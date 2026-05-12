@@ -75,13 +75,21 @@ intersphinx_mapping = {
         "https://opentelemetry-python.readthedocs.io/en/latest/",
         None,
     ),
+    "opentelemetry-contrib": (
+        "https://opentelemetry-python-contrib.readthedocs.io/en/latest/",
+        None,
+    ),
     "fsspec": ("https://filesystem-spec.readthedocs.io/en/latest/", None),
 }
 
 # http://www.sphinx-doc.org/en/master/config.html#confval-nitpicky
 # Sphinx will warn about all references where the target cannot be found.
 nitpicky = True
-nitpick_ignore = []
+nitpick_ignore = [
+    # sphinx-autodoc-typehints 1.25.2 emits :py:data: for typing.Union, but
+    # newer Python docs mark it as a class. Drop once we upgrade the extension.
+    ("py:data", "typing.Union"),
+]
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
