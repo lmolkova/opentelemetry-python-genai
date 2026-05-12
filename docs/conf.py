@@ -71,20 +71,10 @@ extensions = [
 
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3/", None),
-    "psycopg": ("https://www.psycopg.org/psycopg3/docs/", None),
-    "psycopg2": ("https://www.psycopg.org/docs/", None),
-    "opentracing": (
-        "https://opentracing-python.readthedocs.io/en/latest/",
-        None,
-    ),
-    "aiohttp": ("https://docs.aiohttp.org/en/stable/", None),
-    "wrapt": ("https://wrapt.readthedocs.io/en/latest/", None),
-    "pymongo": ("https://pymongo.readthedocs.io/en/stable/", None),
     "opentelemetry": (
         "https://opentelemetry-python.readthedocs.io/en/latest/",
         None,
     ),
-    "redis": ("https://redis.readthedocs.io/en/latest/", None),
     "fsspec": ("https://filesystem-spec.readthedocs.io/en/latest/", None),
 }
 
