@@ -1,3 +1,6 @@
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+
 """Context manager for the instrument/uninstrument cycle in tests.
 
 Every instrumentation's ``tests/conftest.py`` carries a handful of fixtures
