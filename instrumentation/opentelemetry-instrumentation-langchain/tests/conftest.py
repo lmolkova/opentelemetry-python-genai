@@ -12,10 +12,16 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
 
 from opentelemetry.instrumentation.langchain import LangChainInstrumentor
-from opentelemetry.test_util_genai.fixtures import *
-from opentelemetry.test_util_genai.vcr import (
-    scrub_response_headers_overwrite,
-)
+from opentelemetry.test_util_genai.vcr import scrub_response_headers_overwrite
+
+# Loading the ``vcr`` module also activates the ``vcr_cassette_name`` override,
+# which strips the ``[parametrize]`` suffix so all ``content_capture`` matrix
+# cells share one cassette per test (the HTTP request is identical across
+# cells).
+pytest_plugins = [
+    "opentelemetry.test_util_genai.fixtures",
+    "opentelemetry.test_util_genai.vcr",
+]
 
 
 @pytest.fixture(scope="function", name="chat_openai_gpt_3_5_turbo_model")

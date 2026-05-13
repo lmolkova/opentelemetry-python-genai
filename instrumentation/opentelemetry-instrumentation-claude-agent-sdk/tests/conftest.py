@@ -6,7 +6,7 @@
 
 import pytest
 
-from opentelemetry.test_util_genai.fixtures import *
+pytest_plugins = ["opentelemetry.test_util_genai.fixtures"]
 
 
 @pytest.fixture

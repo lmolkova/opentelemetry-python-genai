@@ -12,11 +12,10 @@ from opentelemetry.instrumentation.openai_v2 import OpenAIInstrumentor
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.sampling import ALWAYS_OFF
-from opentelemetry.test_util_genai.fixtures import *
 from opentelemetry.test_util_genai.instrumentor import instrument
-from opentelemetry.test_util_genai.vcr import (
-    scrub_response_headers_overwrite,
-)
+from opentelemetry.test_util_genai.vcr import scrub_response_headers_overwrite
+
+pytest_plugins = ["opentelemetry.test_util_genai.fixtures"]
 
 
 @pytest.fixture(autouse=True)

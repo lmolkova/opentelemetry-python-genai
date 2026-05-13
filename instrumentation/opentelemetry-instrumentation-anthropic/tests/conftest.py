@@ -10,11 +10,10 @@ import pytest
 from anthropic import Anthropic
 
 from opentelemetry.instrumentation.anthropic import AnthropicInstrumentor
-from opentelemetry.test_util_genai.fixtures import *
 from opentelemetry.test_util_genai.instrumentor import instrument
-from opentelemetry.test_util_genai.vcr import (
-    scrub_response_headers,
-)
+from opentelemetry.test_util_genai.vcr import scrub_response_headers
+
+pytest_plugins = ["opentelemetry.test_util_genai.fixtures"]
 
 
 @pytest.fixture(autouse=True)
