@@ -12,10 +12,9 @@ from opentelemetry.instrumentation.openai_v2 import OpenAIInstrumentor
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.sampling import ALWAYS_OFF
-from opentelemetry.test_util_genai.fixtures import *  # noqa: F401,F403
+from opentelemetry.test_util_genai.fixtures import *
 from opentelemetry.test_util_genai.instrumentor import instrument
-from opentelemetry.test_util_genai.vcr import (  # noqa: F401
-    fixture_vcr,
+from opentelemetry.test_util_genai.vcr import (
     scrub_response_headers_overwrite,
 )
 

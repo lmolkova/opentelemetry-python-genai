@@ -6,7 +6,7 @@
 
 import pytest
 
-from opentelemetry.test_util_genai.fixtures import *  # noqa: F401,F403
+from opentelemetry.test_util_genai.fixtures import *
 
 
 @pytest.fixture

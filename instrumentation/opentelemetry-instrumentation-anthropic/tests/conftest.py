@@ -10,10 +10,9 @@ import pytest
 from anthropic import Anthropic
 
 from opentelemetry.instrumentation.anthropic import AnthropicInstrumentor
-from opentelemetry.test_util_genai.fixtures import *  # noqa: F401,F403
+from opentelemetry.test_util_genai.fixtures import *
 from opentelemetry.test_util_genai.instrumentor import instrument
-from opentelemetry.test_util_genai.vcr import (  # noqa: F401
-    fixture_vcr,
+from opentelemetry.test_util_genai.vcr import (
     scrub_response_headers,
 )
 

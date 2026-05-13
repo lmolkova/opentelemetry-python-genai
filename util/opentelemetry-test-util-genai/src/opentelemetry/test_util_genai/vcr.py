@@ -15,9 +15,8 @@ This module hosts those bits once. Per-instrumentation conftests stay short:
 
 .. code-block:: python
 
-    from opentelemetry.test_util_genai.fixtures import *  # noqa: F401,F403
+    from opentelemetry.test_util_genai.fixtures import *
     from opentelemetry.test_util_genai.vcr import (
-        fixture_vcr,                # autouse — registers the serializer
         scrub_response_headers,
     )
 
