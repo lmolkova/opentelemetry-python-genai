@@ -16,6 +16,7 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.test_util_genai.conformance import Scenario
 from opentelemetry.test_util_genai.instrumentor import instrument
 
+
 class InferenceScenario(Scenario):
     expected_spans = ("chat",)
     expected_metrics = (
@@ -41,7 +42,9 @@ class InferenceScenario(Scenario):
         ):
             with vcr.use_cassette("inference-conformance.yaml"):
                 OpenAI().chat.completions.create(
-                    messages=[{"role": "user", "content": "Say this is a test"}],
+                    messages=[
+                        {"role": "user", "content": "Say this is a test"}
+                    ],
                     model="gpt-4o-mini",
                     stream=False,
                 )

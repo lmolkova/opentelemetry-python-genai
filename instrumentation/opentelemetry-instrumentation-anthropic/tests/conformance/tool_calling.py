@@ -64,9 +64,7 @@ class ToolCallingScenario(Scenario):
                                 "description": "Get weather by city",
                                 "input_schema": {
                                     "type": "object",
-                                    "properties": {
-                                        "city": {"type": "string"}
-                                    },
+                                    "properties": {"city": {"type": "string"}},
                                     "required": ["city"],
                                 },
                             }

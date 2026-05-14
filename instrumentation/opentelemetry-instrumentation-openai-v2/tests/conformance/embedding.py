@@ -16,6 +16,7 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.test_util_genai.conformance import Scenario
 from opentelemetry.test_util_genai.instrumentor import instrument
 
+
 class EmbeddingScenario(Scenario):
     expected_spans = ("embeddings",)
     expected_metrics = (

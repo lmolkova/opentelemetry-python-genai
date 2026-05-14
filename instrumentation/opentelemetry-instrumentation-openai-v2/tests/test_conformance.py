@@ -14,8 +14,11 @@ from typing import Any
 
 import pytest
 
-from opentelemetry.test.weaver_live_check import WeaverLiveCheck
-from opentelemetry.test_util_genai.conformance import (
+# Skip collection when weaver_live_check isn't installed (non-conformance envs).
+pytest.importorskip("opentelemetry.test.weaver_live_check")
+
+from opentelemetry.test.weaver_live_check import WeaverLiveCheck  # noqa: E402
+from opentelemetry.test_util_genai.conformance import (  # noqa: E402
     Scenario,
     run_conformance,
 )
