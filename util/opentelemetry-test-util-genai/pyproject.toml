@@ -15,9 +15,12 @@ dependencies = [
   "opentelemetry-instrumentation",
   "opentelemetry-sdk",
   "opentelemetry-semantic-conventions",
+  "opentelemetry-test-utils",
   "opentelemetry-util-genai",
   "pytest",
   "PyYAML",
+  # PyPy lacks grpcio wheels; the weaver fixture skips when this import fails.
+  'opentelemetry-exporter-otlp-proto-grpc; implementation_name != "pypy"',
 ]
 
 [tool.hatch.build.targets.wheel]

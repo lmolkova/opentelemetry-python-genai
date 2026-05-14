@@ -52,3 +52,6 @@ packages = ["src/opentelemetry"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+  "conformance: GenAI semconv conformance scenario (run via the *-conformance tox envs)",
+]
