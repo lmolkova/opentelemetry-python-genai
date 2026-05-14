@@ -145,8 +145,8 @@ def _seen_span_operations(report: LiveCheckReport) -> set[str]:
     }
 
 
-def _dump_report(report: LiveCheckReport) -> None:
-    out = Path("weaver_reports") / "full.json"
+def _dump_report(scenario: Scenario, report: LiveCheckReport) -> None:
+    out = Path("weaver_reports") / f"{type(scenario).__name__}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(report._report, indent=2, sort_keys=True))  # noqa: SLF001
 
@@ -177,7 +177,7 @@ def run_conformance(
         logger_provider.force_flush()
 
         report = weaver.end_and_check(timeout=120)
-        _dump_report(report)
+        _dump_report(scenario, report)
         scenario.validate(report)
         return report
     finally:

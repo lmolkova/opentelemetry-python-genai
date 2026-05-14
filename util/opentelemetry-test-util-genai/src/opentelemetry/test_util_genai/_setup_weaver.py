@@ -18,9 +18,14 @@ import os
 import shutil
 import tarfile
 import tempfile
+import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Any
+
+# Bounds the fetch of the semantic-conventions tarball so a slow/unreachable
+# GitHub doesn't hang conformance runs until the OS-level socket timeout.
+_FETCH_TIMEOUT_SECONDS = 60
 
 logger = logging.getLogger(__name__)
 
@@ -83,11 +88,19 @@ def _fetch_semconv(version: str) -> Path:
         extract_dir.mkdir()
 
         logger.info("Fetching semantic-conventions @ %s", version)
-        with (
-            urllib.request.urlopen(url) as response,
-            archive_path.open("wb") as out,
-        ):
-            shutil.copyfileobj(response, out)
+        try:
+            with (
+                urllib.request.urlopen(
+                    url, timeout=_FETCH_TIMEOUT_SECONDS
+                ) as response,
+                archive_path.open("wb") as out,
+            ):
+                shutil.copyfileobj(response, out)
+        except (TimeoutError, urllib.error.URLError) as exc:
+            raise RuntimeError(
+                f"Failed to fetch semantic-conventions @ {version} from {url}: "
+                f"{exc}"
+            ) from exc
         with tarfile.open(archive_path, "r:gz") as archive:
             archive.extractall(extract_dir, filter="data")
 
