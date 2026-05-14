@@ -118,6 +118,7 @@ class ToolCallingScenario(Scenario):
         operations = [
             attr["value"]
             for entry in report["samples"]
+            if "span" in entry
             for attr in entry["span"]["attributes"]
             if attr["name"] == "gen_ai.operation.name"
         ]

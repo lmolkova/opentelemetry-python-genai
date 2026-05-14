@@ -40,7 +40,6 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, ClassVar
 
-from opentelemetry._logs import set_logger_provider
 from opentelemetry.exporter.otlp.proto.grpc._log_exporter import (
     OTLPLogExporter,
 )
@@ -125,9 +124,6 @@ def _build_providers(
             OTLPLogExporter(endpoint=endpoint, insecure=True)
         )
     )
-    # Some instrumentations resolve the logger off the module-level global
-    # instead of the per-instrumentor provider.
-    set_logger_provider(logger_provider)
 
     return tracer_provider, meter_provider, logger_provider
 
@@ -143,6 +139,7 @@ def _seen_span_operations(report: LiveCheckReport) -> set[str]:
     return {
         attr["value"]
         for entry in report["samples"]
+        if "span" in entry
         for attr in entry["span"]["attributes"]
         if attr["name"] == "gen_ai.operation.name"
     }
@@ -151,7 +148,7 @@ def _seen_span_operations(report: LiveCheckReport) -> set[str]:
 def _dump_report(report: LiveCheckReport) -> None:
     out = Path("weaver_reports") / "full.json"
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(report, indent=2, sort_keys=True))
+    out.write_text(json.dumps(report._report, indent=2, sort_keys=True))  # noqa: SLF001
 
 
 def run_conformance(
@@ -179,7 +176,7 @@ def run_conformance(
         meter_provider.force_flush()
         logger_provider.force_flush()
 
-        report = weaver.end_and_check()
+        report = weaver.end_and_check(timeout=120)
         _dump_report(report)
         scenario.validate(report)
         return report

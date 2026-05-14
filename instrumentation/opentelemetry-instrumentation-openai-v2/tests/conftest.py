@@ -13,7 +13,6 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.sampling import ALWAYS_OFF
 from opentelemetry.test_util_genai.instrumentor import instrument
-from opentelemetry.test_util_genai.vcr import scrub_response_headers_overwrite
 
 pytest_plugins = [
     "opentelemetry.test_util_genai.fixtures",
@@ -39,6 +38,10 @@ def async_openai_client():
 
 @pytest.fixture(scope="module")
 def vcr_config():
+    from opentelemetry.test_util_genai.vcr import (  # noqa: PLC0415
+        scrub_response_headers_overwrite,
+    )
+
     return {
         "filter_headers": [
             ("cookie", "test_cookie"),

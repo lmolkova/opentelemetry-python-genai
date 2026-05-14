@@ -110,11 +110,7 @@ via Weaver live-check. Each scenario module defines a subclass of
 `run(*, tracer_provider, meter_provider, logger_provider, vcr)`.
 
 `tests/test_conformance.py` must set `pytestmark = pytest.mark.conformance` at
-module level. The `*-conformance` tox envs select these tests via
-`-m conformance`; the regular `*-{oldest,latest}` envs deselect them via
-`-m "not conformance"`. Without the marker the test won't run under the
-conformance env and will leak into the regular suite (where `weaver` isn't
-installed).
+module level.
 
 Run via `tox -e py312-test-instrumentation-<pkg>-conformance`.
 

@@ -145,7 +145,14 @@ def policies_dir() -> Path:
     for key, filename in _GENAI_SCHEMA_FILES.items():
         schema_path = docs_genai / filename
         if schema_path.exists():
-            schemas[key] = json.loads(schema_path.read_text(encoding="utf-8"))
+            # OPA's json.match_schema can't fetch the draft-07 meta-schema at
+            # eval time; swap the external $ref for a local "must be an object".
+            schemas[key] = json.loads(
+                schema_path.read_text(encoding="utf-8").replace(
+                    '"$ref": "http://json-schema.org/draft-07/schema#"',
+                    '"type": "object"',
+                )
+            )
         else:
             logger.warning(
                 "GenAI schema not found: %s (emitting null stub)", schema_path
