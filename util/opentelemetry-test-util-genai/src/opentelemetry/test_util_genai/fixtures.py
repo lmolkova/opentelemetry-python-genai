@@ -209,5 +209,9 @@ def weaver_live_check() -> Iterator[Any]:
     except (OSError, RuntimeError, ValueError, tarfile.TarError) as exc:
         pytest.skip(f"could not provision semantic-conventions: {exc}")
 
-    with WeaverLiveCheck(registry=registry, policies_dir=policies) as weaver:
+    with WeaverLiveCheck(
+        registry=registry,
+        policies_dir=policies,
+        extra_args=["--include-unreferenced"],
+    ) as weaver:
         yield weaver
