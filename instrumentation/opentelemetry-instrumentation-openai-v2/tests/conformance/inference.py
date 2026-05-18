@@ -40,7 +40,7 @@ class InferenceScenario(Scenario):
             semconv="gen_ai_latest_experimental",
             content_capture="SPAN_ONLY",
         ):
-            with vcr.use_cassette("inference-conformance.yaml"):
+            with vcr.use_cassette("inference_conformance.yaml"):
                 OpenAI().chat.completions.create(
                     messages=[
                         {"role": "user", "content": "Say this is a test"}

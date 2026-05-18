@@ -40,7 +40,7 @@ class EmbeddingScenario(Scenario):
             semconv="gen_ai_latest_experimental",
             content_capture="SPAN_ONLY",
         ):
-            with vcr.use_cassette("embedding-conformance.yaml"):
+            with vcr.use_cassette("embedding_conformance.yaml"):
                 OpenAI().embeddings.create(
                     input="The quick brown fox jumps over the lazy dog",
                     model="text-embedding-3-small",

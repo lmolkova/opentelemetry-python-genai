@@ -59,7 +59,7 @@ class InferenceScenario(Scenario):
                     stop_sequences=["\n", "Human:", "AI:"],
                     seed=100,
                 )
-                with vcr.use_cassette("inference-conformance.yaml"):
+                with vcr.use_cassette("inference_conformance.yaml"):
                     llm.invoke(
                         [
                             SystemMessage(

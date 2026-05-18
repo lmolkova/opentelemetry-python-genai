@@ -48,7 +48,7 @@ class ToolCallingScenario(Scenario):
                 semconv="gen_ai_latest_experimental",
                 content_capture="SPAN_ONLY",
             ):
-                with vcr.use_cassette("tool_calling-conformance.yaml"):
+                with vcr.use_cassette("tool_calling_conformance.yaml"):
                     Anthropic().messages.create(
                         model="claude-sonnet-4-20250514",
                         max_tokens=256,
