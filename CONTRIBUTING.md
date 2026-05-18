@@ -81,6 +81,10 @@ package's `tests/cassettes/`.
   `scrub_response_headers(...)` from `opentelemetry.test_util_genai.vcr`.
   Diff each new cassette before committing — leaked API keys, org ids, or
   `Set-Cookie` values block the PR.
+- **AI-generated cassettes**: if you lack provider access, you may
+  synthesize a cassette from the provider's API reference via AI. Make sure
+  to mention it in the PR and open a follow-up issue to re-record it in CI
+  against the real provider.
 - **CI**: replay-only; recording in CI is a future improvement.
 
 ### 4. Update the changelog
