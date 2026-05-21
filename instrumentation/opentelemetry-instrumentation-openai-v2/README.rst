@@ -22,7 +22,7 @@ Many LLM platforms support the OpenAI SDK. This means systems such as the follow
      - ``azure.ai.openai``
    * - `Gemini <https://developers.googleblog.com/en/gemini-is-now-accessible-from-the-openai-library/>`_
      - ``gemini``
-   * - `Perplexity <https://docs.perplexity.ai/api-reference/chat-completions>`_
+   * - `Perplexity <https://docs.perplexity.ai/api-reference/>`_
      - ``perplexity``
    * - `xAI <https://x.ai/api>`_ (Compatible with Anthropic)
      - ``xai``
