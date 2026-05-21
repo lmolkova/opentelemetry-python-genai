@@ -107,4 +107,4 @@ References
 * `OpenTelemetry Project <https://opentelemetry.io/>`_
 * `OpenTelemetry GenAI semantic conventions <https://opentelemetry.io/docs/specs/semconv/gen-ai/>`_
 * `OpenAI Agents SDK (Python) <https://github.com/openai/openai-agents-python>`_
-* `OpenAI Documentation <https://platform.openai.com/docs>`_
+* `OpenAI Documentation <https://developers.openai.com/api/docs>`_
