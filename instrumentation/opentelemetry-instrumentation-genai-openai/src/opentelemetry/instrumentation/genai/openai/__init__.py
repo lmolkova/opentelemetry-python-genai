@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """
-OpenAI client instrumentation supporting `openai`, it can be enabled by
+OpenAI client instrumentation supporting `openai`_, it can be enabled by
 using ``OpenAIInstrumentor``.
 
 .. _openai: https://pypi.org/project/openai/
