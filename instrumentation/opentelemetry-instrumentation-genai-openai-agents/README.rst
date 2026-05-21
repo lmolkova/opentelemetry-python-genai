@@ -14,8 +14,7 @@ metadata, and records duration/token usage metrics.
 
 .. note::
    This package continues the project previously published as
-   ``opentelemetry-instrumentation-openai-agents-v2``, renamed for consistency
-   with the OpenTelemetry GenAI instrumentation packages.
+   ``opentelemetry-instrumentation-openai-agents-v2``.
 
 Features
 --------

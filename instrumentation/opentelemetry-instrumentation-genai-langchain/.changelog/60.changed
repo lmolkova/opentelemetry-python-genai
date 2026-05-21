@@ -1,1 +1,1 @@
-Renamed package to `opentelemetry-instrumentation-genai-langchain` (imports `opentelemetry.instrumentation.genai.langchain`); the version line restarts at `1.0b0`.
+Renamed package to `opentelemetry-instrumentation-genai-langchain` (imports `opentelemetry.instrumentation.genai.langchain`).

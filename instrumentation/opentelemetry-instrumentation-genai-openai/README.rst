@@ -12,8 +12,7 @@ the duration of the operations and the number of tokens used as metrics.
 
 .. note::
    This package continues the project previously published as
-   ``opentelemetry-instrumentation-openai-v2``, renamed for consistency with
-   the OpenTelemetry GenAI instrumentation packages.
+   ``opentelemetry-instrumentation-openai-v2``
 
 Many LLM platforms support the OpenAI SDK. This means systems such as the following are observable with this instrumentation when accessed using it:
 
