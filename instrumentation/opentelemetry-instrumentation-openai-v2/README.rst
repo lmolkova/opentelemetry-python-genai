@@ -144,7 +144,8 @@ To uninstrument clients, call the uninstrument method:
 
 References
 ----------
-* `OpenTelemetry OpenAI Instrumentation <https://opentelemetry-python-genai.readthedocs.io/en/latest/instrumentation/openai.html>`_
-* `OpenTelemetry Project <https://opentelemetry.io/>`_
-* `OpenTelemetry Python Examples <https://github.com/open-telemetry/opentelemetry-python/tree/main/docs/examples>`_
 
+* `OpenTelemetry Project <https://opentelemetry.io/>`_
+* `OpenTelemetry GenAI semantic conventions <https://opentelemetry.io/docs/specs/semconv/gen-ai/>`_
+* `OpenAI SDK (Python) <https://github.com/openai/openai-python>`_
+* `OpenAI Documentation <https://platform.openai.com/docs>`_
