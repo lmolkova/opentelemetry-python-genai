@@ -1,1 +1,0 @@
-Renamed package to `opentelemetry-instrumentation-genai-weaviate` (imports `opentelemetry.instrumentation.genai.weaviate`).

@@ -138,8 +138,8 @@ jobs:
       - name: Run tests
         run: uvx --with tox-uv tox -e lint-instrumentation-genai-langchain
 
-  lint-instrumentation-genai-weaviate:
-    name: instrumentation-genai-weaviate
+  lint-instrumentation-genai-weaviate-client:
+    name: instrumentation-genai-weaviate-client
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -155,7 +155,7 @@ jobs:
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
 
       - name: Run tests
-        run: uvx --with tox-uv tox -e lint-instrumentation-genai-weaviate
+        run: uvx --with tox-uv tox -e lint-instrumentation-genai-weaviate-client
 
   lint-util-genai:
     name: util-genai

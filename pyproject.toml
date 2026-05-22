@@ -17,7 +17,7 @@ dependencies = [
   "opentelemetry-instrumentation-genai-langchain[instruments]",
   "opentelemetry-instrumentation-genai-openai[instruments]",
   "opentelemetry-instrumentation-genai-openai-agents[instruments]",
-  "opentelemetry-instrumentation-genai-weaviate[instruments]",
+  "opentelemetry-instrumentation-genai-weaviate-client[instruments]",
 ]
 
 
@@ -36,7 +36,7 @@ opentelemetry-instrumentation-google-genai = { workspace = true }
 opentelemetry-instrumentation-genai-langchain = { workspace = true }
 opentelemetry-instrumentation-genai-openai = { workspace = true }
 opentelemetry-instrumentation-genai-openai-agents = { workspace = true }
-opentelemetry-instrumentation-genai-weaviate = { workspace = true }
+opentelemetry-instrumentation-genai-weaviate-client = { workspace = true }
 
 
 # https://docs.astral.sh/uv/reference/settings/#workspace
@@ -96,7 +96,7 @@ include = [
   "instrumentation/opentelemetry-instrumentation-genai-anthropic",
   "instrumentation/opentelemetry-instrumentation-genai-claude-agent-sdk",
   "instrumentation/opentelemetry-instrumentation-genai-langchain",
-  "instrumentation/opentelemetry-instrumentation-genai-weaviate",
+  "instrumentation/opentelemetry-instrumentation-genai-weaviate-client",
   "util/opentelemetry-util-genai",
 ]
 # We should also add type hints to the test suite - It helps on finding bugs.
@@ -108,8 +108,8 @@ exclude = [
   "instrumentation/opentelemetry-instrumentation-genai-claude-agent-sdk/examples/**/*.py",
   "instrumentation/opentelemetry-instrumentation-genai-langchain/tests/**/*.py",
   "instrumentation/opentelemetry-instrumentation-genai-langchain/examples/**/*.py",
-  "instrumentation/opentelemetry-instrumentation-genai-weaviate/tests/**/*.py",
-  "instrumentation/opentelemetry-instrumentation-genai-weaviate/examples/**/*.py",
+  "instrumentation/opentelemetry-instrumentation-genai-weaviate-client/tests/**/*.py",
+  "instrumentation/opentelemetry-instrumentation-genai-weaviate-client/examples/**/*.py",
   "util/opentelemetry-util-genai/tests/**/*.py",
 ]
 
