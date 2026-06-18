@@ -79,7 +79,7 @@ class InferenceInvocation(GenAIInvocation):
         self.input_messages: list[InputMessage] = []
         self.output_messages: list[OutputMessage] = []
         self.system_instruction: list[MessagePart] = []
-        self.response_model_name: str | None = None
+        self._response_model_name: str | None = None
         self.response_id: str | None = None
         self.finish_reasons: list[str] | None = None
         self.input_tokens: int | None = None
@@ -96,10 +96,20 @@ class InferenceInvocation(GenAIInvocation):
         self.cache_creation_input_tokens: int | None = None
         self.cache_read_input_tokens: int | None = None
         self.tool_definitions: list[ToolDefinition] | None = None
-        # Streaming timing fields (populated by stream wrappers)
-        self.ttfc_seconds: float | None = None
-        self.chunk_gap_seconds: list[float] = []
+        self._ttfc_seconds: float | None = None
+        self._cached_metric_attributes: dict[str, Any] | None = None
+        self._stream_last_chunk_at: float | None = None
         self._start(self._get_base_attributes())
+
+    @property
+    def response_model_name(self) -> str | None:
+        return self._response_model_name
+
+    @response_model_name.setter
+    def response_model_name(self, value: str | None) -> None:
+        if value != self._response_model_name:
+            self._response_model_name = value
+            self._cached_metric_attributes = None
 
     def _get_message_attributes(self, *, for_span: bool) -> dict[str, Any]:
         return get_content_attributes(
@@ -169,41 +179,49 @@ class InferenceInvocation(GenAIInvocation):
             ),
             (
                 _GEN_AI_RESPONSE_TIME_TO_FIRST_CHUNK,
-                self.ttfc_seconds,
+                self._ttfc_seconds,
             ),
         )
         attrs.update({k: v for k, v in optional_attrs if v is not None})
         return attrs
 
     def _get_metric_attributes(self) -> dict[str, Any]:
-        attrs = self._get_base_attributes()
-        if self.response_model_name is not None:
-            attrs[GenAI.GEN_AI_RESPONSE_MODEL] = self.response_model_name
-        attrs.update(self.metric_attributes)
-        return attrs
+        # Cached: also called once per streaming chunk. Invalidated when
+        # response_model_name or metric_attributes (error.type) change.
+        if self._cached_metric_attributes is None:
+            attrs = self._get_base_attributes()
+            if self._response_model_name is not None:
+                attrs[GenAI.GEN_AI_RESPONSE_MODEL] = self._response_model_name
+            attrs.update(self.metric_attributes)
+            self._cached_metric_attributes = attrs
+        return self._cached_metric_attributes
 
-    def _record_chunk_gap(self, gap: float) -> None:
-        """Buffer a time-per-output-chunk gap (in seconds).
+    def _apply_error_attributes(self, error: Error) -> None:
+        super()._apply_error_attributes(error)
+        # error.type was added to metric_attributes; invalidate the cache.
+        self._cached_metric_attributes = None
 
-        Called by the stream wrapper as each chunk after the first arrives.
-        Buffered gaps are drained by ``_consume_streaming_timing`` when the
-        invocation stops.
+    def _on_stream_chunk(self, chunk_at: float) -> None:
+        """Record streaming timing for one output chunk as it arrives.
+
+        The first chunk's delta from the invocation start is the
+        time-to-first-chunk; each later chunk's delta from the previous one is
+        the inter-chunk gap. Both are recorded as they arrive, not buffered.
         """
-        self.chunk_gap_seconds.append(gap)
-
-    def _consume_streaming_timing(
-        self,
-    ) -> tuple[float | None, list[float]]:
-        """Return TTFC and chunk gaps, then reset them on the invocation.
-
-        Called by InvocationMetricsRecorder so the timing values are emitted
-        once and not held past finalization.
-        """
-        ttfc = self.ttfc_seconds
-        gaps = self.chunk_gap_seconds
-        self.ttfc_seconds = None
-        self.chunk_gap_seconds = []
-        return ttfc, gaps
+        last_chunk_at = (
+            self._stream_last_chunk_at
+            if self._stream_last_chunk_at is not None
+            else self._monotonic_start_s
+        )
+        if last_chunk_at is None:  # never started; defensive
+            return
+        self._stream_last_chunk_at = chunk_at
+        delta = chunk_at - last_chunk_at
+        if self._ttfc_seconds is None:
+            self._ttfc_seconds = delta
+            self._metrics_recorder.record_time_to_first_chunk(self, delta)
+        else:
+            self._metrics_recorder.record_time_per_chunk(self, delta)
 
     def _get_metric_token_counts(self) -> dict[str, int]:
         counts: dict[str, int] = {}

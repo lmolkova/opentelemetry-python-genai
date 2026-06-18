@@ -19,10 +19,14 @@ from opentelemetry.test_util_genai.conformance import (  # noqa: E402
 )
 
 from .conformance.inference import InferenceScenario
+from .conformance.inference_streaming import InferenceStreamingScenario
 from .conformance.tool_calling import ToolCallingScenario
 
 _LEGACY_SYSTEM_SKIP = pytest.mark.skip(
     reason="anthropic emits legacy gen_ai.system in experimental mode"
+)
+_STREAMING_METRICS_NOT_IMPLEMENTED = pytest.mark.skip(
+    reason="anthropic streaming wrapper does not emit streaming timing metrics yet"
 )
 
 
@@ -30,6 +34,9 @@ _LEGACY_SYSTEM_SKIP = pytest.mark.skip(
     "scenario",
     [
         pytest.param(InferenceScenario(), marks=_LEGACY_SYSTEM_SKIP),
+        pytest.param(
+            InferenceStreamingScenario(), marks=_STREAMING_METRICS_NOT_IMPLEMENTED
+        ),
         pytest.param(ToolCallingScenario(), marks=_LEGACY_SYSTEM_SKIP),
     ],
     ids=lambda s: type(s).__name__,

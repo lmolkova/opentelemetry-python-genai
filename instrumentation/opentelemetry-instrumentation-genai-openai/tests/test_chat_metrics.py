@@ -299,8 +299,8 @@ def test_chat_completion_streaming_metrics(
 ):
     """Regression test for the openai_v2 sync chat stream wrapper wiring.
 
-    Exercises the actual ChatStreamWrapper path so that removing
-    timing_target=invocation in chat_wrappers.py would cause this test to
+    Exercises the actual ChatStreamWrapper path so that removing the
+    invocation=invocation wiring in chat_wrappers.py would cause this test to
     fail, not just the util-layer tests.
     """
     if not is_experimental_mode():
@@ -365,8 +365,8 @@ async def test_async_chat_completion_streaming_metrics(
     """Regression test for the openai_v2 async chat stream wrapper wiring.
 
     The async path has separate __init__ wiring from the sync path in
-    chat_wrappers.py, so it needs its own coverage. Removing
-    timing_target=invocation in AsyncChatStreamWrapper would still pass
+    chat_wrappers.py, so it needs its own coverage. Removing the
+    invocation=invocation wiring in AsyncChatStreamWrapper would still pass
     every util-layer test, but would silently break TTFC and per-output-chunk
     metrics for async OpenAI streaming.
     """

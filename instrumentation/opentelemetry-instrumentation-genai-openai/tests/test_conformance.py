@@ -25,14 +25,21 @@ from opentelemetry.test_util_genai.conformance import (  # noqa: E402
 
 from .conformance.embedding import EmbeddingScenario
 from .conformance.inference import InferenceScenario
+from .conformance.inference_streaming import InferenceStreamingScenario
 from .conformance.responses_conversation import ResponsesConversationScenario
+from .conformance.responses_streaming import ResponsesStreamingScenario
 from .conformance.tool_calling import ToolCallingScenario
+
+_STREAMING_METRICS_NOT_IMPLEMENTED = pytest.mark.skip(
+    reason="Responses streaming wrapper does not emit streaming timing metrics yet"
+)
 
 
 @pytest.mark.parametrize(
     "scenario",
     [
         InferenceScenario(),
+        InferenceStreamingScenario(),
         pytest.param(
             EmbeddingScenario(),
             marks=pytest.mark.skip(
@@ -41,6 +48,9 @@ from .conformance.tool_calling import ToolCallingScenario
         ),
         ToolCallingScenario(),
         ResponsesConversationScenario(),
+        pytest.param(
+            ResponsesStreamingScenario(), marks=_STREAMING_METRICS_NOT_IMPLEMENTED
+        ),
     ],
     ids=lambda s: type(s).__name__,
 )

@@ -40,9 +40,9 @@ class InvocationMetricsRecorder:
         token_counts = invocation._get_metric_token_counts()
 
         duration_seconds: Optional[float] = None
-        if invocation.monotonic_start_s is not None:
+        if invocation._monotonic_start_s is not None:
             duration_seconds = max(
-                timeit.default_timer() - invocation.monotonic_start_s,
+                timeit.default_timer() - invocation._monotonic_start_s,
                 0.0,
             )
 
@@ -60,21 +60,29 @@ class InvocationMetricsRecorder:
                 context=invocation._span_context,
             )
 
-        # Streaming timing metrics
-        if isinstance(invocation, InferenceInvocation):
-            ttfc, gaps = invocation._consume_streaming_timing()
-            if ttfc is not None:
-                self._ttfc_histogram.record(
-                    ttfc,
-                    attributes=attributes,
-                    context=invocation._span_context,
-                )
-            for gap in gaps:
-                self._time_per_chunk_histogram.record(
-                    gap,
-                    attributes=attributes,
-                    context=invocation._span_context,
-                )
+    def record_time_to_first_chunk(
+        self, invocation: InferenceInvocation, ttfc_seconds: float
+    ) -> None:
+        """Record the streaming time-to-first-chunk for an invocation."""
+        self._ttfc_histogram.record(
+            ttfc_seconds,
+            attributes=invocation._get_metric_attributes(),
+            context=invocation._span_context,
+        )
+
+    def record_time_per_chunk(
+        self, invocation: InferenceInvocation, gap_seconds: float
+    ) -> None:
+        """Record one streaming inter-chunk gap for an invocation.
+
+        Called per chunk as the gap is measured, so the wrapper does not
+        buffer a list of gaps for the lifetime of the stream.
+        """
+        self._time_per_chunk_histogram.record(
+            gap_seconds,
+            attributes=invocation._get_metric_attributes(),
+            context=invocation._span_context,
+        )
 
 
 __all__ = ["InvocationMetricsRecorder"]

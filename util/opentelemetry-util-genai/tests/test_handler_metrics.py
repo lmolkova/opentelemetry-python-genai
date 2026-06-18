@@ -403,15 +403,11 @@ class TelemetryHandlerToolMetricsTest(TestBase):
             invocation = handler.start_inference("prov", request_model="model")
 
         # Simulate streaming timing
-        invocation.ttfc_seconds = 0.35
-        invocation.chunk_gap_seconds = [0.05, 0.08, 0.12]
+        for chunk_at in (1000.35, 1000.40, 1000.48, 1000.60):
+            invocation._on_stream_chunk(chunk_at)
 
         with patch("timeit.default_timer", return_value=1002.0):
             invocation.stop()
-
-        # Timing fields are reset after recording so they aren't double-counted
-        self.assertIsNone(invocation.ttfc_seconds)
-        self.assertEqual(invocation.chunk_gap_seconds, [])
 
         metrics = self._harvest_metrics()
 
@@ -459,7 +455,8 @@ class TelemetryHandlerToolMetricsTest(TestBase):
         with patch("timeit.default_timer", return_value=1000.0):
             invocation = handler.start_inference("prov", request_model="model")
 
-        invocation.ttfc_seconds = 0.42
+        # First chunk 0.42s after the start (1000.0) yields TTFC = 0.42.
+        invocation._on_stream_chunk(1000.42)
 
         with patch("timeit.default_timer", return_value=1002.0):
             invocation.stop()
