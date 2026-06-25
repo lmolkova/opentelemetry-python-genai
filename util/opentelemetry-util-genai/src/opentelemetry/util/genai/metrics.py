@@ -8,14 +8,18 @@ from __future__ import annotations
 import timeit
 from typing import Optional
 
+from opentelemetry.context import Context
 from opentelemetry.metrics import Histogram, Meter
 from opentelemetry.semconv._incubating.attributes import (
     gen_ai_attributes as GenAI,
 )
 from opentelemetry.util.genai.instruments import (
+    create_agent_inference_calls_histogram,
+    create_agent_tool_calls_histogram,
     create_duration_histogram,
     create_token_histogram,
 )
+from opentelemetry.util.types import AttributeValue
 
 from ._invocation import GenAIInvocation
 
@@ -26,6 +30,12 @@ class InvocationMetricsRecorder:
     def __init__(self, meter: Meter):
         self._duration_histogram: Histogram = create_duration_histogram(meter)
         self._token_histogram: Histogram = create_token_histogram(meter)
+        self._agent_inference_calls_histogram: Histogram = (
+            create_agent_inference_calls_histogram(meter)
+        )
+        self._agent_tool_calls_histogram: Histogram = (
+            create_agent_tool_calls_histogram(meter)
+        )
 
     def record(self, invocation: GenAIInvocation) -> None:
         """Record duration and token metrics for an invocation if possible."""
@@ -52,6 +62,29 @@ class InvocationMetricsRecorder:
                 attributes=attributes | {GenAI.GEN_AI_TOKEN_TYPE: token_type},
                 context=invocation._span_context,
             )
+
+    def record_agent_call_counts(
+        self,
+        *,
+        inference_call_count: int,
+        tool_call_count: int,
+        attributes: dict[str, AttributeValue],
+        context: Optional[Context] = None,
+    ) -> None:
+        """Record per-invocation inference/tool call-count histograms.
+
+        Tracks semantic-conventions-genai PR #336.
+        """
+        self._agent_inference_calls_histogram.record(
+            inference_call_count,
+            attributes=attributes,
+            context=context,
+        )
+        self._agent_tool_calls_histogram.record(
+            tool_call_count,
+            attributes=attributes,
+            context=context,
+        )
 
 
 __all__ = ["InvocationMetricsRecorder"]

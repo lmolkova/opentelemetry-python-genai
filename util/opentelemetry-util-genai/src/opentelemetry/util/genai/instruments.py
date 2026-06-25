@@ -4,6 +4,23 @@
 from opentelemetry.metrics import Histogram, Meter
 from opentelemetry.semconv._incubating.metrics import gen_ai_metrics
 
+# PROTOTYPE: these metric names are not yet in opentelemetry.semconv. They track
+# semantic-conventions-genai PR #336 (gen_ai.invoke_agent.{inference,tool}_calls).
+# Replace these literals with gen_ai_metrics constants once that PR ships.
+_GEN_AI_INVOKE_AGENT_INFERENCE_CALLS = "gen_ai.invoke_agent.inference_calls"
+_GEN_AI_INVOKE_AGENT_TOOL_CALLS = "gen_ai.invoke_agent.tool_calls"
+
+_GEN_AI_INVOKE_AGENT_CALLS_BUCKETS = [
+    0,
+    1,
+    2,
+    4,
+    8,
+    16,
+    32,
+    64,
+]
+
 _GEN_AI_CLIENT_OPERATION_DURATION_BUCKETS = [
     0.01,
     0.02,
@@ -54,4 +71,22 @@ def create_token_histogram(meter: Meter) -> Histogram:
         description="Number of input and output tokens used by GenAI clients",
         unit="{token}",
         explicit_bucket_boundaries_advisory=_GEN_AI_CLIENT_TOKEN_USAGE_BUCKETS,
+    )
+
+
+def create_agent_inference_calls_histogram(meter: Meter) -> Histogram:
+    return meter.create_histogram(
+        name=_GEN_AI_INVOKE_AGENT_INFERENCE_CALLS,
+        description="Number of inference (model) calls a GenAI agent makes during a single invocation",
+        unit="{inference_call}",
+        explicit_bucket_boundaries_advisory=_GEN_AI_INVOKE_AGENT_CALLS_BUCKETS,
+    )
+
+
+def create_agent_tool_calls_histogram(meter: Meter) -> Histogram:
+    return meter.create_histogram(
+        name=_GEN_AI_INVOKE_AGENT_TOOL_CALLS,
+        description="Number of tool calls a GenAI agent makes during a single invocation",
+        unit="{tool_call}",
+        explicit_bucket_boundaries_advisory=_GEN_AI_INVOKE_AGENT_CALLS_BUCKETS,
     )

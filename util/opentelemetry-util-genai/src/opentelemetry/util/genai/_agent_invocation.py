@@ -98,6 +98,11 @@ class AgentInvocation(GenAIInvocation):
         self.system_instruction: list[MessagePart] = []
         self.tool_definitions: list[ToolDefinition] | None = None
 
+        # PROTOTYPE (semantic-conventions-genai PR #336): per-invocation counts of
+        # inference (model) calls and client-side tool calls the agent itself issued.
+        self.inference_call_count: int = 0
+        self.tool_call_count: int = 0
+
         self._start(self._get_base_attributes())
 
     def _get_base_attributes(self) -> dict[str, AttributeValue]:
@@ -218,3 +223,12 @@ class AgentInvocation(GenAIInvocation):
             tool_definitions=self.tool_definitions,
         )
         self._metrics_recorder.record(self)
+        agent_metric_attributes: dict[str, AttributeValue] = {}
+        if self.agent_name is not None:
+            agent_metric_attributes[GenAI.GEN_AI_AGENT_NAME] = self.agent_name
+        self._metrics_recorder.record_agent_call_counts(
+            inference_call_count=self.inference_call_count,
+            tool_call_count=self.tool_call_count,
+            attributes=agent_metric_attributes,
+            context=self._span_context,
+        )

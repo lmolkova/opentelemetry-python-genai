@@ -297,6 +297,11 @@ class OpenTelemetryLangChainCallbackHandler(BaseCallbackHandler):
             parent_run_id=parent_run_id,
             invocation=llm_invocation,
         )
+        # PROTOTYPE (semantic-conventions-genai PR #336): count this inference
+        # call against the nearest enclosing agent invocation.
+        agent = self._find_nearest_agent(parent_run_id)
+        if agent is not None:
+            agent.inference_call_count += 1
 
     def on_llm_end(
         self,
@@ -455,6 +460,11 @@ class OpenTelemetryLangChainCallbackHandler(BaseCallbackHandler):
         self._invocation_manager.add_invocation_state(
             run_id, parent_run_id, tool_invocation
         )
+        # PROTOTYPE (semantic-conventions-genai PR #336): count this client-side
+        # tool call against the nearest enclosing agent invocation.
+        agent = self._find_nearest_agent(parent_run_id)
+        if agent is not None:
+            agent.tool_call_count += 1
 
     def on_tool_end(
         self,
