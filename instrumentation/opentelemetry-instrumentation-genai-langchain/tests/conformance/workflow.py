@@ -151,11 +151,17 @@ class NestedWorkflowScenario(Scenario):
         "gen_ai.client.operation.duration",
         "gen_ai.client.token.usage",
     )
-    # langchain can't populate server.address on chat spans.
     expected_violations = (
+        # langchain can't populate server.address on chat spans.
         ExpectedViolation(
             advice_id="genai_expected_attribute_missing",
             message_substring="server.address",
+        ),
+        # gen_ai.workflow.nested is a proposed attribute that is not yet part
+        # of the published semantic-conventions registry.
+        ExpectedViolation(
+            advice_id="missing_attribute",
+            message_substring="gen_ai.workflow.nested",
         ),
     )
 
