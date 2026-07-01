@@ -1,0 +1,180 @@
+interactions:
+- request:
+    body: |-
+      {
+        "messages": [
+          {
+            "content": "You are a research assistant. Provide 2-3 factual sentences.",
+            "role": "system"
+          },
+          {
+            "content": "What is the capital of France?",
+            "role": "user"
+          }
+        ],
+        "model": "gpt-3.5-turbo",
+        "max_completion_tokens": 200,
+        "seed": 42,
+        "stream": false,
+        "temperature": 0.1
+      }
+    headers:
+      Accept:
+      - application/json
+      Content-Type:
+      - application/json
+      Host:
+      - api.openai.com
+      authorization:
+      - Bearer test_openai_api_key
+    method: POST
+    uri: https://api.openai.com/v1/chat/completions
+  response:
+    body:
+      string: |-
+        {
+          "id": "chatcmpl-nested001research",
+          "object": "chat.completion",
+          "created": 1771535300,
+          "model": "gpt-3.5-turbo-0125",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "The capital of France is Paris. Paris sits on the Seine and has been the country's capital since the 10th century.",
+                "refusal": null,
+                "annotations": []
+              },
+              "logprobs": null,
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 35,
+            "completion_tokens": 27,
+            "total_tokens": 62,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "audio_tokens": 0
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "audio_tokens": 0,
+              "accepted_prediction_tokens": 0,
+              "rejected_prediction_tokens": 0
+            }
+          },
+          "service_tier": "default",
+          "system_fingerprint": null
+        }
+    headers:
+      Connection:
+      - keep-alive
+      Content-Type:
+      - application/json
+      Date:
+      - Wed, 20 May 2026 00:07:12 GMT
+      Server:
+      - cloudflare
+      Set-Cookie: test_set_cookie
+      content-length:
+      - '640'
+      openai-organization: test_openai_org_id
+      openai-version:
+      - '2020-10-01'
+      x-request-id:
+      - req_nested001research
+    status:
+      code: 200
+      message: OK
+- request:
+    body: |-
+      {
+        "messages": [
+          {
+            "content": "You are an expert summariser. Condense the text below into one clear sentence.",
+            "role": "system"
+          },
+          {
+            "content": "The capital of France is Paris. Paris sits on the Seine and has been the country's capital since the 10th century.",
+            "role": "user"
+          }
+        ],
+        "model": "gpt-3.5-turbo",
+        "max_completion_tokens": 200,
+        "seed": 42,
+        "stream": false,
+        "temperature": 0.1
+      }
+    headers:
+      Accept:
+      - application/json
+      Content-Type:
+      - application/json
+      Host:
+      - api.openai.com
+      authorization:
+      - Bearer test_openai_api_key
+    method: POST
+    uri: https://api.openai.com/v1/chat/completions
+  response:
+    body:
+      string: |-
+        {
+          "id": "chatcmpl-nested001summary",
+          "object": "chat.completion",
+          "created": 1771535301,
+          "model": "gpt-3.5-turbo-0125",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "Paris, on the Seine, has been France's capital since the 10th century.",
+                "refusal": null,
+                "annotations": []
+              },
+              "logprobs": null,
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 52,
+            "completion_tokens": 18,
+            "total_tokens": 70,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "audio_tokens": 0
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "audio_tokens": 0,
+              "accepted_prediction_tokens": 0,
+              "rejected_prediction_tokens": 0
+            }
+          },
+          "service_tier": "default",
+          "system_fingerprint": null
+        }
+    headers:
+      Connection:
+      - keep-alive
+      Content-Type:
+      - application/json
+      Date:
+      - Wed, 20 May 2026 00:07:13 GMT
+      Server:
+      - cloudflare
+      Set-Cookie: test_set_cookie
+      content-length:
+      - '600'
+      openai-organization: test_openai_org_id
+      openai-version:
+      - '2020-10-01'
+      x-request-id:
+      - req_nested001summary
+    status:
+      code: 200
+      message: OK
+version: 1

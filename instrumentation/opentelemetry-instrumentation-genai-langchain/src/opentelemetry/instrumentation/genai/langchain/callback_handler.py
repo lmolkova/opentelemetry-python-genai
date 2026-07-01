@@ -74,6 +74,9 @@ class OpenTelemetryLangChainCallbackHandler(BaseCallbackHandler):
                 name=workflow_name_override or workflow_name
             )
             workflow.input_messages = make_input_message(inputs)
+            # A workflow whose ancestor is another workflow is nested within it.
+            if self._find_nearest_workflow(parent_run_id) is not None:
+                workflow.nested = True
             self._invocation_manager.add_invocation_state(
                 run_id, parent_run_id, workflow
             )
@@ -497,6 +500,19 @@ class OpenTelemetryLangChainCallbackHandler(BaseCallbackHandler):
             visited.add(current)
             entity = self._invocation_manager.get_invocation(current)
             if isinstance(entity, AgentInvocation):
+                return entity
+            current = self._invocation_manager.get_parent_run_id(current)
+        return None
+
+    def _find_nearest_workflow(
+        self, run_id: Optional[UUID]
+    ) -> Optional[WorkflowInvocation]:
+        current = run_id
+        visited: set[UUID] = set()
+        while current is not None and current not in visited:
+            visited.add(current)
+            entity = self._invocation_manager.get_invocation(current)
+            if isinstance(entity, WorkflowInvocation):
                 return entity
             current = self._invocation_manager.get_parent_run_id(current)
         return None

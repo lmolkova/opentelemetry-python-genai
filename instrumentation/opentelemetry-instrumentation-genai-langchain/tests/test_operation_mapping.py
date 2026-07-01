@@ -132,16 +132,28 @@ class TestClassifyChainRun:
         )
         assert result == OperationName.INVOKE_WORKFLOW
 
-    def test_langgraph_name_with_parent_is_not_workflow(self):
-        # Having a parent disqualifies it from being a top-level workflow.
+    def test_langgraph_name_with_parent_is_nested_workflow(self):
+        # A LangGraph (sub)graph with a parent is a nested workflow. Whether it
+        # is actually nested is decided later from the run tree; classification
+        # only needs to recognise it as a workflow so a span is emitted.
         result = classify_chain_run(
             serialized={"name": "LangGraph"},
             metadata=None,
             kwargs={},
             parent_run_id=uuid.uuid4(),
         )
-        # Not a workflow; no agent signals → suppressed
-        assert result is None
+        assert result == OperationName.INVOKE_WORKFLOW
+
+    def test_langgraph_kwargs_name_with_parent_is_nested_workflow(self):
+        # At runtime LangGraph reports the graph identifier via kwargs["name"]
+        # rather than serialized["name"].
+        result = classify_chain_run(
+            serialized={},
+            metadata=None,
+            kwargs={"name": "LangGraph"},
+            parent_run_id=uuid.uuid4(),
+        )
+        assert result == OperationName.INVOKE_WORKFLOW
 
     # --- invoke_agent ---
 

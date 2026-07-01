@@ -23,6 +23,10 @@ from opentelemetry.util.genai.utils import (
 )
 from opentelemetry.util.types import AttributeValue
 
+# ``gen_ai.workflow.nested`` is not yet in the released semconv package, so it
+# is referenced here as a string literal.
+_GEN_AI_WORKFLOW_NESTED = "gen_ai.workflow.nested"
+
 
 class WorkflowInvocation(GenAIInvocation):
     """
@@ -53,6 +57,8 @@ class WorkflowInvocation(GenAIInvocation):
             span_kind=SpanKind.INTERNAL,
         )
         self.name = name
+        self.nested: bool = False
+        """Whether this workflow is invoked within an enclosing workflow."""
         self.input_messages: list[InputMessage] = []
         self.output_messages: list[OutputMessage] = []
         self._start(self._get_base_attributes())
@@ -89,6 +95,10 @@ class WorkflowInvocation(GenAIInvocation):
         attributes: dict[str, AttributeValue] = {
             GenAI.GEN_AI_OPERATION_NAME: self._operation_name,
         }
+        if self.name:
+            attributes[GenAI.GEN_AI_WORKFLOW_NAME] = self.name
+        if self.nested:
+            attributes[_GEN_AI_WORKFLOW_NESTED] = True
         attributes.update(self._get_messages_for_span())
         if error is not None:
             self._apply_error_attributes(error)

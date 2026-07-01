@@ -107,36 +107,60 @@ def _has_agent_signals(metadata: Optional[dict[str, Any]]) -> bool:
     )
 
 
+def _is_langgraph_graph(
+    serialized: dict[str, Any],
+    kwargs: dict[str, Any],
+) -> bool:
+    """Return True if the chain is a LangGraph graph (``Pregel``) invocation.
+
+    LangGraph reports the graph itself under the ``LangGraph`` identifier as the
+    run name (``kwargs['name']`` at runtime, or ``serialized['name']`` /
+    ``serialized['graph']['id']`` in the serialized repr). Individual graph
+    nodes are reported under the node name instead, so this reliably
+    distinguishes a (sub)graph invocation from a node invocation.
+    """
+    name = kwargs.get("name")
+    if not name and serialized:
+        name = serialized.get("name")
+    if name and LANGGRAPH_IDENTIFIER in str(name):
+        return True
+
+    if serialized and isinstance(serialized.get("graph"), dict):
+        graph_id = serialized["graph"].get("id", "")
+        if LANGGRAPH_IDENTIFIER in str(graph_id):
+            return True
+
+    return False
+
+
 def _looks_like_workflow(
     serialized: dict[str, Any],
     metadata: Optional[dict[str, Any]],
+    kwargs: dict[str, Any],
     parent_run_id: Optional[UUID],
 ) -> bool:
-    """Return True if the chain looks like a top-level workflow/graph."""
-    if parent_run_id is not None:
-        return False
+    """Return True if the chain looks like a workflow/graph.
 
+    Both top-level graphs and nested subgraphs are treated as workflows, so a
+    multi-graph pipeline produces one ``invoke_workflow`` span per graph. A
+    nested subgraph is distinguished from a top-level workflow later, when the
+    span is created, by inspecting the run tree.
+    """
     # An explicit workflow override is authoritative.
     if metadata and metadata.get(_META_WORKFLOW_SPAN):
         return True
 
-    # Heuristic: check for LangGraph identifier in the serialized repr.
-    if serialized:
-        name = serialized.get("name", "")
-        graph_id = (
-            serialized.get("graph", {}).get("id", "")
-            if isinstance(serialized.get("graph"), dict)
-            else ""
-        )
-        return LANGGRAPH_IDENTIFIER in name or LANGGRAPH_IDENTIFIER in graph_id
+    # A LangGraph graph invocation, whether top-level or a nested subgraph.
+    if _is_langgraph_graph(serialized, kwargs):
+        return True
 
-    # No serialized data to inspect, but this is a top-level chain
-    # (parent_run_id is None). When we have zero information about a root-level
-    # chain we prefer to emit a span rather than silently drop it — more data
-    # is better than missing the outermost invocation entirely. Treat it as a
-    # workflow so the outermost operation always gets a span even when the
-    # chain didn't populate its serialized representation.
-    return True
+    # A root-level chain with no serialized data to inspect. We have zero
+    # information about it, but prefer emitting a span for the outermost
+    # invocation rather than silently dropping it.
+    if parent_run_id is None and not serialized:
+        return True
+
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -213,7 +237,7 @@ def classify_chain_run(
         return OperationName.INVOKE_AGENT
 
     # 3. Workflow / orchestration detection.
-    if _looks_like_workflow(serialized, metadata, parent_run_id):
+    if _looks_like_workflow(serialized, metadata, kwargs, parent_run_id):
         return OperationName.INVOKE_WORKFLOW
 
     # 4. Default: suppress unclassified chains.
