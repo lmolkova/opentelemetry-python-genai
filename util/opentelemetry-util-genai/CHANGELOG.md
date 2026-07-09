@@ -50,8 +50,8 @@ See https://github.com/open-telemetry/opentelemetry-python-genai/blob/main/CONTR
 
 ### Deprecated
 
-- deprecate all `start_` factories, update all `invocation` factories to return
-  objects that can be used as ContextManager's
+- Deprecate all `start_` factories; update all `invocation` factories to return
+  objects that can be used as context managers.
   ([#17](https://github.com/open-telemetry/opentelemetry-python-genai/pull/17))
 
 ### Removed

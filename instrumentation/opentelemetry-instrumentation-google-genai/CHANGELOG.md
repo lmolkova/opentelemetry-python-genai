@@ -49,12 +49,12 @@ See https://github.com/open-telemetry/opentelemetry-python-genai/blob/main/CONTR
   `gen_ai.tool.call.arguments`, `gen_ai.tool.call.result`), it also correctly
   changes the `SpanKind` from `INTERNAL` to `CLIENT`. The `generate_content`
   span also is switched to `SpanKind` `CLIENT`, and the `gen_ai.provider.name`
-  attribute which was missing has been added, it's value is `vertex_ai`. The
+  attribute which was missing has been added, its value is `vertex_ai`. The
   `InstrumentationScope` of the log and trace will also change, as the
   `TelemetryHandler` class in the utils package is now used to write the logs
   and traces.
   ([#10](https://github.com/open-telemetry/opentelemetry-python-genai/pull/10))
-- Relax version constraing of `google-genai` to allow v2 of that library to be
+- Relax version constraint of `google-genai` to allow v2 of that library to be
   used with the instrumentation library.
   ([#21](https://github.com/open-telemetry/opentelemetry-python-genai/pull/21))
 - Bumped the version to `1.0b0` to align with the OpenTelemetry GenAI packages.
