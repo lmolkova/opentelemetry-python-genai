@@ -24,6 +24,10 @@ from opentelemetry.util.genai.types import (
 )
 from opentelemetry.util.types import AttributeValue
 
+# ``gen_ai.root_operation.name`` is not yet in the released semconv package,
+# so it is referenced here as a string literal.
+_GEN_AI_ROOT_OPERATION_NAME = "gen_ai.root_operation.name"
+
 
 class AgentInvocation(GenAIInvocation):
     """Represents a single agent invocation (invoke_agent span).
@@ -49,6 +53,7 @@ class AgentInvocation(GenAIInvocation):
         server_address: str | None = None,
         server_port: int | None = None,
         agent_name: str | None = None,
+        root_operation_name: str | None = None,
     ) -> None:
         """Use handler.invoke_local_agent() or handler.invoke_remote_agent() instead of calling this directly."""
         _operation_name = GenAI.GenAiOperationNameValues.INVOKE_AGENT.value
@@ -72,6 +77,7 @@ class AgentInvocation(GenAIInvocation):
         self.agent_id: str | None = None
         self.agent_description: str | None = None
         self.agent_version: str | None = None
+        self.root_operation_name: str | None = root_operation_name
 
         self.conversation_id: str | None = None
         self.data_source_id: str | None = None
@@ -106,6 +112,7 @@ class AgentInvocation(GenAIInvocation):
             (GenAI.GEN_AI_PROVIDER_NAME, self.provider),
             (GenAI.GEN_AI_REQUEST_MODEL, self.request_model),
             (GenAI.GEN_AI_AGENT_NAME, self.agent_name),
+            (_GEN_AI_ROOT_OPERATION_NAME, self.root_operation_name),
             (server_attributes.SERVER_ADDRESS, self.server_address),
             (server_attributes.SERVER_PORT, self.server_port),
         )
@@ -124,6 +131,7 @@ class AgentInvocation(GenAIInvocation):
             (GenAI.GEN_AI_AGENT_ID, self.agent_id),
             (GenAI.GEN_AI_AGENT_DESCRIPTION, self.agent_description),
             (GenAI.GEN_AI_AGENT_VERSION, self.agent_version),
+            (_GEN_AI_ROOT_OPERATION_NAME, self.root_operation_name),
         )
         return {
             GenAI.GEN_AI_OPERATION_NAME: self._operation_name,
@@ -181,6 +189,7 @@ class AgentInvocation(GenAIInvocation):
             (GenAI.GEN_AI_REQUEST_MODEL, self.request_model),
             (server_attributes.SERVER_ADDRESS, self.server_address),
             (server_attributes.SERVER_PORT, self.server_port),
+            (_GEN_AI_ROOT_OPERATION_NAME, self.root_operation_name),
         )
         attrs: dict[str, AttributeValue] = {
             GenAI.GEN_AI_OPERATION_NAME: self._operation_name,

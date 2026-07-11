@@ -70,13 +70,14 @@ class OpenTelemetryLangChainCallbackHandler(BaseCallbackHandler):
             workflow_name_override = (
                 metadata.get("workflow_name") if metadata else None
             )
+            root_operation_name = self._find_enclosing_root_operation_name(
+                parent_run_id
+            )
             workflow = self._telemetry_handler.workflow(
-                name=workflow_name_override or workflow_name
+                name=workflow_name_override or workflow_name,
+                root_operation_name=root_operation_name,
             )
             workflow.input_messages = make_input_message(inputs)
-            # A workflow whose ancestor is another workflow is nested within it.
-            if self._find_nearest_workflow(parent_run_id) is not None:
-                workflow.nested = True
             self._invocation_manager.add_invocation_state(
                 run_id, parent_run_id, workflow
             )
@@ -98,8 +99,14 @@ class OpenTelemetryLangChainCallbackHandler(BaseCallbackHandler):
                     else None
                 )
                 if suggested_agent_name_lower != agent_invocation_name_lower:
+                    root_operation_name = (
+                        self._find_enclosing_root_operation_name(
+                            parent_run_id
+                        )
+                    )
                     agent = self._telemetry_handler.invoke_local_agent(
                         agent_name=suggested_agent_name,
+                        root_operation_name=root_operation_name,
                     )
                     agent.input_messages = make_input_message(inputs)
 
@@ -504,15 +511,35 @@ class OpenTelemetryLangChainCallbackHandler(BaseCallbackHandler):
             current = self._invocation_manager.get_parent_run_id(current)
         return None
 
-    def _find_nearest_workflow(
+    def _find_enclosing_root_operation_name(
         self, run_id: Optional[UUID]
-    ) -> Optional[WorkflowInvocation]:
+    ) -> Optional[str]:
         current = run_id
         visited: set[UUID] = set()
         while current is not None and current not in visited:
             visited.add(current)
             entity = self._invocation_manager.get_invocation(current)
-            if isinstance(entity, WorkflowInvocation):
-                return entity
-            current = self._invocation_manager.get_parent_run_id(current)
+            if isinstance(entity, (AgentInvocation, WorkflowInvocation)):
+                if entity.root_operation_name:
+                    return entity.root_operation_name
+
+                # If this is the top-most enclosing invocation, derive the
+                # operation name from invocation fields.
+                parent = self._invocation_manager.get_parent_run_id(current)
+                if parent is None:
+                    return self._resolve_operation_name(entity)
+
+            parent = self._invocation_manager.get_parent_run_id(current)
+            current = parent
         return None
+
+    def _resolve_operation_name(
+        self, entity: AgentInvocation | WorkflowInvocation
+    ) -> str:
+        if isinstance(entity, AgentInvocation):
+            if entity.agent_name:
+                return f"invoke_agent {entity.agent_name}"
+            return "invoke_agent"
+        if entity.name:
+            return f"invoke_workflow {entity.name}"
+        return "invoke_workflow"

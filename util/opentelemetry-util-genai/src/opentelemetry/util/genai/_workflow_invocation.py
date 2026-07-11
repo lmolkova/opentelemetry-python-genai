@@ -23,9 +23,9 @@ from opentelemetry.util.genai.utils import (
 )
 from opentelemetry.util.types import AttributeValue
 
-# ``gen_ai.workflow.nested`` is not yet in the released semconv package, so it
-# is referenced here as a string literal.
-_GEN_AI_WORKFLOW_NESTED = "gen_ai.workflow.nested"
+# ``gen_ai.root_operation.name`` is not yet in the released semconv package,
+# so it is referenced here as a string literal.
+_GEN_AI_ROOT_OPERATION_NAME = "gen_ai.root_operation.name"
 
 
 class WorkflowInvocation(GenAIInvocation):
@@ -44,6 +44,7 @@ class WorkflowInvocation(GenAIInvocation):
         logger: Logger,
         completion_hook: CompletionHook,
         name: str | None,
+        root_operation_name: str | None = None,
     ) -> None:
         """Use handler.workflow(name) rather than calling this directly."""
         _operation_name = "invoke_workflow"
@@ -57,8 +58,7 @@ class WorkflowInvocation(GenAIInvocation):
             span_kind=SpanKind.INTERNAL,
         )
         self.name = name
-        self.nested: bool = False
-        """Whether this workflow is invoked within an enclosing workflow."""
+        self.root_operation_name: str | None = root_operation_name
         self.input_messages: list[InputMessage] = []
         self.output_messages: list[OutputMessage] = []
         self._start(self._get_base_attributes())
@@ -68,6 +68,8 @@ class WorkflowInvocation(GenAIInvocation):
         attrs: dict[str, AttributeValue] = {
             GenAI.GEN_AI_OPERATION_NAME: self._operation_name,
         }
+        if self.root_operation_name:
+            attrs[_GEN_AI_ROOT_OPERATION_NAME] = self.root_operation_name
         return attrs
 
     def _get_messages_for_span(self) -> dict[str, AttributeValue]:
@@ -97,8 +99,10 @@ class WorkflowInvocation(GenAIInvocation):
         }
         if self.name:
             attributes[GenAI.GEN_AI_WORKFLOW_NAME] = self.name
-        if self.nested:
-            attributes[_GEN_AI_WORKFLOW_NESTED] = True
+        if self.root_operation_name:
+            attributes[_GEN_AI_ROOT_OPERATION_NAME] = (
+                self.root_operation_name
+            )
         attributes.update(self._get_messages_for_span())
         if error is not None:
             self._apply_error_attributes(error)

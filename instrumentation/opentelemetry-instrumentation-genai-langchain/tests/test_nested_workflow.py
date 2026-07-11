@@ -1,11 +1,11 @@
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
 
-"""End-to-end test: a nested LangGraph workflow emits ``gen_ai.workflow.nested``.
+"""End-to-end test: nested LangGraph workflows propagate root operation name.
 
-An outer graph contains an inner (sub)graph as one of its nodes. The outer graph
-is the top-level workflow and must NOT carry ``gen_ai.workflow.nested``; the
-inner subgraph is nested and must carry ``gen_ai.workflow.nested = True``.
+An outer graph contains an inner (sub)graph as one of its nodes. Both should be
+captured as invoke_workflow spans. The inner workflow should include
+`gen_ai.root_operation.name` that points at the outer workflow span name.
 """
 
 from typing import Annotated, TypedDict
@@ -17,8 +17,6 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 
 from opentelemetry.semconv._incubating.attributes import gen_ai_attributes
-
-_GEN_AI_WORKFLOW_NESTED = "gen_ai.workflow.nested"
 
 
 class GraphState(TypedDict):
@@ -66,7 +64,7 @@ def _build_nested_graph(llm: ChatOpenAI):
 
 # span_exporter, start_instrumentation and vcr are fixtures defined in conftest.py
 @pytest.mark.vcr()
-def test_nested_langgraph_workflow_sets_nested_attribute(
+def test_nested_langgraph_workflow_sets_root_operation_name(
     span_exporter,
     start_instrumentation,
     monkeypatch,
@@ -115,20 +113,18 @@ def test_nested_langgraph_workflow_sets_nested_attribute(
         f"saw {[s.name for s in spans]}"
     )
 
-    nested_spans = [
+    root_operation_values = [
+        span.attributes.get("gen_ai.root_operation.name")
+        for span in workflow_spans
+        if "gen_ai.root_operation.name" in span.attributes
+    ]
+    assert len(root_operation_values) == 1, (
+        "Exactly one nested workflow span should carry "
+        "gen_ai.root_operation.name"
+    )
+    outer_workflow = next(
         span
         for span in workflow_spans
-        if span.attributes.get(_GEN_AI_WORKFLOW_NESTED) is True
-    ]
-    top_level_spans = [
-        span
-        for span in workflow_spans
-        if _GEN_AI_WORKFLOW_NESTED not in span.attributes
-    ]
-
-    assert len(nested_spans) == 1, (
-        "Exactly one workflow (the inner subgraph) must be marked nested"
+        if "gen_ai.root_operation.name" not in span.attributes
     )
-    assert len(top_level_spans) == 1, (
-        "The top-level workflow must not carry gen_ai.workflow.nested"
-    )
+    assert root_operation_values[0] == outer_workflow.name

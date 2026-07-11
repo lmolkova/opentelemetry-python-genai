@@ -142,8 +142,9 @@ class WorkflowScenario(Scenario):
 class NestedWorkflowScenario(Scenario):
     """A LangGraph graph whose node is itself a compiled subgraph.
 
-    The outer graph is the top-level workflow (no ``gen_ai.workflow.nested``);
-    the inner subgraph is nested and carries ``gen_ai.workflow.nested = True``.
+    The outer graph and inner subgraph are both represented as
+    ``invoke_workflow`` spans. The inner span should carry
+    ``gen_ai.root_operation.name`` that points at the outer span name.
     """
 
     expected_spans = ("invoke_workflow", "invoke_workflow", "chat", "chat")
@@ -156,12 +157,6 @@ class NestedWorkflowScenario(Scenario):
         ExpectedViolation(
             advice_id="genai_expected_attribute_missing",
             message_substring="server.address",
-        ),
-        # gen_ai.workflow.nested is a proposed attribute that is not yet part
-        # of the published semantic-conventions registry.
-        ExpectedViolation(
-            advice_id="missing_attribute",
-            message_substring="gen_ai.workflow.nested",
         ),
     )
 
@@ -249,15 +244,24 @@ class NestedWorkflowScenario(Scenario):
 
     def validate(self, report: LiveCheckReport) -> None:
         super().validate(report)
-        nested_values = [
-            attr["value"]
+        workflow_spans = [
+            entry["span"]
             for entry in report["samples"]
             if "span" in entry
-            for attr in entry["span"]["attributes"]
-            if attr["name"] == "gen_ai.workflow.nested"
+            and any(
+                attr["name"] == "gen_ai.operation.name"
+                and attr["value"] == "invoke_workflow"
+                for attr in entry["span"]["attributes"]
+            )
         ]
-        assert nested_values == [True], (
-            "Exactly one workflow span (the inner subgraph) must set "
-            f"gen_ai.workflow.nested=True; saw {nested_values}"
+        root_operation_values = [
+            attr["value"]
+            for span in workflow_spans
+            for attr in span["attributes"]
+            if attr["name"] == "gen_ai.root_operation.name"
+        ]
+        assert len(root_operation_values) == 1, (
+            "Exactly one nested workflow span should set "
+            f"gen_ai.root_operation.name; saw {root_operation_values}"
         )
 

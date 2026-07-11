@@ -48,6 +48,9 @@ def _make_agent_inv_mock() -> mock.MagicMock:
     # agent_name is an instance attribute set in AgentInvocation.__init__ via the
     # constructor arg; pre-configure it so spec-restricted attribute access works.
     agent_inv.agent_name = None
+    agent_inv.attributes = {}
+    agent_inv.metric_attributes = {}
+    agent_inv.root_operation_name = None
     return agent_inv
 
 
@@ -57,6 +60,7 @@ def _make_invoke_local_agent_side_effect(inv: mock.MagicMock):
 
     def _side_effect(*args, **kwargs):
         inv.agent_name = kwargs.get("agent_name")
+        inv.root_operation_name = kwargs.get("root_operation_name")
         return inv
 
     return _side_effect
@@ -151,6 +155,108 @@ class TestOnChainStartWorkflow:
         assert (
             handler._invocation_manager.get_invocation(run_id) is workflow_inv
         )
+
+    def test_nested_workflow_sets_root_operation_name(self):
+        handler, telemetry, _, _ = _make_handler()
+        parent_run_id = _run_id()
+        child_run_id = _run_id()
+
+        created_workflows: list[mock.MagicMock] = []
+
+        def _create_workflow(*_args, **kwargs):
+            workflow_invocation = mock.MagicMock(spec=WorkflowInvocation)
+            workflow_invocation.span = mock.MagicMock()
+            workflow_invocation.span.is_recording.return_value = False
+            workflow_invocation.name = kwargs.get("name")
+            workflow_invocation.attributes = {}
+            workflow_invocation.root_operation_name = kwargs.get(
+                "root_operation_name"
+            )
+            workflow_invocation.input_messages = []
+            workflow_invocation.span.name = (
+                f"invoke_workflow {workflow_invocation.name}"
+                if workflow_invocation.name
+                else "invoke_workflow"
+            )
+            created_workflows.append(workflow_invocation)
+            return workflow_invocation
+
+        telemetry.workflow.side_effect = _create_workflow
+
+        handler.on_chain_start(
+            serialized={"name": "LangGraph"},
+            inputs={},
+            run_id=parent_run_id,
+            parent_run_id=None,
+            metadata={"workflow_name": "outer_flow"},
+        )
+        handler.on_chain_start(
+            serialized={"name": "LangGraph"},
+            inputs={},
+            run_id=child_run_id,
+            parent_run_id=parent_run_id,
+            metadata={"workflow_name": "inner_flow"},
+        )
+
+        assert len(created_workflows) == 2
+        assert created_workflows[0].root_operation_name is None
+        assert (
+            created_workflows[1].root_operation_name
+            == "invoke_workflow outer_flow"
+        )
+        assert telemetry.workflow.call_args_list[1].kwargs == {
+            "name": "inner_flow",
+            "root_operation_name": "invoke_workflow outer_flow",
+        }
+
+    def test_nested_workflow_reuses_parent_root_operation_name(self):
+        handler, telemetry, _, _ = _make_handler()
+        parent_run_id = _run_id()
+        child_run_id = _run_id()
+
+        created_workflows: list[mock.MagicMock] = []
+
+        def _create_workflow(*_args, **kwargs):
+            workflow_invocation = mock.MagicMock(spec=WorkflowInvocation)
+            workflow_invocation.span = mock.MagicMock()
+            workflow_invocation.span.is_recording.return_value = False
+            workflow_invocation.name = kwargs.get("name")
+            workflow_invocation.attributes = {}
+            workflow_invocation.root_operation_name = kwargs.get(
+                "root_operation_name"
+            )
+            workflow_invocation.input_messages = []
+            workflow_invocation.span.name = (
+                f"invoke_workflow {workflow_invocation.name}"
+                if workflow_invocation.name
+                else "invoke_workflow"
+            )
+            created_workflows.append(workflow_invocation)
+            return workflow_invocation
+
+        telemetry.workflow.side_effect = _create_workflow
+
+        handler.on_chain_start(
+            serialized={"name": "LangGraph"},
+            inputs={},
+            run_id=parent_run_id,
+            parent_run_id=None,
+            metadata={"workflow_name": "outer_flow"},
+        )
+        created_workflows[0].root_operation_name = "invoke_workflow top_flow"
+
+        handler.on_chain_start(
+            serialized={"name": "LangGraph"},
+            inputs={},
+            run_id=child_run_id,
+            parent_run_id=parent_run_id,
+            metadata={"workflow_name": "inner_flow"},
+        )
+
+        assert telemetry.workflow.call_args_list[1].kwargs == {
+            "name": "inner_flow",
+            "root_operation_name": "invoke_workflow top_flow",
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -336,6 +442,87 @@ class TestOnChainStartAgent:
         # run_id must still be registered (with None invocation) so traversal works
         assert run_id in handler._invocation_manager._invocations
         assert handler._invocation_manager.get_invocation(run_id) is None
+
+        def test_agent_under_workflow_sets_root_operation_name(self):
+            handler, telemetry, workflow_inv, agent_inv = _make_handler()
+            workflow_run_id = _run_id()
+            agent_run_id = _run_id()
+            workflow_inv.span.name = "invoke_workflow orchestrator"
+
+            handler.on_chain_start(
+                serialized={"name": "LangGraph"},
+                inputs={},
+                run_id=workflow_run_id,
+                parent_run_id=None,
+            )
+            handler.on_chain_start(
+                serialized={"name": "math_agent"},
+                inputs={},
+                run_id=agent_run_id,
+                parent_run_id=workflow_run_id,
+                metadata={"agent_name": "math_agent"},
+            )
+
+            assert agent_inv.root_operation_name == "invoke_workflow orchestrator"
+            assert (
+                agent_inv.attributes["gen_ai.root_operation.name"]
+                == "invoke_workflow orchestrator"
+            )
+            assert (
+                agent_inv.metric_attributes["gen_ai.root_operation.name"]
+                == "invoke_workflow orchestrator"
+            )
+
+        def test_nested_agent_uses_outermost_enclosing_operation_name(self):
+            handler, telemetry, workflow_inv, _ = _make_handler()
+            workflow_run_id = _run_id()
+            parent_agent_run_id = _run_id()
+            child_agent_run_id = _run_id()
+            workflow_inv.span.name = "invoke_workflow orchestrator"
+
+            created_agents: list[mock.MagicMock] = []
+
+            def _create_agent(*_args, **kwargs):
+                agent_invocation = _make_agent_inv_mock()
+                agent_invocation.agent_name = kwargs.get("agent_name")
+                agent_invocation.span.name = (
+                    f"invoke_agent {agent_invocation.agent_name}"
+                )
+                created_agents.append(agent_invocation)
+                return agent_invocation
+
+            telemetry.invoke_local_agent.side_effect = _create_agent
+
+            handler.on_chain_start(
+                serialized={"name": "LangGraph"},
+                inputs={},
+                run_id=workflow_run_id,
+                parent_run_id=None,
+            )
+            handler.on_chain_start(
+                serialized={"name": "planner"},
+                inputs={},
+                run_id=parent_agent_run_id,
+                parent_run_id=workflow_run_id,
+                metadata={"agent_name": "planner"},
+            )
+            handler.on_chain_start(
+                serialized={"name": "reviewer"},
+                inputs={},
+                run_id=child_agent_run_id,
+                parent_run_id=parent_agent_run_id,
+                metadata={"agent_name": "reviewer"},
+            )
+
+            assert len(created_agents) == 2
+            assert (
+                created_agents[0].root_operation_name
+                == "invoke_workflow orchestrator"
+            )
+            assert (
+                created_agents[1].root_operation_name
+                == "invoke_workflow orchestrator"
+            )
 
     def test_no_agent_name_child_can_still_find_ancestor_agent(self):
         """Even when an intermediate node has no agent name, a deeper child

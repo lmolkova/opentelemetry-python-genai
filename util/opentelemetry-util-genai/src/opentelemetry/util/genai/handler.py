@@ -257,6 +257,7 @@ class TelemetryHandler:
         self,
         *,
         name: str | None = None,
+        root_operation_name: str | None = None,
     ) -> WorkflowInvocation:
         """Create and start a workflow invocation.
 
@@ -272,6 +273,7 @@ class TelemetryHandler:
             self._logger,
             self._completion_hook,
             name,
+            root_operation_name=root_operation_name,
         )
 
     def stop_llm(self, invocation: LLMInvocation) -> LLMInvocation:  # pylint: disable=no-self-use
@@ -392,6 +394,7 @@ class TelemetryHandler:
         *,
         request_model: str | None = None,
         agent_name: str | None = None,
+        root_operation_name: str | None = None,
     ) -> AgentInvocation:
         """Create and start a local agent invocation (INTERNAL span kind).
 
@@ -411,6 +414,7 @@ class TelemetryHandler:
             span_kind=SpanKind.INTERNAL,
             request_model=request_model,
             agent_name=agent_name,
+            root_operation_name=root_operation_name,
         )
 
     def start_invoke_remote_agent(
@@ -421,6 +425,7 @@ class TelemetryHandler:
         server_address: str | None = None,
         server_port: int | None = None,
         agent_name: str | None = None,
+        root_operation_name: str | None = None,
     ) -> AgentInvocation:
         """Create and start a remote agent invocation (CLIENT span kind).
 
@@ -443,6 +448,7 @@ class TelemetryHandler:
             agent_name=agent_name,
             server_address=server_address,
             server_port=server_port,
+            root_operation_name=root_operation_name,
         )
 
     def invoke_local_agent(
@@ -450,6 +456,7 @@ class TelemetryHandler:
         *,
         request_model: str | None = None,
         agent_name: str | None = None,
+        root_operation_name: str | None = None,
     ) -> AgentInvocation:
         """Returns an agent invocation (INTERNAL span kind). Starts span when called.
 
@@ -469,6 +476,7 @@ class TelemetryHandler:
             span_kind=SpanKind.INTERNAL,
             request_model=request_model,
             agent_name=agent_name,
+            root_operation_name=root_operation_name,
         )
 
     def invoke_remote_agent(
@@ -479,6 +487,7 @@ class TelemetryHandler:
         server_address: str | None = None,
         server_port: int | None = None,
         agent_name: str | None = None,
+        root_operation_name: str | None = None,
     ) -> AgentInvocation:
         """Returns an agent invocation (CLIENT span kind). Starts span when called.
 
@@ -501,11 +510,14 @@ class TelemetryHandler:
             agent_name=agent_name,
             server_address=server_address,
             server_port=server_port,
+            root_operation_name=root_operation_name,
         )
 
     def workflow(
         self,
         name: str | None = None,
+        *,
+        root_operation_name: str | None = None,
     ) -> WorkflowInvocation:
         """Returns a Workflow invocation. Starts a span when called.
 
@@ -521,6 +533,7 @@ class TelemetryHandler:
             self._logger,
             self._completion_hook,
             name,
+            root_operation_name=root_operation_name,
         )
 
 

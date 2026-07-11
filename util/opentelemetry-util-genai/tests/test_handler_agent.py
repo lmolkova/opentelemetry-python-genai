@@ -324,6 +324,42 @@ class TestLocalAgentInvocation(unittest.TestCase):  # pylint: disable=too-many-p
 
         assert GenAI.GEN_AI_AGENT_NAME not in captured_attributes
 
+    def test_root_operation_name_at_construction_available_to_sampler(self):
+        captured_attributes = {}
+
+        class AttributeCapturingSampler:  # pylint: disable=no-self-use
+            def should_sample(
+                self,
+                parent_context,
+                trace_id,
+                name,
+                kind=None,
+                attributes=None,
+                links=None,
+            ):
+                captured_attributes.update(attributes or {})
+                return SamplingResult(Decision.RECORD_AND_SAMPLE, attributes)
+
+            def get_description(self):
+                return "AttributeCapturingSampler"
+
+        sampler_provider = TracerProvider(sampler=AttributeCapturingSampler())
+        sampler_provider.add_span_processor(
+            SimpleSpanProcessor(self.span_exporter)
+        )
+        handler = TelemetryHandler(tracer_provider=sampler_provider)
+
+        invocation = handler.invoke_local_agent(
+            agent_name="Sampler Agent",
+            root_operation_name="invoke_workflow orchestrator",
+        )
+        invocation.stop()
+
+        assert (
+            captured_attributes["gen_ai.root_operation.name"]
+            == "invoke_workflow orchestrator"
+        )
+
 
 class TestAgentInvocationContent(unittest.TestCase):
     def setUp(self):
