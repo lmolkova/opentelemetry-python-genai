@@ -1,7 +1,7 @@
 # Validates the JSON payload of GenAI content attributes against the
 # semconv JSON schemas.  Schema constants (_schema_*) are defined in
-# _schemas.rego, which is generated at test-run time from the semconv
-# repository (docs/gen-ai/*.json) and placed alongside this file.
+# _schemas.rego, generated from the semconv repository (model/gen-ai/*.json)
+# by `make generate-conformance-policies`, alongside this file.
 # Weaver only loads .rego files from --advice-policies, so schemas are
 # inlined as Rego constants rather than loaded as OPA data documents.
 

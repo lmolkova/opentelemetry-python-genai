@@ -20,9 +20,20 @@
       "customType": "regex",
       "managerFilePatterns": ["/^versions\\.env$/"],
       "matchStrings": [
-        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+) versioning=(?<versioning>\\S+)\\s+WEAVER_VERSION=(?<currentValue>\\S+)",
-        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+) packageName=(?<packageName>\\S+) versioning=(?<versioning>\\S+)\\s+SEMCONV_GENAI_REF=(?<currentValue>\\S+)"
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+) versioning=(?<versioning>\\S+)\\s+WEAVER_VERSION=(?<currentValue>\\S+)"
       ]
+    },
+    {
+      // semantic-conventions-genai has no releases, so we track main's HEAD as
+      // a pinned commit. git-refs digest updates need the branch in
+      // currentValue and the SHA in currentDigest, so currentValue is templated
+      // to `main` and SEMCONV_GENAI_REF is captured as the digest.
+      "customType": "regex",
+      "managerFilePatterns": ["/^versions\\.env$/"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+) packageName=(?<packageName>\\S+)\\s+SEMCONV_GENAI_REF=(?<currentDigest>\\S+)"
+      ],
+      "currentValueTemplate": "main"
     },
     {
       // Keep .weaver.toml schema URL pinned to the latest Weaver tag.
