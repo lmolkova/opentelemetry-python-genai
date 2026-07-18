@@ -31,10 +31,7 @@ from opentelemetry.sdk._logs import LoggerProvider
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.test.weaver_live_check import LiveCheckReport
-from opentelemetry.test_util_genai.conformance import (
-    ExpectedViolation,
-    Scenario,
-)
+from opentelemetry.test_util_genai.conformance import Scenario
 from opentelemetry.test_util_genai.instrumentor import instrument
 
 DEFAULT_MODEL = "gpt-4o-mini"
@@ -76,16 +73,6 @@ class OrchestrationScenario(Scenario):
         "execute_tool": 1,
     }
     expected_metrics = ("gen_ai.client.operation.duration",)
-    expected_violations = (
-        # `FunctionSpanData` in the openai-agents library doesn't expose
-        # `tool_call_id`, so our `execute_tool` spans can't set
-        # `gen_ai.tool.call.id`. Tracked in
-        # https://github.com/open-telemetry/opentelemetry-python-genai/issues/86
-        ExpectedViolation(
-            advice_id="genai_expected_attribute_missing",
-            message_substring="gen_ai.tool.call.id",
-        ),
-    )
 
     def run(
         self,

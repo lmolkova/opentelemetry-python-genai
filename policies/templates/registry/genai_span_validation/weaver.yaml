@@ -1,0 +1,66 @@
+# Hand-maintained inputs the semconv registry can't express. Everything else in
+# the generated genai_span_validation.rego is derived from the registry. Keep
+# these in sync when semconv adds a span type or operation.
+params:
+  # Span type -> the `gen_ai.operation.name` values that emit that span (the
+  # registry doesn't link operations to span types). Most types carry one
+  # operation; inference and memory fan out to several. Generation fails if a
+  # gen_ai span type is missing here.
+  span_operations:
+    gen_ai.inference.client: [chat, generate_content, text_completion]
+    gen_ai.embeddings.client: [embeddings]
+    gen_ai.retrieval.client: [retrieval]
+    gen_ai.memory.client: [create_memory, create_memory_store, delete_memory, delete_memory_store, search_memory, update_memory, upsert_memory]
+    gen_ai.create_agent.client: [create_agent]
+    gen_ai.invoke_agent.client: [invoke_agent]
+    gen_ai.invoke_agent.internal: [invoke_agent]
+    gen_ai.execute_tool.internal: [execute_tool]
+    gen_ai.invoke_workflow.internal: [invoke_workflow]
+    gen_ai.plan.internal: [plan]
+
+  # Span type -> the attribute whose value semconv appends to the span name
+  # (`{operation} {value}`). Sourced from each span's name `note` in the
+  # registry (prose, not structured data). Omit a span type whose name is just
+  # `{operation}` with nothing appended (e.g. memory).
+  span_name_target:
+    gen_ai.inference.client: gen_ai.request.model
+    gen_ai.embeddings.client: gen_ai.request.model
+    gen_ai.retrieval.client: gen_ai.data_source.id
+    gen_ai.create_agent.client: gen_ai.agent.name
+    gen_ai.invoke_agent.client: gen_ai.agent.name
+    gen_ai.invoke_agent.internal: gen_ai.agent.name
+    gen_ai.execute_tool.internal: gen_ai.tool.name
+    gen_ai.invoke_workflow.internal: gen_ai.workflow.name
+    gen_ai.plan.internal: gen_ai.agent.name
+
+  # Span type -> unconditionally-recommended attributes that instrumentations
+  # only set when the caller or provider supplies a value (request sampling
+  # parameters, prompt-cache token counts, encoding formats). Semconv marks them
+  # plain `recommended`, so the generated policy would treat a missing one as a
+  # violation; listing them here drops them from the check entirely. An entry not
+  # in the registry's plain-recommended set for its type is inert.
+  #
+  # invoke_agent inherits the full inference attribute group, so semconv also
+  # marks gen_ai.response.finish_reasons / gen_ai.usage.{input,output}_tokens
+  # `recommended` on agent spans — but a multi-turn agent has no single finish
+  # reason and its token usage is an aggregate of the inner LLM spans, so those
+  # belong here (optional), not in recommended_on_success (which is inference).
+  # TODO(semconv): make these conditional on the agent span, or drop them from it.
+  recommended_optional:
+    gen_ai.inference.client: [gen_ai.request.frequency_penalty, gen_ai.request.max_tokens, gen_ai.request.presence_penalty, gen_ai.request.stop_sequences, gen_ai.request.temperature, gen_ai.request.top_p, gen_ai.usage.cache_creation.input_tokens, gen_ai.usage.cache_read.input_tokens]
+    gen_ai.embeddings.client: [gen_ai.request.encoding_formats]
+    gen_ai.invoke_agent.client: [gen_ai.request.frequency_penalty, gen_ai.request.max_tokens, gen_ai.request.presence_penalty, gen_ai.request.stop_sequences, gen_ai.request.temperature, gen_ai.request.top_p, gen_ai.usage.cache_creation.input_tokens, gen_ai.usage.cache_read.input_tokens, gen_ai.response.finish_reasons, gen_ai.usage.input_tokens, gen_ai.usage.output_tokens]
+    gen_ai.invoke_agent.internal: [gen_ai.request.frequency_penalty, gen_ai.request.max_tokens, gen_ai.request.presence_penalty, gen_ai.request.stop_sequences, gen_ai.request.temperature, gen_ai.request.top_p, gen_ai.usage.cache_creation.input_tokens, gen_ai.usage.cache_read.input_tokens, gen_ai.response.finish_reasons, gen_ai.usage.input_tokens, gen_ai.usage.output_tokens]
+
+  # Span type -> recommended attributes that must be present on a successful span
+  # (status != error) but are excused on an error span, where a failed call may
+  # produce no response or usage. Flagged as a violation only on success. Applies
+  # to the client span that makes the actual model call, not agent-level spans.
+  recommended_on_success:
+    gen_ai.inference.client: [gen_ai.response.finish_reasons, gen_ai.usage.input_tokens, gen_ai.usage.output_tokens]
+    gen_ai.embeddings.client: [gen_ai.usage.input_tokens]
+
+templates:
+  - template: "genai_span_validation.rego.j2"
+    filter: ".registry"
+    application_mode: single

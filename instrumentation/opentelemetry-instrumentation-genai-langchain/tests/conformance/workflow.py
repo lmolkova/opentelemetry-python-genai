@@ -37,10 +37,18 @@ class WorkflowScenario(Scenario):
         "gen_ai.client.token.usage",
     )
     # langchain can't populate server.address on chat spans.
+    #
+    # langchain names the workflow span after the LangGraph graph
+    # (`invoke_workflow LangGraph`) but doesn't set gen_ai.workflow.name, so the
+    # name doesn't match the `invoke_workflow {gen_ai.workflow.name}` form.
     expected_violations = (
         ExpectedViolation(
             advice_id="genai_expected_attribute_missing",
             message_substring="server.address",
+        ),
+        ExpectedViolation(
+            advice_id="genai_span_name_format",
+            message_substring="invoke_workflow span name should be",
         ),
     )
 

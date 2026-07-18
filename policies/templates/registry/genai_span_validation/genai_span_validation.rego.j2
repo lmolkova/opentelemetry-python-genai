@@ -1,3 +1,31 @@
+{#-
+  Renders policies/genai_span_validation.rego in full: the per-span-type data
+  tables (derived from the pinned GenAI semconv registry and the weaver.yaml
+  params) followed by the fixed rule logic. Regenerate with
+  `make generate-conformance-policies` after bumping SEMCONV_GENAI_REF in
+  versions.env or editing the params; do not edit the output.
+
+  Uses the weaver `--v2` resolved-registry schema: `ctx` is `.registry`, so
+  `ctx.spans` is the base span groups (provider refinements live under the
+  top-level `refinements` key and are excluded — the rego validates the
+  baseline shape refinements inherit) and attribute names are `attr.key`. Only
+  `gen_ai.*` spans are emitted (mcp.* is skipped).
+-#}
+{%- set prefix = "gen_ai." -%}
+{#- Fail generation if a gen_ai span type is missing from the span_operations
+    param: otherwise it would silently emit no operation mapping and escape
+    validation entirely. minijinja has no raise() and weaver doesn't enable
+    strict-undefined, so `| int` on a message string forces a hard evaluation
+    error (reported as "invalid float literal" at this template line). -#}
+{%- for s in ctx.spans if prefix in s.type and s.type not in params.span_operations -%}
+{{- ("FATAL: span type '" ~ s.type ~ "' is not mapped in the span_operations param (weaver.yaml) — add it") | int -}}
+{%- endfor -%}
+{%- set ns = namespace(op_names=[]) -%}
+{%- for s in ctx.spans -%}
+  {%- for a in s.attributes if a.key == "gen_ai.operation.name" and a.type.members and ns.op_names == [] -%}
+    {%- set ns.op_names = a.type.members | map(attribute="value") | list | sort -%}
+  {%- endfor -%}
+{%- endfor -%}
 # AUTO-GENERATED from the GenAI semantic-conventions registry and the params in
 # templates/registry/genai_span_validation/weaver.yaml. DO NOT EDIT.
 # Regenerate with `make generate-conformance-policies` after bumping
@@ -16,77 +44,38 @@ import rego.v1
 # ─── Generated data ─────────────────────────────────────────────────────────
 
 # Span kind per base gen_ai span type.
-_gen_type_kind["create_agent.client"] := "client"
-_gen_type_kind["embeddings.client"] := "client"
-_gen_type_kind["execute_tool.internal"] := "internal"
-_gen_type_kind["inference.client"] := "client"
-_gen_type_kind["invoke_agent.client"] := "client"
-_gen_type_kind["invoke_agent.internal"] := "internal"
-_gen_type_kind["invoke_workflow.internal"] := "internal"
-_gen_type_kind["memory.client"] := "client"
-_gen_type_kind["plan.internal"] := "internal"
-_gen_type_kind["retrieval.client"] := "client"
-
+{% for s in ctx.spans if prefix in s.type -%}
+_gen_type_kind["{{ s.type | replace(prefix, "") }}"] := "{{ s.kind }}"
+{% endfor %}
 # Attribute appended to the span name (`{operation} {value}`), per span type.
 # Absent for types whose name is just `{operation}` (e.g. memory).
-_gen_span_name_target["create_agent.client"] := "gen_ai.agent.name"
-_gen_span_name_target["embeddings.client"] := "gen_ai.request.model"
-_gen_span_name_target["execute_tool.internal"] := "gen_ai.tool.name"
-_gen_span_name_target["inference.client"] := "gen_ai.request.model"
-_gen_span_name_target["invoke_agent.client"] := "gen_ai.agent.name"
-_gen_span_name_target["invoke_agent.internal"] := "gen_ai.agent.name"
-_gen_span_name_target["invoke_workflow.internal"] := "gen_ai.workflow.name"
-_gen_span_name_target["plan.internal"] := "gen_ai.agent.name"
-_gen_span_name_target["retrieval.client"] := "gen_ai.data_source.id"
-
+{% for s in ctx.spans if prefix in s.type and s.type in params.span_name_target -%}
+_gen_span_name_target["{{ s.type | replace(prefix, "") }}"] := "{{ params.span_name_target[s.type] }}"
+{% endfor %}
 # gen_ai.operation.name -> set of span-type tokens that emit it. Single-valued
 # for every operation except invoke_agent (internal + client).
-_gen_op_types["chat"] := {"inference.client"}
-_gen_op_types["create_agent"] := {"create_agent.client"}
-_gen_op_types["create_memory"] := {"memory.client"}
-_gen_op_types["create_memory_store"] := {"memory.client"}
-_gen_op_types["delete_memory"] := {"memory.client"}
-_gen_op_types["delete_memory_store"] := {"memory.client"}
-_gen_op_types["embeddings"] := {"embeddings.client"}
-_gen_op_types["execute_tool"] := {"execute_tool.internal"}
-_gen_op_types["generate_content"] := {"inference.client"}
-_gen_op_types["invoke_agent"] := {"invoke_agent.client", "invoke_agent.internal"}
-_gen_op_types["invoke_workflow"] := {"invoke_workflow.internal"}
-_gen_op_types["plan"] := {"plan.internal"}
-_gen_op_types["retrieval"] := {"retrieval.client"}
-_gen_op_types["search_memory"] := {"memory.client"}
-_gen_op_types["text_completion"] := {"inference.client"}
-_gen_op_types["update_memory"] := {"memory.client"}
-_gen_op_types["upsert_memory"] := {"memory.client"}
-
+{% for op in ns.op_names -%}
+_gen_op_types["{{ op }}"] := {{ '{' }}
+{%- set sep = joiner(", ") -%}
+{%- for s in ctx.spans if prefix in s.type -%}
+  {%- if op in params.span_operations[s.type] -%}{{ sep() }}"{{ s.type | replace(prefix, "") }}"{%- endif -%}
+{%- endfor -%}
+{{ '}' }}
+{% endfor %}
 # Required attributes per span type (requirement_level: required).
-_gen_required["create_agent.client"] := {"gen_ai.operation.name", "gen_ai.provider.name"}
-_gen_required["embeddings.client"] := {"gen_ai.operation.name", "gen_ai.provider.name"}
-_gen_required["execute_tool.internal"] := {"gen_ai.operation.name", "gen_ai.tool.name"}
-_gen_required["inference.client"] := {"gen_ai.operation.name", "gen_ai.provider.name"}
-_gen_required["invoke_agent.client"] := {"gen_ai.operation.name", "gen_ai.provider.name"}
-_gen_required["invoke_agent.internal"] := {"gen_ai.operation.name"}
-_gen_required["invoke_workflow.internal"] := {"gen_ai.operation.name"}
-_gen_required["memory.client"] := {"gen_ai.operation.name"}
-_gen_required["plan.internal"] := {"gen_ai.operation.name"}
-_gen_required["retrieval.client"] := {"gen_ai.operation.name"}
-
+{% for s in ctx.spans if prefix in s.type -%}
+{%- set attrs = s.attributes | required | map(attribute="key") | list | sort -%}
+_gen_required["{{ s.type | replace(prefix, "") }}"] := {% if attrs %}{{ '{' }}{% for a in attrs %}"{{ a }}"{{ ", " if not loop.last }}{% endfor %}{{ '}' }}{% else %}set(){% endif %}
+{% endfor %}
 # Unconditionally recommended attributes per span type (requirement_level is the
 # plain string `recommended`, not the `{recommended: <note>}` conditional form
 # nor opt_in). Semconv recommends these on every span of the type, so a missing
 # one is a violation — same tier as Required. The conditional forms
 # (`{recommended: …}`, `{conditionally_required: …}`) are excluded here.
-_gen_recommended["create_agent.client"] := {"server.address"}
-_gen_recommended["embeddings.client"] := {"gen_ai.embeddings.dimension.count", "gen_ai.request.encoding_formats", "gen_ai.response.model", "gen_ai.usage.input_tokens", "server.address"}
-_gen_recommended["execute_tool.internal"] := set()
-_gen_recommended["inference.client"] := {"gen_ai.request.frequency_penalty", "gen_ai.request.max_tokens", "gen_ai.request.presence_penalty", "gen_ai.request.stop_sequences", "gen_ai.request.temperature", "gen_ai.request.top_p", "gen_ai.response.finish_reasons", "gen_ai.response.id", "gen_ai.response.model", "gen_ai.usage.cache_creation.input_tokens", "gen_ai.usage.cache_read.input_tokens", "gen_ai.usage.input_tokens", "gen_ai.usage.output_tokens", "server.address"}
-_gen_recommended["invoke_agent.client"] := {"gen_ai.request.frequency_penalty", "gen_ai.request.max_tokens", "gen_ai.request.presence_penalty", "gen_ai.request.stop_sequences", "gen_ai.request.temperature", "gen_ai.request.top_p", "gen_ai.response.finish_reasons", "gen_ai.usage.cache_creation.input_tokens", "gen_ai.usage.cache_read.input_tokens", "gen_ai.usage.input_tokens", "gen_ai.usage.output_tokens", "server.address"}
-_gen_recommended["invoke_agent.internal"] := {"gen_ai.request.frequency_penalty", "gen_ai.request.max_tokens", "gen_ai.request.presence_penalty", "gen_ai.request.stop_sequences", "gen_ai.request.temperature", "gen_ai.request.top_p", "gen_ai.response.finish_reasons", "gen_ai.usage.cache_creation.input_tokens", "gen_ai.usage.cache_read.input_tokens", "gen_ai.usage.input_tokens", "gen_ai.usage.output_tokens"}
-_gen_recommended["invoke_workflow.internal"] := set()
-_gen_recommended["memory.client"] := {"server.address"}
-_gen_recommended["plan.internal"] := set()
-_gen_recommended["retrieval.client"] := {"gen_ai.retrieval.top_k", "server.address"}
-
+{% for s in ctx.spans if prefix in s.type -%}
+{%- set attrs = s.attributes | selectattr("requirement_level", "equalto", "recommended") | map(attribute="key") | list | sort -%}
+_gen_recommended["{{ s.type | replace(prefix, "") }}"] := {% if attrs %}{{ '{' }}{% for a in attrs %}"{{ a }}"{{ ", " if not loop.last }}{% endfor %}{{ '}' }}{% else %}set(){% endif %}
+{% endfor %}
 # Conditionally-expected attributes per span type: requirement_level is an object
 # form — `{recommended: <note>}` or `{conditionally_required: <note>}` — so the
 # attribute belongs on the span only when the note's condition holds. The policy
@@ -94,32 +83,23 @@ _gen_recommended["retrieval.client"] := {"gen_ai.retrieval.top_k", "server.addre
 # level, not flagged. The three plain-string forms (required/recommended/opt_in)
 # are excluded here; error.type is excluded too (its status-conditional presence
 # is checked by the dedicated error.type rules).
-_gen_conditional["create_agent.client"] := {"gen_ai.agent.description", "gen_ai.agent.id", "gen_ai.agent.name", "gen_ai.agent.version", "gen_ai.request.model", "server.port"}
-_gen_conditional["embeddings.client"] := {"gen_ai.request.model", "server.port"}
-_gen_conditional["execute_tool.internal"] := {"gen_ai.agent.name", "gen_ai.tool.call.id", "gen_ai.tool.description", "gen_ai.tool.type"}
-_gen_conditional["inference.client"] := {"gen_ai.conversation.compacted", "gen_ai.conversation.id", "gen_ai.output.type", "gen_ai.prompt.name", "gen_ai.prompt.version", "gen_ai.request.choice.count", "gen_ai.request.model", "gen_ai.request.reasoning.level", "gen_ai.request.seed", "gen_ai.request.stream", "gen_ai.request.top_k", "gen_ai.response.time_to_first_chunk", "gen_ai.usage.reasoning.output_tokens", "server.port"}
-_gen_conditional["invoke_agent.client"] := {"gen_ai.agent.description", "gen_ai.agent.id", "gen_ai.agent.name", "gen_ai.agent.version", "gen_ai.conversation.id", "gen_ai.data_source.id", "gen_ai.output.type", "gen_ai.request.choice.count", "gen_ai.request.model", "gen_ai.request.seed", "server.port"}
-_gen_conditional["invoke_agent.internal"] := {"gen_ai.agent.description", "gen_ai.agent.name", "gen_ai.conversation.id", "gen_ai.data_source.id", "gen_ai.output.type", "gen_ai.request.choice.count", "gen_ai.request.model", "gen_ai.request.seed"}
-_gen_conditional["invoke_workflow.internal"] := {"gen_ai.workflow.name"}
-_gen_conditional["memory.client"] := {"gen_ai.memory.record.count", "gen_ai.memory.record.id", "gen_ai.memory.store.id", "gen_ai.provider.name", "server.port"}
-_gen_conditional["plan.internal"] := {"gen_ai.agent.name"}
-_gen_conditional["retrieval.client"] := {"gen_ai.data_source.id", "gen_ai.provider.name", "gen_ai.request.model", "server.port"}
-
+{% for s in ctx.spans if prefix in s.type -%}
+{%- set attrs = s.attributes | rejectattr("requirement_level", "equalto", "required") | rejectattr("requirement_level", "equalto", "recommended") | rejectattr("requirement_level", "equalto", "opt_in") | rejectattr("key", "equalto", "error.type") | map(attribute="key") | list | sort -%}
+_gen_conditional["{{ s.type | replace(prefix, "") }}"] := {% if attrs %}{{ '{' }}{% for a in attrs %}"{{ a }}"{{ ", " if not loop.last }}{% endfor %}{{ '}' }}{% else %}set(){% endif %}
+{% endfor %}
 # Recommended attributes that are only set when the caller/provider supplies a
 # value (from the `recommended_optional` param); never flagged. See weaver.yaml.
-_gen_recommended_optional["embeddings.client"] := {"gen_ai.request.encoding_formats"}
-_gen_recommended_optional["inference.client"] := {"gen_ai.request.frequency_penalty", "gen_ai.request.max_tokens", "gen_ai.request.presence_penalty", "gen_ai.request.stop_sequences", "gen_ai.request.temperature", "gen_ai.request.top_p", "gen_ai.usage.cache_creation.input_tokens", "gen_ai.usage.cache_read.input_tokens"}
-_gen_recommended_optional["invoke_agent.client"] := {"gen_ai.request.frequency_penalty", "gen_ai.request.max_tokens", "gen_ai.request.presence_penalty", "gen_ai.request.stop_sequences", "gen_ai.request.temperature", "gen_ai.request.top_p", "gen_ai.usage.cache_creation.input_tokens", "gen_ai.usage.cache_read.input_tokens", "gen_ai.response.finish_reasons", "gen_ai.usage.input_tokens", "gen_ai.usage.output_tokens"}
-_gen_recommended_optional["invoke_agent.internal"] := {"gen_ai.request.frequency_penalty", "gen_ai.request.max_tokens", "gen_ai.request.presence_penalty", "gen_ai.request.stop_sequences", "gen_ai.request.temperature", "gen_ai.request.top_p", "gen_ai.usage.cache_creation.input_tokens", "gen_ai.usage.cache_read.input_tokens", "gen_ai.response.finish_reasons", "gen_ai.usage.input_tokens", "gen_ai.usage.output_tokens"}
-
+{% for s in ctx.spans if prefix in s.type and s.type in params.recommended_optional -%}
+_gen_recommended_optional["{{ s.type | replace(prefix, "") }}"] := {{ '{' }}{% for a in params.recommended_optional[s.type] %}"{{ a }}"{{ ", " if not loop.last }}{% endfor %}{{ '}' }}
+{% endfor %}
 # Recommended attributes that must appear on a successful span (from the
 # `recommended_on_success` param); flagged only when status != error. See weaver.yaml.
-_gen_recommended_on_success["embeddings.client"] := {"gen_ai.usage.input_tokens"}
-_gen_recommended_on_success["inference.client"] := {"gen_ai.response.finish_reasons", "gen_ai.usage.input_tokens", "gen_ai.usage.output_tokens"}
-
+{% for s in ctx.spans if prefix in s.type and s.type in params.recommended_on_success -%}
+_gen_recommended_on_success["{{ s.type | replace(prefix, "") }}"] := {{ '{' }}{% for a in params.recommended_on_success[s.type] %}"{{ a }}"{{ ", " if not loop.last }}{% endfor %}{{ '}' }}
+{% endfor %}
 # All documented gen_ai.operation.name enum values.
-_gen_operation_names := {"chat", "create_agent", "create_memory", "create_memory_store", "delete_memory", "delete_memory_store", "embeddings", "execute_tool", "generate_content", "invoke_agent", "invoke_workflow", "plan", "retrieval", "search_memory", "text_completion", "update_memory", "upsert_memory"}
-
+_gen_operation_names := {{ '{' }}{% for op in ns.op_names %}"{{ op }}"{{ ", " if not loop.last }}{% endfor %}{{ '}' }}
+{% raw %}
 # ─── Span-type resolution ───────────────────────────────────────────────────
 #
 # Map a sample's `gen_ai.operation.name` (+ span kind) to the semconv span-type
@@ -427,3 +407,4 @@ _span_finding(id, level, span, context, message) := {
 	"context": context,
 	"message": message,
 }
+{% endraw %}
