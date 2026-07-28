@@ -25,6 +25,21 @@
       ]
     },
     {
+      // The generated conformance reports link to the semconv docs at the
+      // pinned revision. Same datasource/depName as the SEMCONV_GENAI_REF
+      // entry above, so both move in one PR and the generated pages don't
+      // lag versions.env.
+      "customType": "regex",
+      "managerFilePatterns": ["/^docs/conformance/reports/.*\\.md$/"],
+      "matchStrings": [
+        "https://github\\.com/open-telemetry/semantic-conventions-genai/blob/(?<currentValue>[0-9a-f]{40})/"
+      ],
+      "datasourceTemplate": "git-refs",
+      "depNameTemplate": "open-telemetry/semantic-conventions-genai",
+      "packageNameTemplate": "https://github.com/open-telemetry/semantic-conventions-genai.git",
+      "versioningTemplate": "git"
+    },
+    {
       // Keep .weaver.toml schema URL pinned to the latest Weaver tag.
       "customType": "regex",
       "managerFilePatterns": ["/^\\.weaver\\.toml$/"],

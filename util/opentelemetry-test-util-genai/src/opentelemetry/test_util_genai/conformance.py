@@ -34,11 +34,20 @@ Each ``tests/conformance/<op>.py`` defines a :class:`Scenario` subclass with:
   counts and ``expected_metrics`` presence; per-scenario overrides call
   ``super().validate(report)`` and layer on additional checks against the
   weaver report.
+
+Each run writes two artifacts: the raw weaver report to
+``weaver_reports/<library>/<Scenario>.json`` (gitignored, for debugging) and
+the package's semconv attribute coverage to
+``instrumentation/<pkg>/tests/conformance/data.json`` (committed). The latter
+feeds ``scripts/update_conformance_reports.py``, so it reflects a *full* env
+run — a filtered run produces a partial file.
 """
 
 from __future__ import annotations
 
+import inspect
 import json
+import shutil
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
@@ -55,6 +64,10 @@ from opentelemetry.test.weaver_live_check import (
     LiveCheckReport,
     WeaverLiveCheck,
 )
+from opentelemetry.test_util_genai._semconv_reference import (
+    build_scenario_data,
+)
+from opentelemetry.test_util_genai._setup_weaver import _workspace_root
 
 
 @dataclass(frozen=True)
@@ -178,10 +191,58 @@ def _seen_span_operations(report: LiveCheckReport) -> dict[str, int]:
     return counts
 
 
-def _dump_report(scenario: Scenario, report: LiveCheckReport) -> None:
-    out = Path("weaver_reports") / f"{type(scenario).__name__}.json"
-    out.parent.mkdir(parents=True, exist_ok=True)
+def _package_dir(scenario: Scenario) -> Path:
+    """The ``instrumentation/<pkg>`` directory the scenario is defined in."""
+    path = Path(inspect.getfile(type(scenario))).resolve()
+    for ancestor in path.parents:
+        if ancestor.parent.name == "instrumentation":
+            return ancestor
+    raise RuntimeError(
+        f"{type(scenario).__name__} is defined at {path}, which is not inside "
+        "an instrumentation/<package> directory."
+    )
+
+
+def library_name(scenario: Scenario) -> str:
+    """The scenario's library slug, matching the semconv-genai naming."""
+    name = _package_dir(scenario).name
+    for prefix in ("opentelemetry-instrumentation-", "genai-"):
+        name = name.removeprefix(prefix)
+    return name
+
+
+# Library directories emptied so far in this process, so a renamed or deleted
+# scenario leaves no stale dump behind while repeated runs stay additive.
+_cleared_report_dirs: set[Path] = set()
+
+
+def _report_dir(library: str) -> Path:
+    out = _workspace_root() / "weaver_reports" / library
+    if out not in _cleared_report_dirs:
+        shutil.rmtree(out, ignore_errors=True)
+        _cleared_report_dirs.add(out)
+    out.mkdir(parents=True, exist_ok=True)
+    return out
+
+
+def _dump_report(
+    scenario: Scenario, report: LiveCheckReport, library: str
+) -> None:
+    """Write the raw weaver report — the debugging artifact, kept verbatim."""
+    out = _report_dir(library) / f"{type(scenario).__name__}.json"
     out.write_text(json.dumps(report._report, indent=2, sort_keys=True))  # noqa: SLF001
+
+
+def _write_scenario_data(scenario: Scenario, library: str) -> None:
+    """Refresh the package's committed semconv coverage data.
+
+    Derived from *every* report the package has dumped this run rather than
+    merged scenario by scenario: required-level attributes are the intersection
+    across all spans of a type, which only holds when they are reduced together.
+    """
+    data = build_scenario_data(_report_dir(library), library)
+    out = _package_dir(scenario) / "tests" / "conformance" / "data.json"
+    out.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
 
 
 def run_conformance(
@@ -212,7 +273,12 @@ def run_conformance(
         logger_provider.force_flush()
 
         report = weaver.end(timeout=120)
-        _dump_report(scenario, report)
+        library = library_name(scenario)
+        _dump_report(scenario, report, library)
+        # Coverage records what weaver observed, so it is written before the
+        # checks: a scenario that fails (or xfails, like the CrewAI baseline)
+        # still measured something worth reporting.
+        _write_scenario_data(scenario, library)
 
         _check_violations(scenario, report)
         scenario.validate(report)

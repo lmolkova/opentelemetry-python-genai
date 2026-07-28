@@ -178,3 +178,29 @@ jobs:
       - name: Run oldest dependency check
         run: uv run --with packaging scripts/check_oldest_deps.py
 
+  conformance-report:
+    name: conformance-report
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repo @ SHA - ${{ github.sha }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+
+      - name: Regenerate semconv coverage reports
+        run: uv run python scripts/update_conformance_reports.py
+
+      - name: Check conformance reports are up to date
+        run: |
+          # -N so a newly added report page also shows up.
+          git add -N -- docs/conformance
+          git diff --exit-code -- docs/conformance \
+            || (echo 'Conformance reports are out of date, run "uv run python scripts/update_conformance_reports.py" and commit the changes in this PR.' && exit 1)
+

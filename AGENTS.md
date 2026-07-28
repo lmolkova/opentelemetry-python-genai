@@ -287,6 +287,13 @@ Run via `uv run tox -e py314-test-instrumentation-genai-<lib>-conformance`. The
 regular `*-{oldest,latest}` envs `--ignore` it so they don't need the
 OTLP/gRPC exporter or `weaver_live_check`.
 
+Each run also records the package's semconv attribute coverage to
+`tests/conformance/data.json` (committed — CI fails if a conformance run
+changes it and the file wasn't updated). Because it is rewritten from a full
+env run, a `-k`-filtered run yields a partial file; check the diff. Those files
+feed the coverage reports under [`docs/conformance/`](docs/conformance/),
+regenerated with `uv run python scripts/update_conformance_reports.py`.
+
 The parallel PR-review rules live in
 [`.github/instructions/instrumentation.instructions.md`](.github/instructions/instrumentation.instructions.md)
 and should be kept in sync with this section.

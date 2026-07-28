@@ -366,3 +366,13 @@ The `*-conformance` tox envs target `tests/test_conformance.py` directly; the
 regular `*-{oldest,latest}` envs `--ignore` it so they don't need the
 OTLP/gRPC exporter or `weaver_live_check`.
 
+The run also writes `tests/conformance/data.json` — which semconv attributes
+the package emits. **Commit it**, and re-run without `-k` first: a filtered run
+writes a partial file. It feeds the tables in
+[`docs/conformance/`](../../../docs/conformance/), rebuilt with
+`uv run python scripts/update_conformance_reports.py`.
+
+Those tables show what the scenarios *exercise*, not what the package can emit.
+So set the request parameters the library maps (temperature, max_tokens, …)
+instead of sending a bare request.
+

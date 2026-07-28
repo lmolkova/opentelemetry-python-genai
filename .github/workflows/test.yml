@@ -69,3 +69,11 @@ jobs:
 
       - name: Run tests
         run: uvx --with tox-uv tox -e ${{ matrix.tox_env }} -- -ra
+
+      - name: Check conformance reports are up to date
+        if: ${{ matrix.needs_weaver }}
+        run: |
+          # -N so a package's first, still-untracked data.json also shows up.
+          git add -N -- 'instrumentation/*/tests/conformance/data.json'
+          git diff --exit-code -- 'instrumentation/*/tests/conformance/data.json' \
+            || (echo 'Semconv coverage changed. Re-run this conformance env locally and commit the updated data.json.' && exit 1)

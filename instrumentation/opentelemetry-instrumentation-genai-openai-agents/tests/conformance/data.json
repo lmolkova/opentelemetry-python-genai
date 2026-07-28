@@ -1,0 +1,18 @@
+{
+  "spans": {
+    "execute_tool": [
+      "gen_ai.operation.name",
+      "gen_ai.tool.call.result",
+      "gen_ai.tool.name",
+      "gen_ai.tool.type"
+    ],
+    "invoke_agent_internal": [
+      "gen_ai.agent.name",
+      "gen_ai.operation.name"
+    ],
+    "invoke_workflow": [
+      "gen_ai.operation.name",
+      "gen_ai.workflow.name"
+    ]
+  }
+}
