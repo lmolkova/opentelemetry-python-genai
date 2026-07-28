@@ -42,7 +42,7 @@ that pin can change these pages.
 | [Invoke Agent Internal](reports/invoke-agent-internal-span.md) | langchain, openai-agents |
 | [Invoke Workflow](reports/invoke-workflow-span.md) | langchain, openai-agents |
 | [Plan](reports/plan-span.md) | (none) |
-| [Inference](reports/inference-span.md) | anthropic, crewai, google-genai, langchain, openai |
+| [Inference](reports/inference-span.md) | anthropic, google-genai, langchain, openai |
 | [Embeddings](reports/embeddings-span.md) | google-genai, openai |
 | [Retrieval](reports/retrieval-span.md) | (none) |
 | [Memory](reports/memory-span.md) | (none) |

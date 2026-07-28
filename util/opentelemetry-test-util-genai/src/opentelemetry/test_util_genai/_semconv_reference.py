@@ -9,11 +9,6 @@ generates the upstream coverage reports under ``reference/src/semconv_genai``.
 Importing it from there keeps span classification and semconv requirement
 levels in lockstep with the registry weaver validates against, instead of
 duplicating them here.
-
-Upstream's own entry points (``load_scenario_data_files``,
-``write_generated_scenario_data``, ``report``) are bound to its
-``scenarios/<lib>/`` layout, so we use the lower-level helpers and supply our
-own paths.
 """
 
 from __future__ import annotations
@@ -29,13 +24,9 @@ from opentelemetry.test_util_genai._setup_weaver import _provision_genai_root
 
 @dataclass(frozen=True)
 class ReferenceTooling:
-    """The upstream modules used to build and render coverage reports."""
-
-    attribute_spec: ModuleType
     classify: ModuleType
     data_files: ModuleType
     parse_results: ModuleType
-    semconv_model: ModuleType
 
 
 _tooling: ReferenceTooling | None = None
@@ -57,23 +48,21 @@ def reference_tooling() -> ReferenceTooling:
     if str(src) not in sys.path:
         sys.path.insert(0, str(src))
 
-    import semconv_genai.attribute_spec as attribute_spec  # noqa: PLC0415
     import semconv_genai.classify as classify  # noqa: PLC0415
     import semconv_genai.data_files as data_files  # noqa: PLC0415
     import semconv_genai.parse_results as parse_results  # noqa: PLC0415
-    import semconv_genai.semconv_model as semconv_model  # noqa: PLC0415
 
     _tooling = ReferenceTooling(
-        attribute_spec=attribute_spec,
         classify=classify,
         data_files=data_files,
         parse_results=parse_results,
-        semconv_model=semconv_model,
     )
     return _tooling
 
 
-def build_scenario_data(weaver_reports_dir: Path, library: str) -> dict[str, Any]:
+def build_scenario_data(
+    weaver_reports_dir: Path, library: str
+) -> dict[str, Any]:
     """Reduce a library's weaver live-check reports to a ``data.json`` payload."""
     tooling = reference_tooling()
     result = tooling.parse_results.parse_result_dir(

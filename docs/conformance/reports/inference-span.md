@@ -6,17 +6,17 @@
 
 | Attribute | Supporting Libraries |
 | --- | --- |
-| gen_ai.operation.name | [anthropic], [crewai], [google-genai], [langchain], [openai] |
-| gen_ai.provider.name | [anthropic], [crewai], [google-genai], [langchain], [openai] |
+| gen_ai.operation.name | [anthropic], [google-genai], [langchain], [openai] |
+| gen_ai.provider.name | [anthropic], [google-genai], [langchain], [openai] |
 
 ## Conditionally Required
 
 | Attribute | Supporting Libraries |
 | --- | --- |
 | gen_ai.conversation.id | (none) |
-| gen_ai.output.type | [crewai] |
+| gen_ai.output.type | (none) |
 | gen_ai.request.choice.count | (none) |
-| gen_ai.request.model | [anthropic], [crewai], [google-genai], [langchain], [openai] |
+| gen_ai.request.model | [anthropic], [google-genai], [langchain], [openai] |
 | gen_ai.request.seed | [langchain] |
 | gen_ai.request.stream | (none) |
 | gen_ai.request.top_k | (none) |
@@ -33,28 +33,27 @@
 | gen_ai.request.stop_sequences | [langchain] |
 | gen_ai.request.temperature | [langchain] |
 | gen_ai.request.top_p | [langchain] |
-| gen_ai.response.finish_reasons | [anthropic], [crewai], [google-genai], [langchain], [openai] |
-| gen_ai.response.id | [anthropic], [crewai], [google-genai], [langchain], [openai] |
-| gen_ai.response.model | [anthropic], [crewai], [google-genai], [langchain], [openai] |
+| gen_ai.response.finish_reasons | [anthropic], [google-genai], [langchain], [openai] |
+| gen_ai.response.id | [anthropic], [google-genai], [langchain], [openai] |
+| gen_ai.response.model | [anthropic], [google-genai], [langchain], [openai] |
 | gen_ai.response.time_to_first_chunk | (none) |
 | gen_ai.usage.cache_creation.input_tokens | [anthropic] |
 | gen_ai.usage.cache_read.input_tokens | [anthropic], [openai] |
-| gen_ai.usage.input_tokens | [anthropic], [crewai], [google-genai], [langchain], [openai] |
-| gen_ai.usage.output_tokens | [anthropic], [crewai], [google-genai], [langchain], [openai] |
+| gen_ai.usage.input_tokens | [anthropic], [google-genai], [langchain], [openai] |
+| gen_ai.usage.output_tokens | [anthropic], [google-genai], [langchain], [openai] |
 | gen_ai.usage.reasoning.output_tokens | [google-genai] |
-| server.address | [anthropic], [crewai], [google-genai], [openai] |
+| server.address | [anthropic], [google-genai], [openai] |
 
 ## Opt-In
 
 | Attribute | Supporting Libraries |
 | --- | --- |
-| gen_ai.input.messages | [anthropic], [crewai], [google-genai], [langchain], [openai] |
-| gen_ai.output.messages | [anthropic], [crewai], [google-genai], [langchain], [openai] |
+| gen_ai.input.messages | [anthropic], [google-genai], [langchain], [openai] |
+| gen_ai.output.messages | [anthropic], [google-genai], [langchain], [openai] |
 | gen_ai.system_instructions | [openai] |
-| gen_ai.tool.definitions | [crewai], [google-genai], [langchain], [openai] |
+| gen_ai.tool.definitions | [google-genai], [langchain], [openai] |
 
 [anthropic]: ../../../instrumentation/opentelemetry-instrumentation-genai-anthropic/tests/conformance
-[crewai]: ../../../instrumentation/opentelemetry-instrumentation-genai-crewai/tests/conformance
 [google-genai]: ../../../instrumentation/opentelemetry-instrumentation-google-genai/tests/conformance
 [langchain]: ../../../instrumentation/opentelemetry-instrumentation-genai-langchain/tests/conformance
 [openai]: ../../../instrumentation/opentelemetry-instrumentation-genai-openai/tests/conformance

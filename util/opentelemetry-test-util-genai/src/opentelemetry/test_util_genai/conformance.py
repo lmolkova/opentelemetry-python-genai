@@ -35,12 +35,10 @@ Each ``tests/conformance/<op>.py`` defines a :class:`Scenario` subclass with:
   ``super().validate(report)`` and layer on additional checks against the
   weaver report.
 
-Each run writes two artifacts: the raw weaver report to
-``weaver_reports/<library>/<Scenario>.json`` (gitignored, for debugging) and
-the package's semconv attribute coverage to
-``instrumentation/<pkg>/tests/conformance/data.json`` (committed). The latter
-feeds ``scripts/update_conformance_reports.py``, so it reflects a *full* env
-run — a filtered run produces a partial file.
+Each run writes the weaver report to ``weaver_reports/<library>/`` (gitignored)
+and the package's attribute coverage to ``tests/conformance/data.json``
+(committed, feeds ``scripts/update_conformance_reports.py``). Coverage is
+rewritten from the whole run, so a filtered run leaves a partial file.
 """
 
 from __future__ import annotations
@@ -192,7 +190,6 @@ def _seen_span_operations(report: LiveCheckReport) -> dict[str, int]:
 
 
 def _package_dir(scenario: Scenario) -> Path:
-    """The ``instrumentation/<pkg>`` directory the scenario is defined in."""
     path = Path(inspect.getfile(type(scenario))).resolve()
     for ancestor in path.parents:
         if ancestor.parent.name == "instrumentation":
@@ -211,8 +208,8 @@ def library_name(scenario: Scenario) -> str:
     return name
 
 
-# Library directories emptied so far in this process, so a renamed or deleted
-# scenario leaves no stale dump behind while repeated runs stay additive.
+# Emptied once per process, so a renamed or deleted scenario leaves no stale
+# dump behind while the run's own scenarios accumulate.
 _cleared_report_dirs: set[Path] = set()
 
 
@@ -228,7 +225,7 @@ def _report_dir(library: str) -> Path:
 def _dump_report(
     scenario: Scenario, report: LiveCheckReport, library: str
 ) -> None:
-    """Write the raw weaver report — the debugging artifact, kept verbatim."""
+    """Write the weaver report verbatim — it is the debugging artifact."""
     out = _report_dir(library) / f"{type(scenario).__name__}.json"
     out.write_text(json.dumps(report._report, indent=2, sort_keys=True))  # noqa: SLF001
 
@@ -236,9 +233,9 @@ def _dump_report(
 def _write_scenario_data(scenario: Scenario, library: str) -> None:
     """Refresh the package's committed semconv coverage data.
 
-    Derived from *every* report the package has dumped this run rather than
-    merged scenario by scenario: required-level attributes are the intersection
-    across all spans of a type, which only holds when they are reduced together.
+    Reduces *every* report dumped this run rather than merging scenario by
+    scenario: required-level attributes are the intersection across all spans
+    of a type, which only holds when they are reduced together.
     """
     data = build_scenario_data(_report_dir(library), library)
     out = _package_dir(scenario) / "tests" / "conformance" / "data.json"

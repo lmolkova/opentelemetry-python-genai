@@ -3,17 +3,12 @@
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
 
-"""Render semconv coverage reports from committed conformance data.
+"""Render semconv coverage reports from the committed conformance data.
 
-Reads every ``instrumentation/<pkg>/tests/conformance/data.json`` written by
-the conformance runs and renders the report pages under
-``docs/conformance/reports/`` plus an index in ``docs/conformance/README.md``.
-
-The rendering itself is ``semconv_genai.report`` from the pinned
-semantic-conventions-genai checkout, so the pages match the ones that repo
-publishes and follow its layout changes for free. Only two things there are
-bound to its own ``scenarios/<lib>/`` layout, and both are redirected below:
-where library data is loaded from, and what a library links to.
+Renders ``docs/conformance/`` from every
+``instrumentation/<pkg>/tests/conformance/data.json``, using
+``semconv_genai.report`` from the pinned semantic-conventions-genai checkout so
+the pages match the ones that repo publishes.
 
 Usage::
 
@@ -37,8 +32,8 @@ from opentelemetry.test_util_genai._setup_weaver import (
 
 DATA_FILES_GLOB = "instrumentation/*/tests/conformance/data.json"
 
-# Upstream links its report pages at the semconv docs sitting next to them in
-# its own tree; we have no local copy, so point at the pinned revision.
+# Upstream links the semconv docs sitting next to its reports; we have no local
+# copy, so these get rewritten to the pinned revision on GitHub.
 UPSTREAM_DOCS_PREFIX = "](../../docs/"
 
 
@@ -57,7 +52,6 @@ def _conformance_dirs() -> dict[str, Path]:
 
 
 def _load_entries() -> list[Any]:
-    """Load every package's conformance data as upstream ``ScenarioDataEntry``."""
     entries = []
     for data_file in sorted(_workspace_root().glob(DATA_FILES_GLOB)):
         library = _library_name(data_file.parents[2])
@@ -75,9 +69,9 @@ def _semconv_docs_url() -> str:
 
 
 def _report_module(conformance_dirs: dict[str, Path]) -> Any:
-    """Import upstream's renderer with our data sources bound into it.
+    """Import upstream's renderer, redirected at our layout.
 
-    Both patches must land before ``semconv_genai.report`` is imported: it
+    Both rebinds must land before ``semconv_genai.report`` is imported: it
     pulls the two names in by value, so patching afterwards has no effect.
     """
     tooling = reference_tooling()
