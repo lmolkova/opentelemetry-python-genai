@@ -235,18 +235,6 @@ def policies_dir() -> Path:
     return _workspace_root() / "policies"
 
 
-# GenAI content-attribute schemas published by the semconv-genai registry under
-# ``model/gen-ai``. Loaded into weaver's rego data via ``--advice-data`` and
-# matched by ``policies/genai_content_validation.rego``.
-_GENAI_SCHEMA_FILES: tuple[str, ...] = (
-    "gen-ai-input-messages.json",
-    "gen-ai-output-messages.json",
-    "gen-ai-system-instructions.json",
-    "gen-ai-tool-definitions.json",
-    "gen-ai-retrieval-documents.json",
-)
-
-
 def advice_data_glob() -> str:
     """Return a ``weaver --advice-data`` glob of the GenAI content JSON schemas.
 
@@ -254,27 +242,22 @@ def advice_data_glob() -> str:
     (``gen-ai-input-messages.json`` -> ``data["gen-ai-input-messages"]``), which
     ``policies/genai_content_validation.rego`` validates content attributes
     against. The schemas come straight from the pinned semconv-genai registry
-    (https://github.com/open-telemetry/semantic-conventions-genai/tree/main/model/gen-ai);
-    the only rewrite is swapping the external draft-07 meta-schema ``$ref`` for a
-    local ``"type": "object"`` because weaver's rego engine can't fetch it at
-    eval time.
+    (https://github.com/open-telemetry/semantic-conventions-genai/tree/main/model/gen-ai).
+
+    ``gen-ai-tool-definitions.json`` references the external draft-07
+    meta-schema, which weaver's rego engine refuses to fetch at eval time, so
+    rewrite that ``$ref`` to a local ``"type": "object"`` in place (idempotent).
     """
     source = _provision_genai_root() / "model" / "gen-ai"
-    target = _provision_genai_root() / ".build" / "advice-data"
-    target.mkdir(parents=True, exist_ok=True)
-    for filename in _GENAI_SCHEMA_FILES:
-        schema_path = source / filename
-        if not schema_path.is_file():
-            logger.warning(
-                "GenAI schema not found: %s (skipping)", schema_path
-            )
-            continue
-        normalized = schema_path.read_text(encoding="utf-8").replace(
+    for schema_path in source.glob("*.json"):
+        text = schema_path.read_text(encoding="utf-8")
+        patched = text.replace(
             '"$ref": "http://json-schema.org/draft-07/schema#"',
             '"type": "object"',
         )
-        (target / filename).write_text(normalized, encoding="utf-8")
-    return str(target / "*.json")
+        if patched != text:
+            schema_path.write_text(patched, encoding="utf-8")
+    return str(source / "*.json")
 
 
 def semconv_registry() -> Path:
