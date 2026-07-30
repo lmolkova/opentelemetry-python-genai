@@ -64,7 +64,7 @@ jobs:
         name: Create patch file
         run: |
           git add -N --ignore-removal policies
-          git diff > patch
+          git diff -- policies > patch
           if [ -s patch ]; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
           fi
