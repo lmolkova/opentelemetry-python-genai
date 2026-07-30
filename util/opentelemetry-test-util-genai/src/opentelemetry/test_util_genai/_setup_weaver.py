@@ -236,27 +236,19 @@ def policies_dir() -> Path:
 
 
 def advice_data_glob() -> str:
-    """Return a ``weaver --advice-data`` glob of the GenAI content JSON schemas.
-
-    Weaver loads every matched ``*.json`` into rego data keyed by filename stem
-    (``gen-ai-input-messages.json`` -> ``data["gen-ai-input-messages"]``), which
-    ``policies/genai_content_validation.rego`` validates content attributes
-    against. The schemas come straight from the pinned semconv-genai registry
-    (https://github.com/open-telemetry/semantic-conventions-genai/tree/main/model/gen-ai).
-
-    ``gen-ai-tool-definitions.json`` references the external draft-07
-    meta-schema, which weaver's rego engine refuses to fetch at eval time, so
-    rewrite that ``$ref`` to a local ``"type": "object"`` in place (idempotent).
-    """
+    """Return a ``weaver --advice-data`` glob of the GenAI content JSON schemas."""
     source = _provision_genai_root() / "model" / "gen-ai"
-    for schema_path in source.glob("*.json"):
-        text = schema_path.read_text(encoding="utf-8")
-        patched = text.replace(
-            '"$ref": "http://json-schema.org/draft-07/schema#"',
-            '"type": "object"',
-        )
-        if patched != text:
-            schema_path.write_text(patched, encoding="utf-8")
+    # gen-ai-tool-definitions.json references the external draft-07 meta-schema,
+    # which weaver's rego engine refuses to fetch at eval time; rewrite that one
+    # $ref to a local "type": "object" in place (idempotent).
+    schema = source / "gen-ai-tool-definitions.json"
+    text = schema.read_text(encoding="utf-8")
+    patched = text.replace(
+        '"$ref": "http://json-schema.org/draft-07/schema#"',
+        '"type": "object"',
+    )
+    if patched != text:
+        schema.write_text(patched, encoding="utf-8")
     return str(source / "*.json")
 
 
