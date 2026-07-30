@@ -231,8 +231,50 @@ def _provision_genai_root() -> Path:
 
 
 def policies_dir() -> Path:
-    """Return the policies directory (committed ``_schemas.rego`` and friends)."""
+    """Return the ``policies`` directory with the committed advice ``.rego`` files."""
     return _workspace_root() / "policies"
+
+
+# GenAI content-attribute schemas published by the semconv-genai registry under
+# ``model/gen-ai``. Loaded into weaver's rego data via ``--advice-data`` and
+# matched by ``policies/genai_content_validation.rego``.
+_GENAI_SCHEMA_FILES: tuple[str, ...] = (
+    "gen-ai-input-messages.json",
+    "gen-ai-output-messages.json",
+    "gen-ai-system-instructions.json",
+    "gen-ai-tool-definitions.json",
+    "gen-ai-retrieval-documents.json",
+)
+
+
+def advice_data_glob() -> str:
+    """Return a ``weaver --advice-data`` glob of the GenAI content JSON schemas.
+
+    Weaver loads every matched ``*.json`` into rego data keyed by filename stem
+    (``gen-ai-input-messages.json`` -> ``data["gen-ai-input-messages"]``), which
+    ``policies/genai_content_validation.rego`` validates content attributes
+    against. The schemas come straight from the pinned semconv-genai registry
+    (https://github.com/open-telemetry/semantic-conventions-genai/tree/main/model/gen-ai);
+    the only rewrite is swapping the external draft-07 meta-schema ``$ref`` for a
+    local ``"type": "object"`` because weaver's rego engine can't fetch it at
+    eval time.
+    """
+    source = _provision_genai_root() / "model" / "gen-ai"
+    target = _provision_genai_root() / ".build" / "advice-data"
+    target.mkdir(parents=True, exist_ok=True)
+    for filename in _GENAI_SCHEMA_FILES:
+        schema_path = source / filename
+        if not schema_path.is_file():
+            logger.warning(
+                "GenAI schema not found: %s (skipping)", schema_path
+            )
+            continue
+        normalized = schema_path.read_text(encoding="utf-8").replace(
+            '"$ref": "http://json-schema.org/draft-07/schema#"',
+            '"type": "object"',
+        )
+        (target / filename).write_text(normalized, encoding="utf-8")
+    return str(target / "*.json")
 
 
 def semconv_registry() -> Path:
