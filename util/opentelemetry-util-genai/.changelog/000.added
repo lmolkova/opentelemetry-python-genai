@@ -1,0 +1,1 @@
+Add `RetrievalDocument` for `gen_ai.retrieval.documents`; `RetrievalInvocation.documents` now takes it instead of raw mappings.

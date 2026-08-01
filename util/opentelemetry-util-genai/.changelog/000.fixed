@@ -1,0 +1,1 @@
+GenAI JSON serialization drops values it cannot encode (logged at debug) instead of raising `TypeError` into the instrumented call.

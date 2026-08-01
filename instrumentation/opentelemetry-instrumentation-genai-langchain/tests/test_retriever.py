@@ -11,6 +11,7 @@ spans, attributes, and metrics against the semconv spec.
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import pytest
@@ -317,7 +318,9 @@ def test_document_id_in_span_content(
     docs_attr = spans[0].attributes[
         gen_ai_attributes.GEN_AI_RETRIEVAL_DOCUMENTS
     ]
-    assert "abc-123" in docs_attr
+    assert json.loads(docs_attr) == [
+        {"id": "abc-123", "score": None, "content": "text"}
+    ]
     instrumentor.uninstrument()
 
 
@@ -348,7 +351,9 @@ def test_document_without_id_in_span_content(
     docs_attr = spans[0].attributes[
         gen_ai_attributes.GEN_AI_RETRIEVAL_DOCUMENTS
     ]
-    assert "no id here" in docs_attr
+    assert json.loads(docs_attr) == [
+        {"id": None, "score": None, "content": "no id here"}
+    ]
     instrumentor.uninstrument()
 
 

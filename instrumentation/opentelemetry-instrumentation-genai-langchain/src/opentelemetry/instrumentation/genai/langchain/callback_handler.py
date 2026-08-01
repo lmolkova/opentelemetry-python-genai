@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Any, Optional, cast
 from uuid import UUID
 
@@ -42,9 +43,21 @@ from opentelemetry.util.genai.invocation import (
 from opentelemetry.util.genai.types import (
     MessagePart,
     OutputMessage,
+    RetrievalDocument,
     Text,
     ToolCallRequest,
 )
+
+
+@dataclass(kw_only=True)
+class _LangChainRetrievalDocument(RetrievalDocument):
+    """A retrieved document carrying LangChain's page content.
+
+    ``content`` is not declared by the semconv document model, which allows
+    additional properties; it serializes alongside the standard fields.
+    """
+
+    content: str
 
 
 class OpenTelemetryLangChainCallbackHandler(BaseCallbackHandler):
@@ -573,10 +586,9 @@ class OpenTelemetryLangChainCallbackHandler(BaseCallbackHandler):
 
         if self._telemetry_handler.should_capture_content():
             invocation.documents = [
-                {
-                    "content": doc.page_content,
-                    "id": doc.id,
-                }
+                _LangChainRetrievalDocument(
+                    id=doc.id, content=doc.page_content
+                )
                 for doc in documents
             ]
         invocation.stop()

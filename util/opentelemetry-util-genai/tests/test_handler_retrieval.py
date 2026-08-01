@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+from dataclasses import dataclass
 from unittest import TestCase
 from unittest.mock import patch
 
@@ -26,7 +27,7 @@ from opentelemetry.util.genai.environment_variables import (
 )
 from opentelemetry.util.genai.handler import TelemetryHandler
 from opentelemetry.util.genai.invocation import RetrievalInvocation
-from opentelemetry.util.genai.types import Error
+from opentelemetry.util.genai.types import Error, RetrievalDocument
 
 
 class _RetrievalTestBase(TestCase):
@@ -186,22 +187,59 @@ class TelemetryHandlerRetrievalTest(_RetrievalTestBase):  # pylint: disable=too-
         },
     )
     def test_stop_sets_documents_when_content_capture_enabled(self) -> None:
-        docs = [{"id": "doc_1", "score": 0.95}, {"id": "doc_2", "score": 0.87}]
         invocation = self.handler.retrieval()
-        invocation.documents = docs
+        invocation.documents = [
+            RetrievalDocument(id="doc_1", score=0.95),
+            RetrievalDocument(id="doc_2", score=0.87),
+        ]
         invocation.stop()
 
         spans = self._get_finished_spans()
         raw = spans[0].attributes[GenAI.GEN_AI_RETRIEVAL_DOCUMENTS]
         self.assertIsInstance(raw, str)
-        self.assertEqual(json.loads(raw), docs)
+        self.assertEqual(
+            json.loads(raw),
+            [
+                {"id": "doc_1", "score": 0.95},
+                {"id": "doc_2", "score": 0.87},
+            ],
+        )
+
+    @patch.dict(
+        os.environ,
+        {
+            OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT: "SPAN_ONLY",
+        },
+    )
+    def test_stop_serializes_provider_specific_document_fields(self) -> None:
+        """The semconv document schema allows additional properties.
+
+        Producers carry them by subclassing; the extra fields serialize
+        alongside the standard ones rather than nested under them.
+        """
+
+        @dataclass(kw_only=True)
+        class ProviderDocument(RetrievalDocument):
+            collection: str
+
+        invocation = self.handler.retrieval()
+        invocation.documents = [
+            ProviderDocument(id="doc_1", collection="articles")
+        ]
+        invocation.stop()
+
+        spans = self._get_finished_spans()
+        raw = spans[0].attributes[GenAI.GEN_AI_RETRIEVAL_DOCUMENTS]
+        self.assertEqual(
+            json.loads(raw),
+            [{"id": "doc_1", "score": None, "collection": "articles"}],
+        )
 
     def test_stop_suppresses_documents_when_content_capture_disabled(
         self,
     ) -> None:
-        docs = [{"id": "doc_1", "score": 0.95}]
         invocation = self.handler.retrieval()
-        invocation.documents = docs
+        invocation.documents = [RetrievalDocument(id="doc_1", score=0.95)]
         invocation.stop()
 
         spans = self._get_finished_spans()

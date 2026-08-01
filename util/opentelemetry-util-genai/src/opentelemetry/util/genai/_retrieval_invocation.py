@@ -3,8 +3,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
-from typing import Any
+from collections.abc import Sequence
 
 from opentelemetry._logs import Logger
 from opentelemetry.semconv._incubating.attributes import (
@@ -15,6 +14,7 @@ from opentelemetry.trace import SpanKind, Tracer
 from opentelemetry.util.genai._invocation import Error, GenAIInvocation
 from opentelemetry.util.genai.completion_hook import CompletionHook
 from opentelemetry.util.genai.metrics import InvocationMetricsRecorder
+from opentelemetry.util.genai.types import RetrievalDocument
 from opentelemetry.util.genai.utils import (
     gen_ai_json_dumps,
     should_capture_content_on_spans,
@@ -75,7 +75,7 @@ class RetrievalInvocation(GenAIInvocation):
         self._server_port: int | None = server_port
         self.top_k: float | None = None
         self.query_text: str | None = None
-        self.documents: Sequence[Mapping[str, Any]] | None = None
+        self.documents: Sequence[RetrievalDocument] | None = None
         self._start(self._get_start_attributes())
 
     def _get_start_attributes(self) -> dict[str, AttributeValue]:

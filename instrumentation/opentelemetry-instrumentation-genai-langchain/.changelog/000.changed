@@ -1,0 +1,1 @@
+Retrieved documents are built from the shared `RetrievalDocument` type; each document now carries an explicit `score` field.

@@ -251,6 +251,22 @@ class OutputMessage:
     finish_reason: str | FinishReason
 
 
+@dataclass(kw_only=True)
+class RetrievalDocument:
+    """Represents a document returned by a retrieval operation.
+
+    This model is specified as part of semconv in `GenAI messages Python models - RetrievalDocument
+    <https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/non-normative/models.py>`__.
+
+    The semconv model allows additional properties (``content``, ``metadata``,
+    ``title``, ``uri``, provider-specific fields). Subclass this to carry them;
+    subclass fields serialize alongside the standard ones.
+    """
+
+    id: str | None = None
+    score: float | None = None
+
+
 # Callback an instrumentor may supply to derive the error.type attribute from a
 # provider exception.
 # Returns None to fall back to the exception's fully qualified type name.

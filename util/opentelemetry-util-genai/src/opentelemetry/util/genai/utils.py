@@ -5,6 +5,7 @@ import json
 import logging
 import os
 from base64 import b64encode
+from dataclasses import asdict, is_dataclass
 from functools import partial
 from typing import Any
 
@@ -107,7 +108,13 @@ class _GenAiJsonEncoder(json.JSONEncoder):
     def default(self, o: Any) -> Any:
         if isinstance(o, bytes):
             return b64encode(o).decode()
-        return super().default(o)
+        if is_dataclass(o) and not isinstance(o, type):
+            return asdict(o)
+        logger.debug(
+            "Dropping value of unsupported type %s from GenAI content",
+            type(o).__qualname__,
+        )
+        return None
 
 
 gen_ai_json_dump = partial(
