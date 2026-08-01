@@ -34,7 +34,7 @@ class ContentCapturingMode(Enum):
     SPAN_AND_EVENT = 3
 
 
-@dataclass()
+@dataclass(kw_only=True)
 class GenericPart:
     """Used for provider-specific message part types that don't match
     the standard MessagePart types defined in semantic conventions. Wrap custom
@@ -45,7 +45,7 @@ class GenericPart:
     type: Literal["generic"] = "generic"
 
 
-@dataclass()
+@dataclass(kw_only=True)
 class ToolCallRequest:
     """Represents a tool call requested by the model (message part only).
 
@@ -62,7 +62,7 @@ class ToolCallRequest:
     type: Literal["tool_call"] = "tool_call"
 
 
-@dataclass()
+@dataclass(kw_only=True)
 class ToolCallResponse:
     """Represents a tool call result sent to the model or a built-in tool call outcome and details
 
@@ -75,7 +75,7 @@ class ToolCallResponse:
     type: Literal["tool_call_response"] = "tool_call_response"
 
 
-@dataclass()
+@dataclass(kw_only=True)
 class ServerToolCall:
     """Represents a server-side tool call.
 
@@ -93,7 +93,7 @@ class ServerToolCall:
     type: Literal["server_tool_call"] = "server_tool_call"
 
 
-@dataclass()
+@dataclass(kw_only=True)
 class ServerToolCallResponse:
     """Represents a server-side tool call response.
 
@@ -110,7 +110,7 @@ class ServerToolCallResponse:
     type: Literal["server_tool_call_response"] = "server_tool_call_response"
 
 
-@dataclass()
+@dataclass(kw_only=True)
 class Text:
     """Represents text content sent to or received from the model
 
@@ -122,7 +122,7 @@ class Text:
     type: Literal["text"] = "text"
 
 
-@dataclass()
+@dataclass(kw_only=True)
 class Reasoning:
     """Represents reasoning/thinking content received from the model
 
@@ -134,7 +134,7 @@ class Reasoning:
     type: Literal["reasoning"] = "reasoning"
 
 
-@dataclass()
+@dataclass(kw_only=True)
 class CompactionPart:
     """Represents a server-side context compaction event.
 
@@ -156,7 +156,7 @@ class CompactionPart:
 Modality = Literal["image", "video", "audio"]
 
 
-@dataclass()
+@dataclass(kw_only=True)
 class Blob:
     """Represents blob binary data sent inline to the model
 
@@ -170,7 +170,7 @@ class Blob:
     type: Literal["blob"] = "blob"
 
 
-@dataclass()
+@dataclass(kw_only=True)
 class File:
     """Represents an external referenced file sent to the model by file id
 
@@ -184,7 +184,7 @@ class File:
     type: Literal["file"] = "file"
 
 
-@dataclass()
+@dataclass(kw_only=True)
 class Uri:
     """Represents an external referenced file sent to the model by URI
 
@@ -198,7 +198,7 @@ class Uri:
     type: Literal["uri"] = "uri"
 
 
-@dataclass()
+@dataclass(kw_only=True)
 class FunctionToolDefinition:
     """Represents a function tool definition sent to the model"""
 
@@ -208,7 +208,7 @@ class FunctionToolDefinition:
     type: Literal["function"] = "function"
 
 
-@dataclass()
+@dataclass(kw_only=True)
 class GenericToolDefinition:
     """Represents a generic tool definition sent to the model"""
 
@@ -238,13 +238,13 @@ FinishReason = Literal[
 ]
 
 
-@dataclass()
+@dataclass(kw_only=True)
 class InputMessage:
     role: str
     parts: list[MessagePart]
 
 
-@dataclass()
+@dataclass(kw_only=True)
 class OutputMessage:
     role: str
     parts: list[MessagePart]

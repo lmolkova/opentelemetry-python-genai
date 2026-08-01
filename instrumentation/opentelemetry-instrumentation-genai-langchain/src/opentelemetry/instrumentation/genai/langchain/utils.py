@@ -318,7 +318,9 @@ def make_input_message(data: Any) -> list[InputMessage]:
     if input_data:
         serialized = serialize(input_data)
         if serialized:
-            return [InputMessage(role="user", parts=[Text(serialized)])]
+            return [
+                InputMessage(role="user", parts=[Text(content=serialized)])
+            ]
     return []
 
 

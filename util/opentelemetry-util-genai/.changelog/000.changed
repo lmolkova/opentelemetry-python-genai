@@ -1,0 +1,1 @@
+Message and tool-definition dataclasses are keyword-only, so instrumentations can subclass them to carry provider-specific fields.
