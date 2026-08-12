@@ -125,6 +125,48 @@ async def test_async_messages_create_basic(
 
 @pytest.mark.asyncio
 @pytest.mark.vcr()
+async def test_async_messages_create_with_raw_response(
+    span_exporter, async_anthropic_client, instrument_no_content
+):
+    """Async ``with_raw_response.create`` must not crash and record a span.
+
+    Regression test mirroring the sync case: the raw-response object the SDK
+    returns from ``with_raw_response`` has no ``model`` attribute, so extraction
+    raised ``AttributeError`` into the caller after the API call succeeded.
+    """
+    model = "claude-sonnet-4-20250514"
+    messages = [{"role": "user", "content": "Say hello in one word."}]
+
+    raw_response = (
+        await async_anthropic_client.messages.with_raw_response.create(
+            model=model,
+            max_tokens=100,
+            messages=messages,
+        )
+    )
+
+    assert hasattr(raw_response, "headers")
+    message = raw_response.parse()
+
+    spans = span_exporter.get_finished_spans()
+    assert len(spans) == 1
+    span = spans[0]
+    assert span.name == f"chat {model}"
+    assert span.attributes[GenAIAttributes.GEN_AI_RESPONSE_ID] == message.id
+    assert (
+        span.attributes[GenAIAttributes.GEN_AI_RESPONSE_MODEL] == message.model
+    )
+    assert span.attributes[
+        GenAIAttributes.GEN_AI_USAGE_INPUT_TOKENS
+    ] == expected_input_tokens(message.usage)
+    assert (
+        span.attributes[GenAIAttributes.GEN_AI_USAGE_OUTPUT_TOKENS]
+        == message.usage.output_tokens
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.vcr()
 async def test_async_messages_create_captures_content(
     span_exporter, async_anthropic_client, instrument_with_content
 ):

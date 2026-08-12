@@ -1,0 +1,1 @@
+Stop raising ``AttributeError`` into the caller when ``Messages.create`` is invoked through ``with_raw_response``; the raw response is returned untouched and telemetry is extracted from the parsed message.

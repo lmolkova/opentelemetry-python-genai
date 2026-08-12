@@ -160,6 +160,44 @@ def test_sync_messages_create_basic(
 
 
 @pytest.mark.vcr()
+def test_sync_messages_create_with_raw_response(
+    span_exporter, anthropic_client, instrument_no_content
+):
+    """``with_raw_response.create`` must not crash and must still record a span.
+
+    Regression test: the instrumentation assumed the wrapped call always
+    returns a ``Message`` and read ``message.model`` off the raw-response object
+    (``LegacyAPIResponse``) that ``with_raw_response`` returns, raising
+    ``AttributeError`` into the caller *after* the API call had already
+    succeeded. The raw response must be returned to the caller untouched.
+    """
+    model = "claude-sonnet-4-20250514"
+    messages = [{"role": "user", "content": "Say hello in one word."}]
+
+    raw_response = anthropic_client.messages.with_raw_response.create(
+        model=model,
+        max_tokens=100,
+        messages=messages,
+    )
+
+    # The caller still receives the raw response, with metadata and parse().
+    assert hasattr(raw_response, "headers")
+    message = raw_response.parse()
+
+    spans = span_exporter.get_finished_spans()
+    assert len(spans) == 1
+    assert_span_attributes(
+        spans[0],
+        request_model=model,
+        response_id=message.id,
+        response_model=message.model,
+        input_tokens=expected_input_tokens(message.usage),
+        output_tokens=message.usage.output_tokens,
+        finish_reasons=[normalize_stop_reason(message.stop_reason)],
+    )
+
+
+@pytest.mark.vcr()
 def test_sync_messages_create_captures_content(
     span_exporter, anthropic_client, instrument_with_content
 ):

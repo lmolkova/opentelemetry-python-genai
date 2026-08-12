@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Awaitable, Callable
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Protocol, cast, runtime_checkable
 
 from anthropic._streaming import Stream as AnthropicStream
 from anthropic.types import Message as AnthropicMessage
@@ -52,6 +52,39 @@ _logger = logging.getLogger(__name__)
 ANTHROPIC = "anthropic"
 
 
+@runtime_checkable
+class _RawResponse(Protocol):
+    """A ``with_raw_response`` result whose ``Message`` is behind ``parse()``.
+
+    Mirrors the OpenAI sibling package's ``ParsableResponse``: the anthropic
+    SDK's raw-response classes (e.g. ``LegacyAPIResponse``) live in private
+    modules and expose the deserialized payload via ``parse()``, so we match on
+    shape rather than importing private names.
+    """
+
+    def parse(self, *args: Any, **kwargs: Any) -> Any: ...
+
+
+def _message_for_extraction(
+    result: object, stream_requested: bool
+) -> AnthropicMessage | None:
+    """Return the ``Message`` to extract telemetry from, or ``None`` to skip.
+
+    ``Messages.create`` normally returns a ``Message``. When called through
+    ``with_raw_response`` it returns a raw-response object instead; parsing it
+    yields the ``Message`` (safe for non-streaming calls, mirroring the OpenAI
+    instrumentation). Streaming raw responses and any other unexpected payload
+    are left uninstrumented rather than crashing the caller's application.
+    """
+    if isinstance(result, AnthropicMessage):
+        return result
+    if not stream_requested and isinstance(result, _RawResponse):
+        parsed = result.parse()
+        if isinstance(parsed, AnthropicMessage):
+            return parsed
+    return None
+
+
 def messages_create(
     handler: TelemetryHandler,
 ) -> Callable[
@@ -86,10 +119,15 @@ def messages_create(
                     result, invocation, capture_content
                 )
 
-            wrapper = MessageWrapper(result, capture_content)
-            wrapper.extract_into(invocation)
+            message = _message_for_extraction(
+                result, bool(kwargs.get("stream"))
+            )
+            if message is not None:
+                MessageWrapper(message, capture_content).extract_into(
+                    invocation
+                )
             invocation.stop()
-            return wrapper.message
+            return result
         except Exception as exc:
             invocation.fail(exc)
             raise
@@ -142,12 +180,15 @@ def async_messages_create(
                     capture_content,
                 )
 
-            wrapper = MessageWrapper(
-                cast("AnthropicMessage", result), capture_content
+            message = _message_for_extraction(
+                result, bool(kwargs.get("stream"))
             )
-            wrapper.extract_into(invocation)
+            if message is not None:
+                MessageWrapper(message, capture_content).extract_into(
+                    invocation
+                )
             invocation.stop()
-            return wrapper.message
+            return result
         except Exception as exc:
             invocation.fail(exc)
             raise
