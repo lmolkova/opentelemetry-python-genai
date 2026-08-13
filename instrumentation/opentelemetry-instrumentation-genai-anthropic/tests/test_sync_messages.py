@@ -1242,3 +1242,90 @@ def test_sync_messages_create_event_only_no_content_in_span(
     assert len(logs) == 1
     log_record = logs[0].log_record
     assert log_record.event_name == "gen_ai.client.inference.operation.details"
+
+
+@pytest.mark.vcr()
+def test_sync_messages_create_streaming_with_raw_response(
+    span_exporter, anthropic_client, instrument_no_content
+):
+    """Streaming ``with_raw_response.create`` defers parse() and records a full span.
+
+    Regression test: the raw response the SDK returns from
+    ``with_raw_response.create(stream=True)`` is a ``LegacyAPIResponse``, not a
+    ``Stream``, so it fell past the stream check and the span was ended
+    immediately with no response attributes, before the caller even called
+    ``parse()``. The proxy must defer finalization until the parsed stream is
+    drained and then populate the span with the response model, usage, and
+    finish reason.
+    """
+    model = "claude-sonnet-4-20250514"
+    messages = [{"role": "user", "content": "Say hello in one word."}]
+
+    raw_response = anthropic_client.messages.with_raw_response.create(
+        model=model,
+        max_tokens=100,
+        messages=messages,
+        stream=True,
+    )
+
+    # Raw-response metadata still resolves natively off the proxy.
+    assert hasattr(raw_response, "headers")
+    assert raw_response.headers is not None
+
+    # Deferred: the span must not be finalized before the caller parses/drains.
+    assert span_exporter.get_finished_spans() == ()
+
+    stream = raw_response.parse()
+    response_text = ""
+    for chunk in stream:
+        if chunk.type == "content_block_delta":
+            delta = getattr(chunk, "delta", None)
+            if delta and hasattr(delta, "text"):
+                response_text += delta.text
+    assert response_text == "Hello."
+
+    spans = span_exporter.get_finished_spans()
+    assert len(spans) == 1
+    # The span is no longer a premature empty one: it carries response
+    # attributes accumulated from the drained stream.
+    assert_span_attributes(
+        spans[0],
+        request_model=model,
+        response_model=model,
+        input_tokens=13,
+        output_tokens=5,
+        finish_reasons=["stop"],
+    )
+
+
+@pytest.mark.vcr()
+def test_sync_messages_create_streaming_with_raw_response_never_parsed(
+    span_exporter, anthropic_client, instrument_no_content
+):
+    """A never-parsed streaming raw response is finalized once when closed.
+
+    When the caller reads only metadata and never calls ``parse()``, the span
+    must still be finalized (so it does not leak) exactly once when the
+    underlying body is closed, since ``stop()`` is not idempotent.
+    """
+    model = "claude-sonnet-4-20250514"
+    messages = [{"role": "user", "content": "Say hello in one word."}]
+
+    raw_response = anthropic_client.messages.with_raw_response.create(
+        model=model,
+        max_tokens=100,
+        messages=messages,
+        stream=True,
+    )
+
+    # Deferred: nothing finalized while the caller has not parsed or closed.
+    assert span_exporter.get_finished_spans() == ()
+
+    # Caller drains/closes the body without ever parsing it.
+    raw_response.http_response.close()
+
+    assert len(span_exporter.get_finished_spans()) == 1
+
+    # A second close must not finalize the span again.
+    raw_response.http_response.close()
+    assert len(span_exporter.get_finished_spans()) == 1

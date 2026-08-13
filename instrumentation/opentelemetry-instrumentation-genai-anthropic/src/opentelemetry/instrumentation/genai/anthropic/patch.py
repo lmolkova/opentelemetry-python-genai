@@ -18,6 +18,7 @@ from opentelemetry.semconv._incubating.attributes import (
 from opentelemetry.util.genai.handler import TelemetryHandler
 from opentelemetry.util.genai.invocation import InferenceInvocation
 
+from ._raw_response import wrap_raw_stream_result
 from .messages_extractors import (
     extract_params,
     get_input_messages,
@@ -159,6 +160,14 @@ def messages_create(
                 return MessagesStreamWrapper(
                     result, invocation, capture_content
                 )
+            if (
+                _is_streaming_request(kwargs)
+                and isinstance(result, _RawResponse)
+                and hasattr(result, "http_response")
+            ):
+                return wrap_raw_stream_result(
+                    result, invocation, capture_content
+                )
 
             message = _message_for_extraction(result, kwargs)
             if message is not None:
@@ -217,6 +226,14 @@ def async_messages_create(
                     ),
                     invocation,
                     capture_content,
+                )
+            if (
+                _is_streaming_request(kwargs)
+                and isinstance(result, _RawResponse)
+                and hasattr(result, "http_response")
+            ):
+                return wrap_raw_stream_result(
+                    result, invocation, capture_content
                 )
 
             message = _message_for_extraction(result, kwargs)
