@@ -197,6 +197,30 @@ def test_sync_messages_create_with_raw_response(
     )
 
 
+def test_message_for_extraction_swallows_raw_response_parse_error():
+    """A failing ``parse()`` on a raw response must not break the caller.
+
+    ``with_raw_response`` callers that only read headers must never be broken by
+    telemetry. If ``parse()`` raises (validation/deserialization failure),
+    ``_message_for_extraction`` returns ``None`` (skip response telemetry)
+    instead of propagating the exception into the caller's application.
+    """
+    from opentelemetry.instrumentation.genai.anthropic.patch import (
+        _message_for_extraction,
+    )
+
+    class _FailingRawResponse:
+        def parse(self, *args, **kwargs):
+            raise ValueError("boom")
+
+    assert (
+        _message_for_extraction(
+            _FailingRawResponse(), stream_requested=False
+        )
+        is None
+    )
+
+
 @pytest.mark.vcr()
 def test_sync_messages_create_captures_content(
     span_exporter, anthropic_client, instrument_with_content

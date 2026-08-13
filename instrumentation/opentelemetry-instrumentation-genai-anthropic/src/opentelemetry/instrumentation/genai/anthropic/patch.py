@@ -71,15 +71,32 @@ def _message_for_extraction(
     """Return the ``Message`` to extract telemetry from, or ``None`` to skip.
 
     ``Messages.create`` normally returns a ``Message``. When called through
-    ``with_raw_response`` it returns a raw-response object instead; parsing it
-    yields the ``Message`` (safe for non-streaming calls, mirroring the OpenAI
-    instrumentation). Streaming raw responses and any other unexpected payload
-    are left uninstrumented rather than crashing the caller's application.
+    ``with_raw_response`` it returns a raw-response object instead. For a
+    non-streaming call the HTTP body is already fully received, so ``parse()``
+    is a pure, memoized deserialization -- it neither consumes a stream nor
+    triggers network I/O early. This mirrors the OpenAI sibling's non-streaming
+    path (``openai/patch.py`` ``_set_response_properties``, commented "safe to
+    parse() here since this is the non-streaming path").
+
+    The parse is guarded: if it raises, the failure is swallowed and ``None``
+    is returned so the caller's raw response is handed back untouched --
+    telemetry must never break the application (AGENTS.md: "Do not raise new
+    exceptions in instrumentation/telemetry code"). Streaming raw responses are
+    never parsed here (that would consume the stream); they are left
+    uninstrumented.
     """
     if isinstance(result, AnthropicMessage):
         return result
     if not stream_requested and isinstance(result, _RawResponse):
-        parsed = result.parse()
+        try:
+            parsed = result.parse()
+        except Exception:  # pylint: disable=broad-exception-caught
+            _logger.debug(
+                "with_raw_response.parse() failed; skipping response "
+                "telemetry for this call",
+                exc_info=True,
+            )
+            return None
         if isinstance(parsed, AnthropicMessage):
             return parsed
     return None
