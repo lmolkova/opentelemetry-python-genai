@@ -213,12 +213,33 @@ def test_message_for_extraction_swallows_raw_response_parse_error():
         def parse(self, *args, **kwargs):
             raise ValueError("boom")
 
-    assert (
-        _message_for_extraction(
-            _FailingRawResponse(), stream_requested=False
-        )
-        is None
+    assert _message_for_extraction(_FailingRawResponse(), {}) is None
+
+
+def test_message_for_extraction_skips_streaming_raw_response_without_parsing():
+    """``with_streaming_response`` must never be parsed here.
+
+    ``with_streaming_response`` is selected by the Stainless
+    ``x-stainless-raw-response: stream`` header rather than the ``stream``
+    argument. Parsing it would consume the streaming body before the caller
+    receives it, so the header path must be detected and left un-parsed.
+    """
+    from opentelemetry.instrumentation.genai.anthropic.patch import (
+        _message_for_extraction,
     )
+
+    class _StreamingRawResponse:
+        def __init__(self):
+            self.parsed = False
+
+        def parse(self, *args, **kwargs):
+            self.parsed = True
+            raise AssertionError("parse() must not run for a streaming response")
+
+    raw = _StreamingRawResponse()
+    kwargs = {"extra_headers": {"x-stainless-raw-response": "stream"}}
+    assert _message_for_extraction(raw, kwargs) is None
+    assert raw.parsed is False
 
 
 @pytest.mark.vcr()

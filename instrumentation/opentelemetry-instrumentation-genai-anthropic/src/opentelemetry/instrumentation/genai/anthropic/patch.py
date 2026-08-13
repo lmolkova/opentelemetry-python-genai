@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from typing import TYPE_CHECKING, Any, Protocol, cast, runtime_checkable
 
 from anthropic._streaming import Stream as AnthropicStream
@@ -65,8 +65,30 @@ class _RawResponse(Protocol):
     def parse(self, *args: Any, **kwargs: Any) -> Any: ...
 
 
+_RAW_RESPONSE_HEADER = "x-stainless-raw-response"
+
+
+def _is_streaming_request(kwargs: Mapping[str, Any]) -> bool:
+    """Whether the call produces a stream, from either selection mechanism.
+
+    A stream is requested by the ``stream=True`` argument *or* by the Stainless
+    ``x-stainless-raw-response: stream`` header that ``with_streaming_response``
+    sets (the header path leaves ``stream`` unset in kwargs). Mirrors the OpenAI
+    sibling's ``is_streamed_raw_response`` (``response_extractors.py``).
+    """
+    if kwargs.get("stream"):
+        return True
+    extra_headers = kwargs.get("extra_headers")
+    if not isinstance(extra_headers, Mapping):
+        return False
+    return any(
+        key.lower() == _RAW_RESPONSE_HEADER and value == "stream"
+        for key, value in extra_headers.items()
+    )
+
+
 def _message_for_extraction(
-    result: object, stream_requested: bool
+    result: object, kwargs: Mapping[str, Any]
 ) -> AnthropicMessage | None:
     """Return the ``Message`` to extract telemetry from, or ``None`` to skip.
 
@@ -78,16 +100,18 @@ def _message_for_extraction(
     path (``openai/patch.py`` ``_set_response_properties``, commented "safe to
     parse() here since this is the non-streaming path").
 
+    Streaming responses are never parsed here (that would consume the stream
+    before the caller receives it). This covers both ``stream=True`` and the
+    ``with_streaming_response`` header path, via ``_is_streaming_request``.
+
     The parse is guarded: if it raises, the failure is swallowed and ``None``
     is returned so the caller's raw response is handed back untouched --
     telemetry must never break the application (AGENTS.md: "Do not raise new
-    exceptions in instrumentation/telemetry code"). Streaming raw responses are
-    never parsed here (that would consume the stream); they are left
-    uninstrumented.
+    exceptions in instrumentation/telemetry code").
     """
     if isinstance(result, AnthropicMessage):
         return result
-    if not stream_requested and isinstance(result, _RawResponse):
+    if not _is_streaming_request(kwargs) and isinstance(result, _RawResponse):
         try:
             parsed = result.parse()
         except Exception:  # pylint: disable=broad-exception-caught
@@ -136,9 +160,7 @@ def messages_create(
                     result, invocation, capture_content
                 )
 
-            message = _message_for_extraction(
-                result, bool(kwargs.get("stream"))
-            )
+            message = _message_for_extraction(result, kwargs)
             if message is not None:
                 MessageWrapper(message, capture_content).extract_into(
                     invocation
@@ -197,9 +219,7 @@ def async_messages_create(
                     capture_content,
                 )
 
-            message = _message_for_extraction(
-                result, bool(kwargs.get("stream"))
-            )
+            message = _message_for_extraction(result, kwargs)
             if message is not None:
                 MessageWrapper(message, capture_content).extract_into(
                     invocation
