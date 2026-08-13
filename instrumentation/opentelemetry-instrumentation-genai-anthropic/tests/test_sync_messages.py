@@ -234,7 +234,9 @@ def test_message_for_extraction_skips_streaming_raw_response_without_parsing():
 
         def parse(self, *args, **kwargs):
             self.parsed = True
-            raise AssertionError("parse() must not run for a streaming response")
+            raise AssertionError(
+                "parse() must not run for a streaming response"
+            )
 
     raw = _StreamingRawResponse()
     kwargs = {"extra_headers": {"x-stainless-raw-response": "stream"}}
