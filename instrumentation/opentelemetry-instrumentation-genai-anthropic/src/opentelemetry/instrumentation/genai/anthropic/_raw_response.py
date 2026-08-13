@@ -1,28 +1,51 @@
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
 
-"""Transparent proxy for streaming ``with_raw_response`` results.
+"""Transparent proxy for ``with_raw_response`` / ``with_streaming_response`` results.
 
-Mirrors the OpenAI sibling package's ``_raw_response`` module. The anthropic
-SDK returns a raw-response object (a ``LegacyAPIResponse``) from
-``with_raw_response.create(stream=True)`` and from ``with_streaming_response``,
-not a ``Stream``. That object falls past the ``isinstance(result,
-AnthropicStream)`` check in ``patch.py``, so without this proxy the span is
-ended immediately with no response attributes, before the caller ever calls
-``parse()``.
+Mirrors the OpenAI sibling package's ``_raw_response`` module. Both anthropic
+raw-response entry points hand the caller a response object whose payload is
+behind ``parse()``:
+
+* ``with_raw_response.create(...)`` returns a ``LegacyAPIResponse`` directly.
+* ``with_streaming_response.create(...)`` returns an (async) context manager
+  that yields an ``APIResponse`` / ``AsyncAPIResponse``.
+
+The SDK sets the ``x-stainless-raw-response: stream`` header on *every*
+``with_streaming_response`` call, streaming or not, so the request header cannot
+tell us whether the parsed payload is a ``Message`` or a ``Stream``. Instead of
+guessing from the header, this proxy defers to ``parse()`` and routes on what it
+actually returns:
+
+* a ``Message`` -> extract response telemetry and finalize the span now;
+* a ``Stream`` / ``AsyncStream`` -> hand back an instrumented stream wrapper that
+  finalizes the span when it is drained;
+* a coroutine (``AsyncAPIResponse.parse`` is ``async``) -> hand back a coroutine
+  that awaits the real parse and then routes by the same rules;
+* anything else -> hand back untouched and log at debug.
+
+The span is finalized independently of ``parse()``: a caller that only reads
+metadata and closes the body finalizes it once via the ``close`` / ``aclose``
+fallback on the underlying httpx response.
 """
 
 from __future__ import annotations
 
 import functools
+import inspect
 import logging
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any
 
 from anthropic._streaming import Stream as AnthropicStream
+from anthropic.types import Message as AnthropicMessage
 from wrapt import ObjectProxy
 
-from .wrappers import AsyncMessagesStreamWrapper, MessagesStreamWrapper
+from .wrappers import (
+    AsyncMessagesStreamWrapper,
+    MessagesStreamWrapper,
+    MessageWrapper,
+)
 
 try:
     from anthropic._streaming import AsyncStream as _AnthropicAsyncStream
@@ -39,40 +62,49 @@ if _AnthropicAsyncStream is not None:
     _INSTRUMENTABLE_STREAM_TYPES += (_AnthropicAsyncStream,)
 
 
-class RawResponseStreamProxy(ObjectProxy):
-    """Proxy for a streaming ``with_raw_response`` result.
+class RawResponseProxy(ObjectProxy):
+    """Proxy for a ``with_raw_response`` / ``with_streaming_response`` result.
 
     Callers read response metadata (``headers``, ``request_id``,
     ``http_response`` ...) off the raw response and call ``parse()`` to obtain
-    the stream. Wrapping the raw response (instead of the parsed stream) keeps
+    the payload. Wrapping the raw response (instead of the parsed value) keeps
     every metadata attribute resolving natively, and keeps ``isinstance`` /
-    ``__class__`` seeing the original type, while ``parse()`` returns an
-    instrumented stream wrapper. Parsing is deferred until the caller asks for
-    it and memoized so repeated calls share one span.
+    ``__class__`` seeing the original type, while ``parse()`` routes on the
+    value it returns. Parsing is deferred until the caller asks for it and
+    memoized so repeated calls share one span.
 
-    ``parse()`` wraps the result only when it is an SDK ``Stream`` /
-    ``AsyncStream`` we know how to drive. Anything else is handed back
-    untouched (for example the coroutine ``parse()`` becomes on the non-legacy
-    async streaming response, or a custom non-stream target): we cannot
-    instrument it, so we log and step aside.
+    ``parse()`` dispatches on the parsed value rather than on any request
+    header, because the SDK sets ``x-stainless-raw-response: stream`` on every
+    ``with_streaming_response`` call regardless of whether the payload is a
+    ``Message`` or a ``Stream``:
+
+    * ``Message`` -> extract response telemetry and finalize the span now;
+    * ``Stream`` / ``AsyncStream`` -> return an instrumented stream wrapper that
+      finalizes the span when drained;
+    * a coroutine (async client's ``parse()``) -> return a coroutine that awaits
+      it and then dispatches by the same rules;
+    * anything else -> return it untouched and log at debug.
 
     The span is finalized independently of ``parse()``. Whether the caller
-    parses and drains the wrapper, drains the body directly, or never parses at
-    all, every path ends by closing the underlying httpx response, so a
-    fallback on its ``close`` / ``aclose`` finalizes the span when ``parse()``
-    never built a wrapper that would finalize it instead.
+    parses, drains the body directly, or never parses at all, every path ends by
+    closing the underlying httpx response, so a fallback on its ``close`` /
+    ``aclose`` finalizes the span when ``parse()`` never built (or never ran) a
+    dispatch that finalized it instead.
     """
 
     def __init__(
         self,
         raw_response: Any,
+        dispatch_message: Callable[[AnthropicMessage], None],
         wrap_stream: Callable[[Any], object | None],
         finalize: Callable[[], None],
     ) -> None:
         super().__init__(raw_response)
+        self._self_dispatch_message = dispatch_message
         self._self_wrap_stream = wrap_stream
         self._self_finalize: Callable[[], None] | None = finalize
         self._self_parsed: object | None = None
+        self._self_parsing = False
         self._install_close_fallback(raw_response)
 
     def _install_close_fallback(self, raw_response: Any) -> None:
@@ -113,8 +145,16 @@ class RawResponseStreamProxy(ObjectProxy):
         return _aclose
 
     def _finalize_close_fallback(self) -> None:
-        # When ``parse()`` built a stream wrapper, that wrapper owns
-        # finalization; only finalize here for callers that never parsed.
+        # ``parse()`` reads and closes the body synchronously for a
+        # non-streaming payload, so the close fires *during* the parse call --
+        # before dispatch can extract the message. While a parse is in flight,
+        # let that parse own finalization instead of finalizing here with no
+        # response attributes.
+        if self._self_parsing:
+            return
+        # When ``parse()`` already dispatched (extracted a message, or built a
+        # stream wrapper that owns finalization), do not finalize here; only
+        # finalize for callers that never parsed.
         if self._self_parsed is None:
             self._finalize_once()
 
@@ -126,25 +166,66 @@ class RawResponseStreamProxy(ObjectProxy):
 
     def parse(self, *args: Any, **kwargs: Any) -> object:
         # Memoize the first parse regardless of the arguments it was called
-        # with, so calling parse() again returns the same wrapper rather than
+        # with, so calling parse() again returns the same value rather than
         # re-parsing. This is deliberate: one raw response backs one span, and
         # re-parsing a stream would consume it twice anyway.
         if self._self_parsed is not None:
             return self._self_parsed
-        stream = self.__wrapped__.parse(*args, **kwargs)
-        if isinstance(stream, _INSTRUMENTABLE_STREAM_TYPES):
-            wrapped = self._self_wrap_stream(stream)
+        # Suppress the close fallback while the SDK reads the body: a
+        # non-streaming ``parse()`` closes the response synchronously, and the
+        # fallback would otherwise finalize the span before we can dispatch.
+        self._self_parsing = True
+        try:
+            parsed = self.__wrapped__.parse(*args, **kwargs)
+        except BaseException:
+            # The caller's own ``parse()`` failed; let the close fallback
+            # finalize the span and propagate the caller's exception unchanged.
+            self._self_parsing = False
+            raise
+        if inspect.iscoroutine(parsed):
+            # Async client: ``parse()`` is a coroutine and the body is only read
+            # when it is awaited, so keep suppressing until the awaitable runs.
+            return self._dispatch_awaitable(parsed)
+        self._self_parsing = False
+        return self._dispatch(parsed)
+
+    async def _dispatch_awaitable(self, awaitable: Awaitable[Any]) -> object:
+        try:
+            parsed = await awaitable
+        finally:
+            self._self_parsing = False
+        return self._dispatch(parsed)
+
+    def _dispatch(self, parsed: Any) -> object:
+        if isinstance(parsed, AnthropicMessage):
+            try:
+                self._self_dispatch_message(parsed)
+            except Exception:  # pylint: disable=broad-exception-caught
+                # Telemetry must never break the caller: if extraction fails,
+                # log and hand the parsed message back untouched.
+                _logger.debug(
+                    "failed to extract raw-response message telemetry; "
+                    "returning the parsed message untouched",
+                    exc_info=True,
+                )
+            self._self_parsed = parsed
+            self._finalize_once()
+            return parsed
+        if isinstance(parsed, _INSTRUMENTABLE_STREAM_TYPES):
+            wrapped = self._self_wrap_stream(parsed)
             if wrapped is not None:
                 self._self_parsed = wrapped
                 return wrapped
-        # Not a stream we can drive; hand it back untouched. The close fallback
-        # finalizes the span once the caller drains/closes the response body.
+        # Neither an SDK message nor a stream we can drive; hand it back
+        # untouched. The body was likely already read/closed during parse (with
+        # the fallback suppressed), so finalize now with the request attributes.
         _logger.debug(
-            "with_raw_response.parse() returned %s, not an SDK stream; "
-            "skipping stream instrumentation for this call",
-            type(stream).__name__,
+            "with_raw_response.parse() returned %s, neither an SDK Message nor "
+            "a stream we can drive; skipping instrumentation for this call",
+            type(parsed).__name__,
         )
-        return stream
+        self._finalize_once()
+        return parsed
 
 
 def _wrap_parsed_stream(
@@ -168,22 +249,26 @@ def _wrap_parsed_stream(
     return None
 
 
-def wrap_raw_stream_result(
+def wrap_raw_response(
     result: Any,
     invocation: InferenceInvocation,
     capture_content: bool,
-) -> RawResponseStreamProxy:
-    """Wrap a streaming ``with_raw_response`` result, deferring ``parse()``.
+) -> RawResponseProxy:
+    """Wrap a ``with_raw_response`` / ``with_streaming_response`` result.
 
     The raw response is wrapped so its metadata resolves natively and
-    ``parse()`` returns an instrumented ``MessagesStreamWrapper`` /
-    ``AsyncMessagesStreamWrapper`` only once the caller asks for it. The span
-    is finalized by the parsed wrapper when drained, or by the close fallback
-    when the caller drains/closes the body without parsing.
+    ``parse()`` routes on the value it returns: a ``Message`` finalizes the span
+    immediately with response telemetry, a ``Stream`` / ``AsyncStream`` becomes
+    an instrumented wrapper that finalizes on drain, and a coroutine is awaited
+    before dispatching. When the caller never parses, the close fallback
+    finalizes the span once.
     """
-    return RawResponseStreamProxy(
+    return RawResponseProxy(
         result,
-        lambda stream: _wrap_parsed_stream(
+        dispatch_message=lambda message: MessageWrapper(
+            message, capture_content
+        ).extract_into(invocation),
+        wrap_stream=lambda stream: _wrap_parsed_stream(
             stream, invocation, capture_content
         ),
         finalize=invocation.stop,

@@ -197,51 +197,112 @@ def test_sync_messages_create_with_raw_response(
     )
 
 
-def test_message_for_extraction_swallows_raw_response_parse_error():
-    """A failing ``parse()`` on a raw response must not break the caller.
+class _FakeHTTPResponse:
+    """Minimal stand-in for the httpx response behind a raw response."""
 
-    ``with_raw_response`` callers that only read headers must never be broken by
-    telemetry. If ``parse()`` raises (validation/deserialization failure),
-    ``_message_for_extraction`` returns ``None`` (skip response telemetry)
-    instead of propagating the exception into the caller's application.
-    """
-    from opentelemetry.instrumentation.genai.anthropic.patch import (
-        _message_for_extraction,
+    def __init__(self):
+        self.close_calls = 0
+
+    def close(self):
+        self.close_calls += 1
+
+
+def _build_message():
+    from anthropic.types import Message
+
+    return Message.model_construct(
+        id="msg_test",
+        type="message",
+        role="assistant",
+        model="claude-test",
+        content=[],
+        stop_reason="end_turn",
+        stop_sequence=None,
+        usage=None,
     )
 
-    class _FailingRawResponse:
+
+def test_raw_response_proxy_swallows_message_extraction_error():
+    """A telemetry extraction failure must never propagate to the caller.
+
+    The proxy routes on what ``parse()`` returns. When it returns a ``Message``
+    but extracting telemetry from it raises, the proxy logs at debug, finalizes
+    the span once, and hands the caller the parsed message untouched -- the
+    telemetry error must not surface as the caller's ``parse()`` result.
+    """
+    from opentelemetry.instrumentation.genai.anthropic._raw_response import (
+        RawResponseProxy,
+    )
+
+    message = _build_message()
+    finalize_calls = []
+
+    class _Raw:
+        http_response = _FakeHTTPResponse()
+
         def parse(self, *args, **kwargs):
-            raise ValueError("boom")
+            return message
 
-    assert _message_for_extraction(_FailingRawResponse(), {}) is None
+    def _boom(_message):
+        raise ValueError("telemetry extraction boom")
 
-
-def test_message_for_extraction_skips_streaming_raw_response_without_parsing():
-    """``with_streaming_response`` must never be parsed here.
-
-    ``with_streaming_response`` is selected by the Stainless
-    ``x-stainless-raw-response: stream`` header rather than the ``stream``
-    argument. Parsing it would consume the streaming body before the caller
-    receives it, so the header path must be detected and left un-parsed.
-    """
-    from opentelemetry.instrumentation.genai.anthropic.patch import (
-        _message_for_extraction,
+    proxy = RawResponseProxy(
+        _Raw(),
+        dispatch_message=_boom,
+        wrap_stream=lambda _stream: None,
+        finalize=lambda: finalize_calls.append(True),
     )
 
-    class _StreamingRawResponse:
+    result = proxy.parse()
+
+    assert result is message
+    # The span is still finalized exactly once despite the extraction failure.
+    assert finalize_calls == [True]
+
+
+def test_raw_response_proxy_parse_error_propagates_and_finalizes_once():
+    """A caller ``parse()`` failure propagates unchanged and finalizes once.
+
+    When the SDK's own ``parse()`` raises (validation/deserialization failure),
+    that is the caller's own exception: telemetry must neither swallow it nor
+    replace it. The span must still be finalized exactly once when the body is
+    later closed, and never a second time (``stop()`` is not idempotent).
+    """
+    from opentelemetry.instrumentation.genai.anthropic._raw_response import (
+        RawResponseProxy,
+    )
+
+    finalize_calls = []
+    http_response = _FakeHTTPResponse()
+
+    class _Raw:
         def __init__(self):
-            self.parsed = False
+            self.http_response = http_response
 
         def parse(self, *args, **kwargs):
-            self.parsed = True
-            raise AssertionError(
-                "parse() must not run for a streaming response"
-            )
+            raise ValueError("caller parse boom")
 
-    raw = _StreamingRawResponse()
-    kwargs = {"extra_headers": {"x-stainless-raw-response": "stream"}}
-    assert _message_for_extraction(raw, kwargs) is None
-    assert raw.parsed is False
+    proxy = RawResponseProxy(
+        _Raw(),
+        dispatch_message=lambda _message: None,
+        wrap_stream=lambda _stream: None,
+        finalize=lambda: finalize_calls.append(True),
+    )
+
+    with pytest.raises(ValueError, match="caller parse boom"):
+        proxy.parse()
+
+    # Not finalized until the caller closes the body.
+    assert finalize_calls == []
+
+    proxy.http_response.close()
+    assert finalize_calls == [True]
+    assert http_response.close_calls == 1
+
+    # A second close must not finalize the span again.
+    proxy.http_response.close()
+    assert finalize_calls == [True]
+    assert http_response.close_calls == 2
 
 
 @pytest.mark.vcr()
@@ -1331,3 +1392,103 @@ def test_sync_messages_create_streaming_with_raw_response_never_parsed(
     # A second close must not finalize the span again.
     raw_response.http_response.close()
     assert len(span_exporter.get_finished_spans()) == 1
+
+
+@pytest.mark.vcr()
+def test_sync_messages_with_streaming_response_nonstreaming(
+    span_exporter, metric_reader, anthropic_client, instrument_no_content
+):
+    """Non-streaming ``with_streaming_response.create`` records response attrs.
+
+    Regression test for the routing bug: the SDK sets
+    ``x-stainless-raw-response: stream`` on *every* ``with_streaming_response``
+    call, so keying the stream proxy off that header routed this non-streaming
+    call (whose ``parse()`` returns a ``Message``) into the stream path and
+    finalized the span with request attributes only. Routing on what ``parse()``
+    returns instead extracts the message and records the response model, usage,
+    and finish reason.
+    """
+    from opentelemetry.semconv._incubating.metrics import gen_ai_metrics
+
+    model = "claude-sonnet-4-20250514"
+    messages = [{"role": "user", "content": "Say hello in one word."}]
+
+    with anthropic_client.messages.with_streaming_response.create(
+        model=model,
+        max_tokens=100,
+        messages=messages,
+    ) as raw_response:
+        assert hasattr(raw_response, "headers")
+        message = raw_response.parse()
+
+    from anthropic.types import Message
+
+    assert isinstance(message, Message)
+
+    spans = span_exporter.get_finished_spans()
+    assert len(spans) == 1
+    span = spans[0]
+    # The response attributes are now present (they were absent before the fix).
+    assert GenAIAttributes.GEN_AI_RESPONSE_MODEL in span.attributes
+    assert GenAIAttributes.GEN_AI_USAGE_INPUT_TOKENS in span.attributes
+    assert_span_attributes(
+        span,
+        request_model=model,
+        response_id=message.id,
+        response_model=message.model,
+        input_tokens=expected_input_tokens(message.usage),
+        output_tokens=message.usage.output_tokens,
+        finish_reasons=[normalize_stop_reason(message.stop_reason)],
+    )
+
+    # The token-usage metric is recorded for this non-streaming path.
+    metrics = {
+        metric.name: metric
+        for rm in metric_reader.get_metrics_data().resource_metrics
+        for scope in rm.scope_metrics
+        for metric in scope.metrics
+    }
+    assert gen_ai_metrics.GEN_AI_CLIENT_TOKEN_USAGE in metrics
+
+
+@pytest.mark.vcr()
+def test_sync_messages_with_streaming_response_streaming(
+    span_exporter, anthropic_client, instrument_no_content
+):
+    """Streaming ``with_streaming_response.create`` defers and records a full span.
+
+    ``parse()`` yields a ``Stream``; draining it finalizes the span with the
+    response model, token usage, and finish reason accumulated from the stream.
+    """
+    model = "claude-sonnet-4-20250514"
+    messages = [{"role": "user", "content": "Say hello in one word."}]
+
+    with anthropic_client.messages.with_streaming_response.create(
+        model=model,
+        max_tokens=100,
+        messages=messages,
+        stream=True,
+    ) as raw_response:
+        assert hasattr(raw_response, "headers")
+        # Deferred: the span is not finalized before the stream is drained.
+        assert span_exporter.get_finished_spans() == ()
+
+        stream = raw_response.parse()
+        response_text = ""
+        for chunk in stream:
+            if chunk.type == "content_block_delta":
+                delta = getattr(chunk, "delta", None)
+                if delta and hasattr(delta, "text"):
+                    response_text += delta.text
+    assert response_text == "Hello."
+
+    spans = span_exporter.get_finished_spans()
+    assert len(spans) == 1
+    assert_span_attributes(
+        spans[0],
+        request_model=model,
+        response_model=model,
+        input_tokens=13,
+        output_tokens=5,
+        finish_reasons=["stop"],
+    )

@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any, Protocol, cast, runtime_checkable
 
 from anthropic._streaming import Stream as AnthropicStream
@@ -18,7 +18,7 @@ from opentelemetry.semconv._incubating.attributes import (
 from opentelemetry.util.genai.handler import TelemetryHandler
 from opentelemetry.util.genai.invocation import InferenceInvocation
 
-from ._raw_response import wrap_raw_stream_result
+from ._raw_response import wrap_raw_response
 from .messages_extractors import (
     extract_params,
     get_input_messages,
@@ -66,65 +66,18 @@ class _RawResponse(Protocol):
     def parse(self, *args: Any, **kwargs: Any) -> Any: ...
 
 
-_RAW_RESPONSE_HEADER = "x-stainless-raw-response"
+def _is_raw_response(result: object) -> bool:
+    """Whether ``result`` is a raw-response object to route through the proxy.
 
-
-def _is_streaming_request(kwargs: Mapping[str, Any]) -> bool:
-    """Whether the call produces a stream, from either selection mechanism.
-
-    A stream is requested by the ``stream=True`` argument *or* by the Stainless
-    ``x-stainless-raw-response: stream`` header that ``with_streaming_response``
-    sets (the header path leaves ``stream`` unset in kwargs). Mirrors the OpenAI
-    sibling's ``is_streamed_raw_response`` (``response_extractors.py``).
+    Both ``with_raw_response`` (``LegacyAPIResponse``) and
+    ``with_streaming_response`` (``APIResponse`` / ``AsyncAPIResponse``) expose
+    their payload behind ``parse()`` and carry the underlying httpx response;
+    the proxy needs both -- ``parse()`` to route on the parsed value and
+    ``http_response`` to finalize the span for callers that never parse.
     """
-    if kwargs.get("stream"):
-        return True
-    extra_headers = kwargs.get("extra_headers")
-    if not isinstance(extra_headers, Mapping):
-        return False
-    return any(
-        key.lower() == _RAW_RESPONSE_HEADER and value == "stream"
-        for key, value in extra_headers.items()
+    return isinstance(result, _RawResponse) and hasattr(
+        result, "http_response"
     )
-
-
-def _message_for_extraction(
-    result: object, kwargs: Mapping[str, Any]
-) -> AnthropicMessage | None:
-    """Return the ``Message`` to extract telemetry from, or ``None`` to skip.
-
-    ``Messages.create`` normally returns a ``Message``. When called through
-    ``with_raw_response`` it returns a raw-response object instead. For a
-    non-streaming call the HTTP body is already fully received, so ``parse()``
-    is a pure, memoized deserialization -- it neither consumes a stream nor
-    triggers network I/O early. This mirrors the OpenAI sibling's non-streaming
-    path (``openai/patch.py`` ``_set_response_properties``, commented "safe to
-    parse() here since this is the non-streaming path").
-
-    Streaming responses are never parsed here (that would consume the stream
-    before the caller receives it). This covers both ``stream=True`` and the
-    ``with_streaming_response`` header path, via ``_is_streaming_request``.
-
-    The parse is guarded: if it raises, the failure is swallowed and ``None``
-    is returned so the caller's raw response is handed back untouched --
-    telemetry must never break the application (AGENTS.md: "Do not raise new
-    exceptions in instrumentation/telemetry code").
-    """
-    if isinstance(result, AnthropicMessage):
-        return result
-    if not _is_streaming_request(kwargs) and isinstance(result, _RawResponse):
-        try:
-            parsed = result.parse()
-        except Exception:  # pylint: disable=broad-exception-caught
-            _logger.debug(
-                "with_raw_response.parse() failed; skipping response "
-                "telemetry for this call",
-                exc_info=True,
-            )
-            return None
-        if isinstance(parsed, AnthropicMessage):
-            return parsed
-    return None
 
 
 def messages_create(
@@ -160,18 +113,11 @@ def messages_create(
                 return MessagesStreamWrapper(
                     result, invocation, capture_content
                 )
-            if (
-                _is_streaming_request(kwargs)
-                and isinstance(result, _RawResponse)
-                and hasattr(result, "http_response")
-            ):
-                return wrap_raw_stream_result(
-                    result, invocation, capture_content
-                )
+            if _is_raw_response(result):
+                return wrap_raw_response(result, invocation, capture_content)
 
-            message = _message_for_extraction(result, kwargs)
-            if message is not None:
-                MessageWrapper(message, capture_content).extract_into(
+            if isinstance(result, AnthropicMessage):
+                MessageWrapper(result, capture_content).extract_into(
                     invocation
                 )
             invocation.stop()
@@ -227,18 +173,11 @@ def async_messages_create(
                     invocation,
                     capture_content,
                 )
-            if (
-                _is_streaming_request(kwargs)
-                and isinstance(result, _RawResponse)
-                and hasattr(result, "http_response")
-            ):
-                return wrap_raw_stream_result(
-                    result, invocation, capture_content
-                )
+            if _is_raw_response(result):
+                return wrap_raw_response(result, invocation, capture_content)
 
-            message = _message_for_extraction(result, kwargs)
-            if message is not None:
-                MessageWrapper(message, capture_content).extract_into(
+            if isinstance(result, AnthropicMessage):
+                MessageWrapper(result, capture_content).extract_into(
                     invocation
                 )
             invocation.stop()

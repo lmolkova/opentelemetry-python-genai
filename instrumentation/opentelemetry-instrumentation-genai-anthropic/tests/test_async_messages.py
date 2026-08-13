@@ -1153,3 +1153,108 @@ async def test_async_messages_create_streaming_with_raw_response_never_parsed(
     # A second close must not finalize the span again.
     await raw_response.http_response.aclose()
     assert len(span_exporter.get_finished_spans()) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.vcr()
+async def test_async_messages_with_streaming_response_nonstreaming(
+    span_exporter, metric_reader, async_anthropic_client, instrument_no_content
+):
+    """Non-streaming async ``with_streaming_response.create`` records response attrs.
+
+    Regression test for the async half of the routing bug: the SDK sets
+    ``x-stainless-raw-response: stream`` on every ``with_streaming_response``
+    call, and ``AsyncAPIResponse.parse()`` is a coroutine, so this non-streaming
+    call was handed back uninstrumented and got a request-only span. Routing on
+    the awaited ``parse()`` result extracts the message and records the response
+    model, usage, and finish reason.
+    """
+    from opentelemetry.semconv._incubating.metrics import gen_ai_metrics
+
+    model = "claude-sonnet-4-20250514"
+    messages = [{"role": "user", "content": "Say hello in one word."}]
+
+    async with async_anthropic_client.messages.with_streaming_response.create(
+        model=model,
+        max_tokens=100,
+        messages=messages,
+    ) as raw_response:
+        assert hasattr(raw_response, "headers")
+        # AsyncAPIResponse.parse() is a coroutine; the proxy hands back one too.
+        message = await raw_response.parse()
+
+    from anthropic.types import Message
+
+    assert isinstance(message, Message)
+
+    spans = span_exporter.get_finished_spans()
+    assert len(spans) == 1
+    span = spans[0]
+    assert GenAIAttributes.GEN_AI_RESPONSE_MODEL in span.attributes
+    assert GenAIAttributes.GEN_AI_USAGE_INPUT_TOKENS in span.attributes
+    assert span.attributes[GenAIAttributes.GEN_AI_RESPONSE_ID] == message.id
+    assert (
+        span.attributes[GenAIAttributes.GEN_AI_RESPONSE_MODEL] == message.model
+    )
+    assert span.attributes[
+        GenAIAttributes.GEN_AI_USAGE_INPUT_TOKENS
+    ] == expected_input_tokens(message.usage)
+    assert (
+        span.attributes[GenAIAttributes.GEN_AI_USAGE_OUTPUT_TOKENS]
+        == message.usage.output_tokens
+    )
+    assert span.attributes[GenAIAttributes.GEN_AI_RESPONSE_FINISH_REASONS] == (
+        normalize_stop_reason(message.stop_reason),
+    )
+
+    metrics = {
+        metric.name: metric
+        for rm in metric_reader.get_metrics_data().resource_metrics
+        for scope in rm.scope_metrics
+        for metric in scope.metrics
+    }
+    assert gen_ai_metrics.GEN_AI_CLIENT_TOKEN_USAGE in metrics
+
+
+@pytest.mark.asyncio
+@pytest.mark.vcr()
+async def test_async_messages_with_streaming_response_streaming(
+    span_exporter, async_anthropic_client, instrument_no_content
+):
+    """Streaming async ``with_streaming_response.create`` defers and records a full span.
+
+    The awaited ``parse()`` yields an ``AsyncStream``; draining it finalizes the
+    span with the response model, token usage, and finish reason.
+    """
+    model = "claude-sonnet-4-20250514"
+    messages = [{"role": "user", "content": "Say hello in one word."}]
+
+    async with async_anthropic_client.messages.with_streaming_response.create(
+        model=model,
+        max_tokens=100,
+        messages=messages,
+        stream=True,
+    ) as raw_response:
+        assert hasattr(raw_response, "headers")
+        # Deferred: the span is not finalized before the stream is drained.
+        assert span_exporter.get_finished_spans() == ()
+
+        stream = await raw_response.parse()
+        response_text = ""
+        async for chunk in stream:
+            if chunk.type == "content_block_delta":
+                delta = getattr(chunk, "delta", None)
+                if delta and hasattr(delta, "text"):
+                    response_text += delta.text
+    assert response_text == "Hello!"
+
+    spans = span_exporter.get_finished_spans()
+    assert len(spans) == 1
+    span = spans[0]
+    assert span.attributes[GenAIAttributes.GEN_AI_REQUEST_MODEL] == model
+    assert span.attributes[GenAIAttributes.GEN_AI_RESPONSE_MODEL] == model
+    assert span.attributes[GenAIAttributes.GEN_AI_USAGE_INPUT_TOKENS] == 13
+    assert span.attributes[GenAIAttributes.GEN_AI_USAGE_OUTPUT_TOKENS] == 5
+    assert span.attributes[GenAIAttributes.GEN_AI_RESPONSE_FINISH_REASONS] == (
+        "stop",
+    )
