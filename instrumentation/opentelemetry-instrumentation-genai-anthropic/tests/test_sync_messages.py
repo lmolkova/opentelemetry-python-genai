@@ -13,7 +13,10 @@ import pytest
 from anthropic import Anthropic, APIConnectionError, NotFoundError
 from anthropic.resources.messages import Messages as _Messages
 
-from opentelemetry.instrumentation.genai.anthropic import AnthropicInstrumentor
+from opentelemetry.instrumentation.genai.anthropic import (
+    AnthropicInstrumentor,
+    _raw_response,
+)
 from opentelemetry.instrumentation.genai.anthropic.messages_extractors import (
     GEN_AI_USAGE_CACHE_CREATION_INPUT_TOKENS,
     GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS,
@@ -195,6 +198,47 @@ def test_sync_messages_create_with_raw_response(
         output_tokens=message.usage.output_tokens,
         finish_reasons=[normalize_stop_reason(message.stop_reason)],
     )
+
+
+@pytest.fixture(name="vcr_cassette_name")
+def fixture_vcr_cassette_name(request):
+    # Reuse an existing recorded interaction for tests that exercise the same
+    # request but a different code path. VCR matches on method + URI, so the
+    # recorded ``with_raw_response`` create call replays here unchanged.
+    reused = {
+        "test_sync_messages_raw_response_extraction_failure_not_raised": (
+            "test_sync_messages_create_with_raw_response"
+        ),
+    }
+    return reused.get(request.node.name, request.node.name)
+
+
+@pytest.mark.vcr()
+def test_sync_messages_raw_response_extraction_failure_not_raised(
+    span_exporter, anthropic_client, instrument_no_content, monkeypatch
+):
+    """Extraction failures must never surface to the caller of ``parse()``.
+
+    ``with_raw_response.create`` reads the body eagerly, so extraction runs in
+    ``wrap_raw_response``'s ``is_closed`` branch. If that extraction raises, it
+    must be swallowed (telemetry never breaks the caller) and the caller must
+    still receive the parsed ``Message``.
+    """
+
+    def boom(self, invocation):
+        raise ValueError("boom")
+
+    monkeypatch.setattr(
+        _raw_response.MessageWrapper, "extract_into", boom, raising=True
+    )
+
+    raw_response = anthropic_client.messages.with_raw_response.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=100,
+        messages=[{"role": "user", "content": "Say hello in one word."}],
+    )
+
+    assert raw_response.parse().id
 
 
 @pytest.mark.vcr()

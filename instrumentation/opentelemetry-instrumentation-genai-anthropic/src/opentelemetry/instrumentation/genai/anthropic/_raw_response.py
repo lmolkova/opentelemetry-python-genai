@@ -194,29 +194,37 @@ class RawResponseProxy(_ObjectProxy):
             if self._self_async_parse:
                 return self._replay_parsed()
             return self._self_parsed
-        # Suppress the close fallback while the SDK reads the body: a
-        # non-streaming ``parse()`` closes the response synchronously, and the
-        # fallback would otherwise finalize the span before we can dispatch.
+        # Hold the close-fallback suppression flag only across an actual body
+        # read. The sync ``parse()`` reads the body synchronously -- its close
+        # fires mid-parse and must stay suppressed -- so guard that call. The
+        # async ``parse()`` only builds a coroutine here and reads nothing until
+        # it is awaited, so drop the flag before handing that coroutine back and
+        # let ``_dispatch_awaitable`` re-arm it around the ``await``. Setting the
+        # flag outside a body-read window would strand it True forever if the
+        # caller never awaits the coroutine, permanently suppressing the close
+        # fallback and leaking the span.
         self._self_parsing = True
         try:
             parsed: Any = self._self_response.parse(*args, **kwargs)
-        except BaseException:
-            # The caller's own ``parse()`` failed; let the close fallback
-            # finalize the span and propagate the caller's exception unchanged.
+        finally:
+            # Whether the read succeeded or the caller's own ``parse()`` raised,
+            # release the flag so the close fallback can finalize the span.
             self._self_parsing = False
-            raise
         if inspect.iscoroutine(parsed):
             # Async client: ``parse()`` is a coroutine and the body is only read
-            # when it is awaited, so keep suppressing until the awaitable runs.
+            # when it is awaited, so suppression is re-armed inside the awaitable.
             self._self_async_parse = True
             return self._dispatch_awaitable(parsed)
-        self._self_parsing = False
         return self._dispatch(parsed)
 
     async def _replay_parsed(self) -> object:
         return self._self_parsed
 
     async def _dispatch_awaitable(self, awaitable: Awaitable[Any]) -> object:
+        # The flag is armed here -- immediately before the ``await`` that reads
+        # the body -- rather than in ``parse()``, so a coroutine that is created
+        # but never awaited never sets it, and the close fallback still fires.
+        self._self_parsing = True
         try:
             parsed = await awaitable
         finally:
@@ -307,16 +315,18 @@ def wrap_raw_response(
     if getattr(http_response, "is_closed", False):
         try:
             parsed = result.parse()
-        except Exception:  # pylint: disable=broad-exception-caught
-            _logger.debug(
-                "raw-response parse() failed; skipping response telemetry",
-                exc_info=True,
-            )
-        else:
             if isinstance(parsed, AnthropicMessage):
                 MessageWrapper(parsed, capture_content).extract_into(
                     invocation
                 )
+        except Exception:  # pylint: disable=broad-exception-caught
+            # Telemetry must never break the caller: swallow both parse() and
+            # extraction failures so a successful API call is never turned into
+            # an exception after the fact (this mirrors ``_dispatch``'s guard).
+            _logger.debug(
+                "raw-response parse() failed; skipping response telemetry",
+                exc_info=True,
+            )
         invocation.stop()
         return result
 

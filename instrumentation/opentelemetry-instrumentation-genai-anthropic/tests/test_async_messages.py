@@ -1235,6 +1235,45 @@ async def test_async_messages_with_streaming_response_parse_twice(
     assert first.id == second.id
 
 
+@pytest.fixture(name="vcr_cassette_name")
+def fixture_vcr_cassette_name(request):
+    # Reuse an existing recorded interaction for tests that exercise the same
+    # request but a different code path. VCR matches on method + URI, so the
+    # recorded ``with_streaming_response`` create call replays here unchanged.
+    reused = {
+        "test_async_messages_with_streaming_response_parse_never_awaited": (
+            "test_async_messages_with_streaming_response_nonstreaming"
+        ),
+    }
+    return reused.get(request.node.name, request.node.name)
+
+
+@pytest.mark.vcr()
+@pytest.mark.asyncio
+async def test_async_messages_with_streaming_response_parse_never_awaited(
+    span_exporter, async_anthropic_client, instrument_no_content
+):
+    """A never-awaited async ``parse()`` coroutine must not leak the span.
+
+    ``parse()`` returns a coroutine that reads the body only when awaited. If
+    the caller abandons it (``coro.close()``, early return, cancelled task), the
+    close-fallback suppression flag must never have been set, so ``__aexit__``'s
+    ``aclose`` still finalizes the span exactly once.
+    """
+    model = "claude-sonnet-4-20250514"
+    messages = [{"role": "user", "content": "Say hello in one word."}]
+
+    async with async_anthropic_client.messages.with_streaming_response.create(
+        model=model,
+        max_tokens=100,
+        messages=messages,
+    ) as raw_response:
+        coro = raw_response.parse()
+        coro.close()
+
+    assert len(span_exporter.get_finished_spans()) == 1
+
+
 @pytest.mark.asyncio
 @pytest.mark.vcr()
 async def test_async_messages_with_streaming_response_streaming(
