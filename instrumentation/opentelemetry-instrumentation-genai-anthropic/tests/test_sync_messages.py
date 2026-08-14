@@ -197,6 +197,20 @@ def test_sync_messages_create_with_raw_response(
     )
 
 
+@pytest.mark.vcr()
+def test_sync_messages_with_raw_response_never_parsed(
+    span_exporter, anthropic_client, instrument_no_content
+):
+    raw_response = anthropic_client.messages.with_raw_response.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=100,
+        messages=[{"role": "user", "content": "Say hello in one word."}],
+    )
+    assert raw_response.headers is not None
+    spans = span_exporter.get_finished_spans()
+    assert len(spans) == 1
+
+
 class _FakeHTTPResponse:
     """Minimal stand-in for the httpx response behind a raw response."""
 

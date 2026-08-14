@@ -116,10 +116,10 @@ def messages_create(
             if _is_raw_response(result):
                 return wrap_raw_response(result, invocation, capture_content)
 
-            if isinstance(result, AnthropicMessage):
-                MessageWrapper(result, capture_content).extract_into(
-                    invocation
-                )
+            # Only a non-streaming ``Message`` remains here: the stream and
+            # raw-response results returned above, so no ``isinstance`` guard is
+            # needed (and pyright flags one as unnecessary).
+            MessageWrapper(result, capture_content).extract_into(invocation)
             invocation.stop()
             return result
         except Exception as exc:

@@ -1216,6 +1216,25 @@ async def test_async_messages_with_streaming_response_nonstreaming(
     assert gen_ai_metrics.GEN_AI_CLIENT_TOKEN_USAGE in metrics
 
 
+@pytest.mark.vcr()
+@pytest.mark.asyncio
+async def test_async_messages_with_streaming_response_parse_twice(
+    span_exporter, async_anthropic_client, instrument_no_content
+):
+    from anthropic.types import Message
+
+    async with async_anthropic_client.messages.with_streaming_response.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=100,
+        messages=[{"role": "user", "content": "Say hello in one word."}],
+    ) as raw_response:
+        first = await raw_response.parse()
+        second = await raw_response.parse()
+    assert isinstance(first, Message)
+    assert isinstance(second, Message)
+    assert first.id == second.id
+
+
 @pytest.mark.asyncio
 @pytest.mark.vcr()
 async def test_async_messages_with_streaming_response_streaming(

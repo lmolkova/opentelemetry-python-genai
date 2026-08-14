@@ -35,11 +35,10 @@ import functools
 import inspect
 import logging
 from collections.abc import Awaitable, Callable
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from anthropic._streaming import Stream as AnthropicStream
 from anthropic.types import Message as AnthropicMessage
-from wrapt import ObjectProxy
 
 from .wrappers import (
     AsyncMessagesStreamWrapper,
@@ -53,16 +52,29 @@ except ImportError:
     _AnthropicAsyncStream = None
 
 if TYPE_CHECKING:
+    from anthropic._streaming import AsyncStream as AnthropicAsyncStream
+    from anthropic.types import RawMessageStreamEvent
+
     from opentelemetry.util.genai.invocation import InferenceInvocation
+
+    # wrapt's ``ObjectProxy`` is untyped; model just the constructor we use so
+    # the proxy subclass and its ``__init__`` are fully typed under pyright.
+    class _ObjectProxy:
+        def __init__(self, wrapped: object) -> None: ...
+
+else:
+    from wrapt import ObjectProxy as _ObjectProxy
 
 _logger = logging.getLogger(__name__)
 
-_INSTRUMENTABLE_STREAM_TYPES: tuple[type, ...] = (AnthropicStream,)
-if _AnthropicAsyncStream is not None:
-    _INSTRUMENTABLE_STREAM_TYPES += (_AnthropicAsyncStream,)
+_INSTRUMENTABLE_STREAM_TYPES: tuple[type, ...] = tuple(
+    stream_type
+    for stream_type in (AnthropicStream, _AnthropicAsyncStream)
+    if stream_type is not None
+)
 
 
-class RawResponseProxy(ObjectProxy):
+class RawResponseProxy(_ObjectProxy):
     """Proxy for a ``with_raw_response`` / ``with_streaming_response`` result.
 
     Callers read response metadata (``headers``, ``request_id``,
@@ -85,6 +97,11 @@ class RawResponseProxy(ObjectProxy):
       it and then dispatches by the same rules;
     * anything else -> return it untouched and log at debug.
 
+    A memoized parse is replayed in kind: the sync client gets the value back
+    directly, and the async client (whose ``parse()`` is a coroutine) gets a
+    fresh awaitable that resolves to the same already-parsed value, so
+    ``await raw_response.parse()`` works on the second call too.
+
     The span is finalized independently of ``parse()``. Whether the caller
     parses, drains the body directly, or never parses at all, every path ends by
     closing the underlying httpx response, so a fallback on its ``close`` /
@@ -100,10 +117,12 @@ class RawResponseProxy(ObjectProxy):
         finalize: Callable[[], None],
     ) -> None:
         super().__init__(raw_response)
+        self._self_response: Any = raw_response
         self._self_dispatch_message = dispatch_message
         self._self_wrap_stream = wrap_stream
         self._self_finalize: Callable[[], None] | None = finalize
         self._self_parsed: object | None = None
+        self._self_async_parse = False
         self._self_parsing = False
         self._install_close_fallback(raw_response)
 
@@ -145,11 +164,11 @@ class RawResponseProxy(ObjectProxy):
         return _aclose
 
     def _finalize_close_fallback(self) -> None:
-        # ``parse()`` reads and closes the body synchronously for a
-        # non-streaming payload, so the close fires *during* the parse call --
-        # before dispatch can extract the message. While a parse is in flight,
-        # let that parse own finalization instead of finalizing here with no
-        # response attributes.
+        # A ``with_streaming_response`` non-streaming ``parse()`` reads and
+        # closes the body while it deserializes, so the close fires *during* the
+        # parse call -- before dispatch can extract the message. While a parse is
+        # in flight, let that parse own finalization instead of finalizing here
+        # with no response attributes.
         if self._self_parsing:
             return
         # When ``parse()`` already dispatched (extracted a message, or built a
@@ -168,15 +187,19 @@ class RawResponseProxy(ObjectProxy):
         # Memoize the first parse regardless of the arguments it was called
         # with, so calling parse() again returns the same value rather than
         # re-parsing. This is deliberate: one raw response backs one span, and
-        # re-parsing a stream would consume it twice anyway.
+        # re-parsing a stream would consume it twice anyway. The async client
+        # awaits ``parse()``, so replay the memoized value through a fresh
+        # awaitable; the sync client hands it back directly.
         if self._self_parsed is not None:
+            if self._self_async_parse:
+                return self._replay_parsed()
             return self._self_parsed
         # Suppress the close fallback while the SDK reads the body: a
         # non-streaming ``parse()`` closes the response synchronously, and the
         # fallback would otherwise finalize the span before we can dispatch.
         self._self_parsing = True
         try:
-            parsed = self.__wrapped__.parse(*args, **kwargs)
+            parsed: Any = self._self_response.parse(*args, **kwargs)
         except BaseException:
             # The caller's own ``parse()`` failed; let the close fallback
             # finalize the span and propagate the caller's exception unchanged.
@@ -185,9 +208,13 @@ class RawResponseProxy(ObjectProxy):
         if inspect.iscoroutine(parsed):
             # Async client: ``parse()`` is a coroutine and the body is only read
             # when it is awaited, so keep suppressing until the awaitable runs.
+            self._self_async_parse = True
             return self._dispatch_awaitable(parsed)
         self._self_parsing = False
         return self._dispatch(parsed)
+
+    async def _replay_parsed(self) -> object:
+        return self._self_parsed
 
     async def _dispatch_awaitable(self, awaitable: Awaitable[Any]) -> object:
         try:
@@ -217,8 +244,8 @@ class RawResponseProxy(ObjectProxy):
                 self._self_parsed = wrapped
                 return wrapped
         # Neither an SDK message nor a stream we can drive; hand it back
-        # untouched. The body was likely already read/closed during parse (with
-        # the fallback suppressed), so finalize now with the request attributes.
+        # untouched. The body was likely already read/closed during parse, so
+        # finalize now with the request attributes.
         _logger.debug(
             "with_raw_response.parse() returned %s, neither an SDK Message nor "
             "a stream we can drive; skipping instrumentation for this call",
@@ -241,11 +268,19 @@ def _wrap_parsed_stream(
     ``parse()``. Returns ``None`` for anything we cannot drive.
     """
     if isinstance(stream, AnthropicStream):
-        return MessagesStreamWrapper(stream, invocation, capture_content)
+        return MessagesStreamWrapper[None](
+            cast("AnthropicStream[RawMessageStreamEvent]", stream),
+            invocation,
+            capture_content,
+        )
     if _AnthropicAsyncStream is not None and isinstance(
         stream, _AnthropicAsyncStream
     ):
-        return AsyncMessagesStreamWrapper(stream, invocation, capture_content)
+        return AsyncMessagesStreamWrapper[None](
+            cast("AnthropicAsyncStream[RawMessageStreamEvent]", stream),
+            invocation,
+            capture_content,
+        )
     return None
 
 
@@ -253,16 +288,38 @@ def wrap_raw_response(
     result: Any,
     invocation: InferenceInvocation,
     capture_content: bool,
-) -> RawResponseProxy:
+) -> Any:
     """Wrap a ``with_raw_response`` / ``with_streaming_response`` result.
 
-    The raw response is wrapped so its metadata resolves natively and
-    ``parse()`` routes on the value it returns: a ``Message`` finalizes the span
-    immediately with response telemetry, a ``Stream`` / ``AsyncStream`` becomes
-    an instrumented wrapper that finalizes on drain, and a coroutine is awaited
-    before dispatching. When the caller never parses, the close fallback
-    finalizes the span once.
+    When the SDK has already read the body to completion (the non-streaming
+    ``with_raw_response`` path), the operation is over: ``parse()`` is a memoized
+    deserialization with nothing left to wait for, so the span is finalized here
+    and the caller gets its raw response untouched.
+
+    While the body is still open, the caller owns when it is read, so the result
+    is wrapped so its metadata resolves natively and ``parse()`` routes on the
+    value it returns: a ``Message`` finalizes the span immediately with response
+    telemetry, a ``Stream`` / ``AsyncStream`` becomes an instrumented wrapper
+    that finalizes on drain, and a coroutine is awaited before dispatching. When
+    the caller never parses, the close fallback finalizes the span once.
     """
+    http_response = getattr(result, "http_response", None)
+    if getattr(http_response, "is_closed", False):
+        try:
+            parsed = result.parse()
+        except Exception:  # pylint: disable=broad-exception-caught
+            _logger.debug(
+                "raw-response parse() failed; skipping response telemetry",
+                exc_info=True,
+            )
+        else:
+            if isinstance(parsed, AnthropicMessage):
+                MessageWrapper(parsed, capture_content).extract_into(
+                    invocation
+                )
+        invocation.stop()
+        return result
+
     return RawResponseProxy(
         result,
         dispatch_message=lambda message: MessageWrapper(
