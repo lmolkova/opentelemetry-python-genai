@@ -204,7 +204,9 @@ def test_closed_unrecognized_body_still_finalizes():
     """
     invocation = _FakeInvocation()
     raw = _FakeRaw(
-        http_response=_FakeHttpResponse(body={"object": "other"}, is_closed=True)
+        http_response=_FakeHttpResponse(
+            body={"object": "other"}, is_closed=True
+        )
     )
 
     _wrap(raw, invocation)
@@ -214,9 +216,7 @@ def test_closed_unrecognized_body_still_finalizes():
 
 def test_closed_non_json_body_still_finalizes():
     invocation = _FakeInvocation()
-    raw = _FakeRaw(
-        http_response=_FakeHttpResponse(body=None, is_closed=True)
-    )
+    raw = _FakeRaw(http_response=_FakeHttpResponse(body=None, is_closed=True))
 
     _wrap(raw, invocation)
 
@@ -272,7 +272,9 @@ def test_parse_stream_hands_span_to_the_wrapper():
 
     assert isinstance(wrapper, _SyncWrapper)
     assert invocation.stop_count == 0  # the wrapper owns it now
-    assert proxy.parse() is wrapper  # replayed, never re-parsed into a raw stream
+    assert (
+        proxy.parse() is wrapper
+    )  # replayed, never re-parsed into a raw stream
 
     wrapper.close()
     assert invocation.stop_count == 1
@@ -541,3 +543,108 @@ def test_async_abandoned_stream_is_closed_by_the_async_close_hook():
         assert invocation.stop_count == 1
 
     asyncio.run(exercise())
+
+
+class _NestedReadHttpResponse(_FakeHttpResponse):
+    """A transport whose ``read`` re-enters itself once.
+
+    Contrived, but it isolates the depth behaviour: with a plain in-flight
+    flag the inner read clears it and the outer read finalizes early, before
+    the body it is still draining is available.
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.depth = 0
+        self.finalized_at_depth = []
+
+    def read(self):
+        self.depth += 1
+        try:
+            if self.depth == 1:
+                # The re-entrant read goes through the installed hook too.
+                self.read()
+            return super().read()
+        finally:
+            self.depth -= 1
+
+
+def test_nested_read_finalizes_only_once_the_outer_read_returns():
+    invocation = _FakeInvocation()
+    http_response = _NestedReadHttpResponse()
+    raw = _FakeRaw(_PAYLOAD, http_response=http_response)
+    proxy = _wrap(raw, invocation)
+
+    http_response.read()
+
+    assert proxy._self_recorded == [_PAYLOAD]
+    assert invocation.stop_count == 1
+
+
+def test_read_driven_by_parse_leaves_finalization_to_the_dispatch():
+    """The read hook must stand down for the read ``parse()`` drives."""
+    invocation = _FakeInvocation()
+
+    class _ReadingRaw(_FakeRaw):
+        def parse(self, *args, **kwargs):
+            self.http_response.read()  # the SDK reads the body here
+            return super().parse(*args, **kwargs)
+
+    raw = _ReadingRaw(_PAYLOAD)
+    proxy = _wrap(raw, invocation)
+
+    assert proxy.parse() is _PAYLOAD
+
+    # Recorded once, by the parse dispatch rather than twice via the read hook.
+    assert proxy._self_recorded == [_PAYLOAD]
+    assert invocation.stop_count == 1
+
+
+def test_close_during_a_parse_driven_read_stands_down():
+    """httpx closes while draining, before the content is available."""
+    invocation = _FakeInvocation()
+
+    class _ClosingRaw(_FakeRaw):
+        def parse(self, *args, **kwargs):
+            self.http_response.close()  # closed mid-drain
+            return super().parse(*args, **kwargs)
+
+    raw = _ClosingRaw(_PAYLOAD)
+    proxy = _wrap(raw, invocation)
+
+    assert proxy.parse() is _PAYLOAD
+    assert proxy._self_recorded == [_PAYLOAD]
+    assert invocation.stop_count == 1
+
+
+def test_close_during_a_plain_read_stands_down():
+    invocation = _FakeInvocation()
+
+    class _ClosingHttpResponse(_FakeHttpResponse):
+        def read(self):
+            self.close()  # httpx closes before assigning the content
+            return super().read()
+
+    http_response = _ClosingHttpResponse()
+    raw = _FakeRaw(_PAYLOAD, http_response=http_response)
+    proxy = _wrap(raw, invocation)
+
+    http_response.read()
+
+    assert proxy._self_recorded == [_PAYLOAD]
+    assert invocation.stop_count == 1
+
+
+def test_reads_in_flight_returns_to_zero_after_a_failed_parse():
+    invocation = _FakeInvocation()
+
+    class _Raw(_FakeRaw):
+        def parse(self, *args, **kwargs):
+            raise ValueError("boom")
+
+    proxy = _wrap(_Raw(), invocation)
+
+    with pytest.raises(ValueError, match="boom"):
+        proxy.parse()
+
+    assert proxy._self_reads_in_flight == 0

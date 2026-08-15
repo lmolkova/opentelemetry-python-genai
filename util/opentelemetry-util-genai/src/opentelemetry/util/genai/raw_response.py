@@ -63,6 +63,7 @@ class RawResponse(Protocol):
 
     def parse(self, *args: Any, **kwargs: Any) -> Any: ...
 
+
 # Distinguishes "a body read owns finalization, stand down" from "no stream
 # wrapper to finalize", which are both falsy but call for opposite handling.
 _SUPPRESSED = object()
@@ -120,13 +121,11 @@ class RawResponseProxy(_ObjectProxy, metaclass=_RawResponseProxyMeta):
         # Response telemetry is settled: whichever path saw the body first
         # recorded it (or gave up on it), so no later path may record again.
         self._self_dispatched = False
-        # ``parse()`` owns finalization for the body read it drives, and it
-        # produces the object the caller should see -- so the read hook stands
-        # down and lets the parse dispatch instead.
-        self._self_parsing = False
-        # A direct body read closes the response before the content is
-        # available, so the close hook must stand down until the read returns.
-        self._self_reading = False
+        # How many body reads are in flight, counting the ``parse()`` that
+        # drives one. A read nested inside another -- the SDK's ``parse()``
+        # reading the body is the common case -- must not finalize when the
+        # inner one returns, so this is a depth rather than a flag.
+        self._self_reads_in_flight = 0
         # The wrapper the close hook has to finalize when the caller abandons
         # the stream. Set by both the default and the cast parse.
         self._self_stream_wrapper: Any = None
@@ -197,11 +196,11 @@ class RawResponseProxy(_ObjectProxy, metaclass=_RawResponseProxyMeta):
     ) -> Callable[..., Any]:
         @functools.wraps(original)
         def _read(*args: object, **kwargs: object) -> Any:
-            self._self_reading = True
+            self._self_reads_in_flight += 1
             try:
                 content = original(*args, **kwargs)
             finally:
-                self._self_reading = False
+                self._self_reads_in_flight -= 1
             self._finalize_read_fallback()
             return content
 
@@ -212,11 +211,11 @@ class RawResponseProxy(_ObjectProxy, metaclass=_RawResponseProxyMeta):
     ) -> Callable[..., Awaitable[Any]]:
         @functools.wraps(original)
         async def _aread(*args: object, **kwargs: object) -> Any:
-            self._self_reading = True
+            self._self_reads_in_flight += 1
             try:
                 content = await original(*args, **kwargs)
             finally:
-                self._self_reading = False
+                self._self_reads_in_flight -= 1
             self._finalize_read_fallback()
             return content
 
@@ -227,14 +226,13 @@ class RawResponseProxy(_ObjectProxy, metaclass=_RawResponseProxyMeta):
 
         This is the last point at which the deserialized body is available to
         telemetry, so a caller that only ever reads is finalized here with full
-        response attributes. A read driven by ``parse()`` is left alone -- the
-        dispatch that follows it owns finalization.
+        response attributes. A read still nested inside another -- the one
+        ``parse()`` drives, most often -- is left alone: the outer read, or the
+        dispatch that follows it, owns finalization.
         """
-        if self._self_parsing or self._self_dispatched:
+        if self._self_reads_in_flight or self._self_dispatched:
             return
-        self._extract_body_of(
-            getattr(self.__wrapped__, "http_response", None)
-        )
+        self._extract_body_of(getattr(self.__wrapped__, "http_response", None))
         # Settled either way: the invocation ends here, so a later ``parse()``
         # must not write into an already-stopped invocation.
         self._self_dispatched = True
@@ -268,16 +266,16 @@ class RawResponseProxy(_ObjectProxy, metaclass=_RawResponseProxyMeta):
         """The abandoned stream wrapper the close hook has to finalize, if any.
 
         httpx closes the response while it drains the body and only assigns the
-        content afterwards, so a close that fires *during* a read or a
-        ``parse()`` would finalize with nothing to extract. Those two own
-        finalization themselves once the body is available.
+        content afterwards, so a close that fires *during* a read -- including
+        the read ``parse()`` drives -- would finalize with nothing to extract.
+        The read owns finalization itself once the body is available.
 
         Handing the wrapper out clears it, which also breaks the recursion from
         finalizing it: closing the wrapper closes the SDK stream, which closes
         this same httpx response and re-enters the hook, where there is now no
         wrapper left and nothing to finalize.
         """
-        if self._self_parsing or self._self_reading:
+        if self._self_reads_in_flight:
             return _SUPPRESSED
         wrapper = self._self_stream_wrapper
         self._self_stream_wrapper = None
@@ -406,20 +404,20 @@ class RawResponseProxy(_ObjectProxy, metaclass=_RawResponseProxyMeta):
             return None
 
     def _sdk_parse(self, *args: Any, **kwargs: Any) -> Any:
-        # Suppress the read and close fallbacks only across an actual body read.
-        # The sync ``parse()`` reads here, so guard this call; the async
-        # ``parse()`` only builds a coroutine and reads nothing until awaited,
-        # so ``_await_and_settle`` re-arms the flag around the ``await``
-        # instead. Setting it outside a body-read window would strand it True if
-        # the caller never awaited the coroutine, leaking the invocation.
-        self._self_parsing = True
+        # Count this as a read in flight only across an actual body read. The
+        # sync ``parse()`` reads here, so guard this call; the async ``parse()``
+        # only builds a coroutine and reads nothing until awaited, so
+        # ``_await_and_settle`` counts the ``await`` instead. Counting outside a
+        # body-read window would strand the depth above zero if the caller never
+        # awaited the coroutine, leaking the invocation.
+        self._self_reads_in_flight += 1
         try:
             return self.__wrapped__.parse(*args, **kwargs)
         except Exception:
             self._finalize_failed_parse()
             raise
         finally:
-            self._self_parsing = False
+            self._self_reads_in_flight -= 1
 
     def _finalize_failed_parse(self) -> None:
         # The read that failed may already have closed the body, and the close
@@ -444,14 +442,14 @@ class RawResponseProxy(_ObjectProxy, metaclass=_RawResponseProxyMeta):
         awaitable: Awaitable[Any],
         settle: Callable[[Any], object],
     ) -> object:
-        self._self_parsing = True
+        self._self_reads_in_flight += 1
         try:
             parsed = await awaitable
         except Exception:
             self._finalize_failed_parse()
             raise
         finally:
-            self._self_parsing = False
+            self._self_reads_in_flight -= 1
         return settle(parsed)
 
     def _dispatch(self, parsed: object) -> object:
