@@ -6,10 +6,20 @@
 import inspect
 import json
 
-import httpx
 import pytest
 from anthropic import APIConnectionError, AsyncAnthropic, NotFoundError
-from anthropic._legacy_response import LegacyAPIResponse
+
+try:
+    import httpx
+    from anthropic._legacy_response import LegacyAPIResponse
+
+    IS_V1 = False
+except ImportError:
+    import httpx2 as httpx
+    from anthropic._response import AsyncAPIResponse as LegacyAPIResponse
+
+    IS_V1 = True
+
 from anthropic._response import AsyncAPIResponse
 from anthropic._streaming import AsyncStream as AnthropicAsyncStream
 from anthropic.resources.messages import AsyncMessages as _AsyncMessages
@@ -157,6 +167,8 @@ async def test_async_messages_create_with_raw_response(
 
     assert hasattr(raw_response, "headers")
     message = raw_response.parse()
+    if inspect.iscoroutine(message):
+        message = await message
 
     spans = span_exporter.get_finished_spans()
     assert len(spans) == 1
@@ -216,23 +228,34 @@ async def test_async_messages_create_with_all_params(
     model = "claude-sonnet-4-20250514"
     messages = [{"role": "user", "content": "Say hello."}]
 
-    await async_anthropic_client.messages.create(
-        model=model,
-        max_tokens=50,
-        messages=messages,
-        temperature=0.7,
-        top_p=0.9,
-        top_k=40,
-        stop_sequences=["STOP"],
-    )
+    if IS_V1:
+        await async_anthropic_client.messages.create(
+            model=model,
+            max_tokens=50,
+            messages=messages,
+            stop_sequences=["STOP"],
+        )
+    else:
+        await async_anthropic_client.messages.create(
+            model=model,
+            max_tokens=50,
+            messages=messages,
+            stop_sequences=["STOP"],
+            temperature=0.7,
+            top_p=0.9,
+            top_k=40,
+        )
 
     spans = span_exporter.get_finished_spans()
     assert len(spans) == 1
     span = spans[0]
     assert span.attributes[GenAIAttributes.GEN_AI_REQUEST_MAX_TOKENS] == 50
-    assert span.attributes[GenAIAttributes.GEN_AI_REQUEST_TEMPERATURE] == 0.7
-    assert span.attributes[GenAIAttributes.GEN_AI_REQUEST_TOP_P] == 0.9
-    assert span.attributes[GenAIAttributes.GEN_AI_REQUEST_TOP_K] == 40
+    if not IS_V1:
+        assert (
+            span.attributes[GenAIAttributes.GEN_AI_REQUEST_TEMPERATURE] == 0.7
+        )
+        assert span.attributes[GenAIAttributes.GEN_AI_REQUEST_TOP_P] == 0.9
+        assert span.attributes[GenAIAttributes.GEN_AI_REQUEST_TOP_K] == 40
     assert span.attributes[GenAIAttributes.GEN_AI_REQUEST_STOP_SEQUENCES] == (
         "STOP",
     )
@@ -1107,6 +1130,8 @@ async def test_async_messages_create_streaming_with_raw_response(
     assert span_exporter.get_finished_spans() == ()
 
     stream = raw_response.parse()
+    if inspect.iscoroutine(stream):
+        stream = await stream
     response_text = ""
     async for chunk in stream:
         if chunk.type == "content_block_delta":
@@ -1686,7 +1711,10 @@ async def test_async_messages_with_raw_response_does_not_parse_early(
     assert spans[0].attributes[GenAIAttributes.GEN_AI_RESPONSE_MODEL] == model
     assert not parse_calls
 
-    assert raw_response.parse().model == model
+    parsed = raw_response.parse()
+    if inspect.iscoroutine(parsed):
+        parsed = await parsed
+    assert parsed.model == model
     assert len(parse_calls) == 1
 
 
@@ -1732,6 +1760,8 @@ async def test_async_messages_with_raw_response_captures_content(
         )
     )
     message = raw_response.parse()
+    if inspect.iscoroutine(message):
+        message = await message
 
     span = span_exporter.get_finished_spans()[0]
     input_messages = _load_span_messages(

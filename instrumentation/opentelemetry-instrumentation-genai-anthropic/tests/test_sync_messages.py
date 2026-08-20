@@ -8,11 +8,22 @@ import inspect
 import json
 import os
 from pathlib import Path
+from types import SimpleNamespace
 
-import httpx
 import pytest
 from anthropic import Anthropic, APIConnectionError, NotFoundError
-from anthropic._legacy_response import LegacyAPIResponse
+
+try:
+    import httpx
+    from anthropic._legacy_response import LegacyAPIResponse
+
+    IS_V1 = False
+except ImportError:
+    import httpx2 as httpx
+    from anthropic._response import APIResponse as LegacyAPIResponse
+
+    IS_V1 = True
+
 from anthropic._response import APIResponse
 from anthropic._streaming import Stream as AnthropicStream
 from anthropic.resources.messages import Messages as _Messages
@@ -33,6 +44,7 @@ from opentelemetry.instrumentation.genai.anthropic._raw_response import (
 from opentelemetry.instrumentation.genai.anthropic.messages_extractors import (
     GEN_AI_USAGE_CACHE_CREATION_INPUT_TOKENS,
     GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS,
+    get_server_address_and_port,
 )
 from opentelemetry.semconv._incubating.attributes import (
     error_attributes as ErrorAttributes,
@@ -404,23 +416,34 @@ def test_sync_messages_create_with_all_params(
     model = "claude-sonnet-4-20250514"
     messages = [{"role": "user", "content": "Say hello."}]
 
-    anthropic_client.messages.create(
-        model=model,
-        max_tokens=50,
-        messages=messages,
-        temperature=0.7,
-        top_p=0.9,
-        top_k=40,
-        stop_sequences=["STOP"],
-    )
+    if IS_V1:
+        anthropic_client.messages.create(
+            model=model,
+            max_tokens=50,
+            messages=messages,
+            stop_sequences=["STOP"],
+        )
+    else:
+        anthropic_client.messages.create(
+            model=model,
+            max_tokens=50,
+            messages=messages,
+            stop_sequences=["STOP"],
+            temperature=0.7,
+            top_p=0.9,
+            top_k=40,
+        )
 
     spans = span_exporter.get_finished_spans()
     assert len(spans) == 1
     span = spans[0]
     assert span.attributes[GenAIAttributes.GEN_AI_REQUEST_MAX_TOKENS] == 50
-    assert span.attributes[GenAIAttributes.GEN_AI_REQUEST_TEMPERATURE] == 0.7
-    assert span.attributes[GenAIAttributes.GEN_AI_REQUEST_TOP_P] == 0.9
-    assert span.attributes[GenAIAttributes.GEN_AI_REQUEST_TOP_K] == 40
+    if not IS_V1:
+        assert (
+            span.attributes[GenAIAttributes.GEN_AI_REQUEST_TEMPERATURE] == 0.7
+        )
+        assert span.attributes[GenAIAttributes.GEN_AI_REQUEST_TOP_P] == 0.9
+        assert span.attributes[GenAIAttributes.GEN_AI_REQUEST_TOP_K] == 40
     # OpenTelemetry converts lists to tuples when storing as attributes
     assert span.attributes[GenAIAttributes.GEN_AI_REQUEST_STOP_SEQUENCES] == (
         "STOP",
@@ -2141,3 +2164,43 @@ def test_sync_messages_raw_response_parse_after_exit(
     assert spans[0].attributes[GenAIAttributes.GEN_AI_RESPONSE_MODEL] == model
 
     assert raw_response.parse().model == model
+
+
+def test_get_server_address_and_port():
+    client = SimpleNamespace(
+        _client=SimpleNamespace(
+            base_url=SimpleNamespace(host="custom.anthropic.com", port=8080)
+        )
+    )
+    address, port = get_server_address_and_port(client)
+    assert address == "custom.anthropic.com"
+    assert port == 8080
+
+
+def test_get_server_address_and_port_default_ports():
+    client = SimpleNamespace(
+        _client=SimpleNamespace(
+            base_url=SimpleNamespace(host="api.anthropic.com", port=443)
+        )
+    )
+    address, port = get_server_address_and_port(client)
+    assert address == "api.anthropic.com"
+    assert port is None
+
+
+def test_get_server_address_and_port_string_url():
+    client = SimpleNamespace(
+        _client=SimpleNamespace(
+            base_url="https://custom.anthropic.com:8443/v1"
+        )
+    )
+    address, port = get_server_address_and_port(client)
+    assert address == "custom.anthropic.com"
+    assert port == 8443
+
+
+def test_get_server_address_and_port_missing_client():
+    assert get_server_address_and_port(SimpleNamespace(_client=None)) == (
+        None,
+        None,
+    )

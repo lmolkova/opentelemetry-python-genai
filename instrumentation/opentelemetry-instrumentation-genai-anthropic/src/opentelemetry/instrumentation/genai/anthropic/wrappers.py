@@ -6,6 +6,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import (
     TYPE_CHECKING,
+    Any,
     Generic,
     Protocol,
     TypeVar,
@@ -31,7 +32,6 @@ except ImportError:
     _sdk_accumulate_event = None
 
 if TYPE_CHECKING:
-    import httpx
     from anthropic._streaming import AsyncStream, Stream
     from anthropic.lib.streaming._messages import (  # pylint: disable=no-name-in-module
         AsyncMessageStream,
@@ -162,7 +162,7 @@ class MessagesStreamWrapper(
         self._self_message_telemetry_finalized = False
 
     @property
-    def response(self) -> httpx.Response:
+    def response(self) -> Any:
         return finalize_on_close(self.stream.response, self._stop)
 
     @property
@@ -202,7 +202,7 @@ class AsyncMessagesStreamWrapper(
         self._self_message_telemetry_finalized = False
 
     @property
-    def response(self) -> httpx.Response:
+    def response(self) -> Any:
         return finalize_on_aclose(self.stream.response, self._stop)
 
     @property

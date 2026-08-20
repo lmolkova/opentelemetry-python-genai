@@ -8,6 +8,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
+from urllib.parse import urlparse
 
 from anthropic.types import MessageDeltaUsage
 
@@ -213,12 +214,19 @@ def extract_params(  # pylint: disable=too-many-locals
 def get_server_address_and_port(
     client_instance: Messages | AsyncMessages,
 ) -> tuple[str | None, int | None]:
-    base_url = client_instance._client.base_url
-    port = base_url.port
-    return (
-        base_url.host or None,
-        port if port and port != 443 and port > 0 else None,
-    )
+    base_client = getattr(client_instance, "_client", None)
+    base_url = getattr(base_client, "base_url", None)
+    if not base_url:
+        return None, None
+    address = getattr(base_url, "host", None)
+    port = getattr(base_url, "port", None)
+    if not address:
+        url = urlparse(str(base_url))
+        address = url.hostname
+        port = url.port
+    if port == 443 or port == 80:
+        port = None
+    return address or None, port
 
 
 def get_llm_request_attributes(
