@@ -35,6 +35,7 @@ from __future__ import annotations
 import weakref
 from typing import Any
 
+from agents.exceptions import AgentsException
 from agents.tracing import Span, Trace, TracingProcessor
 from agents.tracing.span_data import (
     AgentSpanData,
@@ -130,6 +131,12 @@ class GenAITracingProcessor(TracingProcessor):
                 invocation.tool_result = (
                     output if isinstance(output, str) else str(output)
                 )
+        # SpanError is a mapping, not a raised exception, so it never
+        # reaches util-genai's exception path on its own.
+        span_error = getattr(span, "error", None)
+        if span_error is not None:
+            invocation.fail(AgentsException(span_error.get("message") or ""))
+            return
         invocation.stop()
 
     def shutdown(self) -> None:
