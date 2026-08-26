@@ -242,12 +242,7 @@ def test_tool_span_error_sets_error_status_and_type(
     (tool_span,) = span_exporter.get_finished_spans()
     assert tool_span.status.status_code is StatusCode.ERROR
     assert tool_span.attributes is not None
-    # util-genai reports the qualified name on current versions and the
-    # bare qualname on the supported floor.
-    assert tool_span.attributes["error.type"] in {
-        "AgentsException",
-        "agents.exceptions.AgentsException",
-    }
+    assert tool_span.attributes["error.type"] == "_OTHER"
 
 
 def test_agent_span_error_sets_error_status_and_type(
@@ -266,12 +261,7 @@ def test_agent_span_error_sets_error_status_and_type(
     (agent_span,) = span_exporter.get_finished_spans()
     assert agent_span.status.status_code is StatusCode.ERROR
     assert agent_span.attributes is not None
-    # util-genai reports the qualified name on current versions and the
-    # bare qualname on the supported floor.
-    assert agent_span.attributes["error.type"] in {
-        "AgentsException",
-        "agents.exceptions.AgentsException",
-    }
+    assert agent_span.attributes["error.type"] == "_OTHER"
 
 
 def test_state_uses_weakref_so_dropped_spans_are_collected() -> None:
