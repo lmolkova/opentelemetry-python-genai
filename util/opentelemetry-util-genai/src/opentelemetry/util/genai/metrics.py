@@ -15,6 +15,8 @@ from opentelemetry.semconv._incubating.attributes import (
 )
 from opentelemetry.util.genai.instruments import (
     create_duration_histogram,
+    create_execute_tool_duration_histogram,
+    create_invoke_agent_duration_histogram,
     create_time_per_output_chunk_histogram,
     create_time_to_first_chunk_histogram,
     create_token_histogram,
@@ -25,6 +27,8 @@ from opentelemetry.util.types import Attributes
 from ._invocation import GenAIInvocation
 
 if TYPE_CHECKING:
+    from ._agent_invocation import AgentInvocation
+    from ._tool_invocation import ToolInvocation
     from ._workflow_invocation import WorkflowInvocation
 
 
@@ -35,6 +39,12 @@ class InvocationMetricsRecorder:
         self._duration_histogram: Histogram = create_duration_histogram(meter)
         self._workflow_duration_histogram: Histogram = (
             create_workflow_duration_histogram(meter)
+        )
+        self._invoke_agent_duration_histogram: Histogram = (
+            create_invoke_agent_duration_histogram(meter)
+        )
+        self._execute_tool_duration_histogram: Histogram = (
+            create_execute_tool_duration_histogram(meter)
         )
         self._token_histogram: Histogram = create_token_histogram(meter)
         self._time_to_first_chunk_histogram: Histogram = (
@@ -74,6 +84,32 @@ class InvocationMetricsRecorder:
             0.0,
         )
         self._workflow_duration_histogram.record(
+            duration_seconds,
+            attributes=attributes,
+            context=invocation._span_context,
+        )
+
+    def record_agent(self, invocation: AgentInvocation) -> None:
+        """Record duration metric for an agent invocation."""
+        attributes = invocation._get_metric_attributes()
+        duration_seconds = max(
+            timeit.default_timer() - invocation._monotonic_start_s,
+            0.0,
+        )
+        self._invoke_agent_duration_histogram.record(
+            duration_seconds,
+            attributes=attributes,
+            context=invocation._span_context,
+        )
+
+    def record_tool(self, invocation: ToolInvocation) -> None:
+        """Record duration metric for a tool invocation."""
+        attributes = invocation._get_metric_attributes()
+        duration_seconds = max(
+            timeit.default_timer() - invocation._monotonic_start_s,
+            0.0,
+        )
+        self._execute_tool_duration_histogram.record(
             duration_seconds,
             attributes=attributes,
             context=invocation._span_context,

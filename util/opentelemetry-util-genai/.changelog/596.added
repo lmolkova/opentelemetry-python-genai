@@ -1,0 +1,1 @@
+Add support for cache write tokens, per-modality token breakdown, reasoning level, continuation response ID, conversation compaction, prompt template attributes, and agent/tool duration metrics.

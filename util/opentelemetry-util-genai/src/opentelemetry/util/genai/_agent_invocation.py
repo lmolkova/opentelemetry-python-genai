@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from typing import Final
+
 from opentelemetry._logs import Logger
 from opentelemetry.semconv._incubating.attributes import (
     gen_ai_attributes as GenAI,
@@ -20,9 +22,12 @@ from opentelemetry.util.genai.types import (
     InputMessage,
     MessagePart,
     OutputMessage,
+    SystemInstructionPart,
     ToolDefinition,
 )
 from opentelemetry.util.types import AttributeValue
+
+_GEN_AI_CONVERSATION_COMPACTED: Final = "gen_ai.conversation.compacted"
 
 
 class AgentInvocation(GenAIInvocation):
@@ -34,6 +39,30 @@ class AgentInvocation(GenAIInvocation):
     Reference:
         Client span: https://github.com/open-telemetry/semantic-conventions/blob/main/docs/gen-ai/gen-ai-agent-spans.md#invoke-agent-client-span
         Internal span: https://github.com/open-telemetry/semantic-conventions/blob/main/docs/gen-ai/gen-ai-agent-spans.md#invoke-agent-internal-span
+    """
+
+    agent_id: str | None = None
+    """
+    .. deprecated:: 1.3b0
+        Deprecated on internal agent spans (local agents). Restricted to remote agent client spans.
+    """
+
+    agent_version: str | None = None
+    """
+    .. deprecated:: 1.3b0
+        Deprecated on internal agent spans (local agents).
+    """
+
+    cache_creation_input_tokens: int | None = None
+    """
+    .. deprecated:: 1.3b0
+        Deprecated on internal agent spans (local agents).
+    """
+
+    cache_read_input_tokens: int | None = None
+    """
+    .. deprecated:: 1.3b0
+        Deprecated on internal agent spans (local agents).
     """
 
     def __init__(
@@ -74,6 +103,7 @@ class AgentInvocation(GenAIInvocation):
         self.agent_version: str | None = None
 
         self.conversation_id: str | None = None
+        self.conversation_compacted: bool | None = None
         self.data_source_id: str | None = None
         self.output_type: str | None = None
 
@@ -95,7 +125,9 @@ class AgentInvocation(GenAIInvocation):
 
         self.input_messages: list[InputMessage] = []
         self.output_messages: list[OutputMessage] = []
-        self.system_instruction: list[MessagePart] = []
+        self.system_instruction: (
+            list[SystemInstructionPart] | list[MessagePart]
+        ) = []
         self.tool_definitions: list[ToolDefinition] | None = None
 
         self._start(self._get_start_attributes())
@@ -121,16 +153,22 @@ class AgentInvocation(GenAIInvocation):
 
     def _get_agent_attributes(self) -> dict[str, AttributeValue]:
         """Return agent attributes not known at span creation time."""
-        optional_attrs = (
-            (GenAI.GEN_AI_AGENT_ID, self.agent_id),
-            (GenAI.GEN_AI_AGENT_DESCRIPTION, self.agent_description),
-            (GenAI.GEN_AI_AGENT_VERSION, self.agent_version),
-        )
+        if self._span_kind == SpanKind.INTERNAL:
+            optional_attrs = (
+                (GenAI.GEN_AI_AGENT_DESCRIPTION, self.agent_description),
+            )
+        else:
+            optional_attrs = (
+                (GenAI.GEN_AI_AGENT_ID, self.agent_id),
+                (GenAI.GEN_AI_AGENT_DESCRIPTION, self.agent_description),
+                (GenAI.GEN_AI_AGENT_VERSION, self.agent_version),
+            )
         return {k: v for k, v in optional_attrs if v is not None}
 
     def _get_request_attributes(self) -> dict[str, AttributeValue]:
         optional_attrs = (
             (GenAI.GEN_AI_CONVERSATION_ID, self.conversation_id),
+            (_GEN_AI_CONVERSATION_COMPACTED, self.conversation_compacted),
             (GenAI.GEN_AI_DATA_SOURCE_ID, self.data_source_id),
             (GenAI.GEN_AI_OUTPUT_TYPE, self.output_type),
             (GenAI.GEN_AI_REQUEST_TEMPERATURE, self.temperature),
@@ -150,18 +188,24 @@ class AgentInvocation(GenAIInvocation):
         return {}
 
     def _get_usage_attributes(self) -> dict[str, AttributeValue]:
-        optional_attrs = (
-            (GenAI.GEN_AI_USAGE_INPUT_TOKENS, self.input_tokens),
-            (GenAI.GEN_AI_USAGE_OUTPUT_TOKENS, self.output_tokens),
-            (
-                GenAI.GEN_AI_USAGE_CACHE_CREATION_INPUT_TOKENS,
-                self.cache_creation_input_tokens,
-            ),
-            (
-                GenAI.GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS,
-                self.cache_read_input_tokens,
-            ),
-        )
+        if self._span_kind == SpanKind.INTERNAL:
+            optional_attrs = (
+                (GenAI.GEN_AI_USAGE_INPUT_TOKENS, self.input_tokens),
+                (GenAI.GEN_AI_USAGE_OUTPUT_TOKENS, self.output_tokens),
+            )
+        else:
+            optional_attrs = (
+                (GenAI.GEN_AI_USAGE_INPUT_TOKENS, self.input_tokens),
+                (GenAI.GEN_AI_USAGE_OUTPUT_TOKENS, self.output_tokens),
+                (
+                    GenAI.GEN_AI_USAGE_CACHE_CREATION_INPUT_TOKENS,
+                    self.cache_creation_input_tokens,
+                ),
+                (
+                    GenAI.GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS,
+                    self.cache_read_input_tokens,
+                ),
+            )
         return {k: v for k, v in optional_attrs if v is not None}
 
     def _get_content_attributes_for_span(self) -> dict[str, AttributeValue]:
@@ -174,16 +218,11 @@ class AgentInvocation(GenAIInvocation):
         )
 
     def _get_metric_attributes(self) -> dict[str, AttributeValue]:
-        optional_attrs = (
-            (GenAI.GEN_AI_PROVIDER_NAME, self._provider),
-            (GenAI.GEN_AI_REQUEST_MODEL, self._request_model),
-            (server_attributes.SERVER_ADDRESS, self._server_address),
-            (server_attributes.SERVER_PORT, self._server_port),
-        )
-        attrs: dict[str, AttributeValue] = {
-            GenAI.GEN_AI_OPERATION_NAME: self._operation_name,
-            **{k: v for k, v in optional_attrs if v is not None},
-        }
+        attrs: dict[str, AttributeValue] = {}
+        if self._agent_name is not None:
+            attrs[GenAI.GEN_AI_AGENT_NAME] = self._agent_name
+        if self._request_model is not None:
+            attrs[GenAI.GEN_AI_REQUEST_MODEL] = self._request_model
         attrs.update(self.metric_attributes)
         return attrs
 
@@ -215,4 +254,4 @@ class AgentInvocation(GenAIInvocation):
             system_instruction=self.system_instruction,
             tool_definitions=self.tool_definitions,
         )
-        self._metrics_recorder.record(self)
+        self._metrics_recorder.record_agent(self)

@@ -1,8 +1,14 @@
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
 
+from typing import Final
+
 from opentelemetry.metrics import Histogram, Meter
 from opentelemetry.semconv._incubating.metrics import gen_ai_metrics
+
+_GEN_AI_INVOKE_WORKFLOW_DURATION: Final = "gen_ai.invoke_workflow.duration"
+_GEN_AI_INVOKE_AGENT_DURATION: Final = "gen_ai.invoke_agent.duration"
+_GEN_AI_EXECUTE_TOOL_DURATION: Final = "gen_ai.execute_tool.duration"
 
 _GEN_AI_CLIENT_OPERATION_DURATION_BUCKETS = [
     0.01,
@@ -50,8 +56,26 @@ def create_duration_histogram(meter: Meter) -> Histogram:
 
 def create_workflow_duration_histogram(meter: Meter) -> Histogram:
     return meter.create_histogram(
-        name="gen_ai.invoke_workflow.duration",
+        name=_GEN_AI_INVOKE_WORKFLOW_DURATION,
         description="Measures the duration of a workflow execution.",
+        unit="s",
+        explicit_bucket_boundaries_advisory=_GEN_AI_CLIENT_OPERATION_DURATION_BUCKETS,
+    )
+
+
+def create_invoke_agent_duration_histogram(meter: Meter) -> Histogram:
+    return meter.create_histogram(
+        name=_GEN_AI_INVOKE_AGENT_DURATION,
+        description="Measures the duration of an in-process agent invocation.",
+        unit="s",
+        explicit_bucket_boundaries_advisory=_GEN_AI_CLIENT_OPERATION_DURATION_BUCKETS,
+    )
+
+
+def create_execute_tool_duration_histogram(meter: Meter) -> Histogram:
+    return meter.create_histogram(
+        name=_GEN_AI_EXECUTE_TOOL_DURATION,
+        description="Measures the duration of a tool execution.",
         unit="s",
         explicit_bucket_boundaries_advisory=_GEN_AI_CLIENT_OPERATION_DURATION_BUCKETS,
     )

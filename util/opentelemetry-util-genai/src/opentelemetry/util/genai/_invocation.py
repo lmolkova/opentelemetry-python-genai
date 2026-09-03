@@ -30,6 +30,7 @@ from opentelemetry.util.genai.types import (
     InputMessage,
     MessagePart,
     OutputMessage,
+    SystemInstructionPart,
     ToolDefinition,
 )
 from opentelemetry.util.genai.utils import (
@@ -172,7 +173,9 @@ class GenAIInvocation(AbstractContextManager["GenAIInvocation"]):
         *,
         inputs: list[InputMessage] | None = None,
         outputs: list[OutputMessage] | None = None,
-        system_instruction: list[MessagePart] | None = None,
+        system_instruction: list[SystemInstructionPart]
+        | list[MessagePart]
+        | None = None,
         tool_definitions: list[ToolDefinition] | None = None,
         log_record: LogRecord | None = None,
     ) -> None:
@@ -239,7 +242,7 @@ def get_content_attributes(
     *,
     input_messages: Sequence[InputMessage],
     output_messages: Sequence[OutputMessage],
-    system_instruction: Sequence[MessagePart],
+    system_instruction: Sequence[SystemInstructionPart | MessagePart],
     tool_definitions: Sequence[ToolDefinition] | None,
     for_span: bool,
 ) -> dict[str, Any]:

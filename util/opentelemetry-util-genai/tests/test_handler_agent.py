@@ -113,9 +113,9 @@ class TestLocalAgentInvocation(unittest.TestCase):  # pylint: disable=too-many-p
 
         attrs = self.span_exporter.get_finished_spans()[0].attributes
         assert attrs[GenAI.GEN_AI_AGENT_NAME] == "Full Agent"
-        assert attrs[GenAI.GEN_AI_AGENT_ID] == "agent-123"
+        assert GenAI.GEN_AI_AGENT_ID not in attrs
         assert attrs[GenAI.GEN_AI_AGENT_DESCRIPTION] == "A test agent"
-        assert attrs[GenAI.GEN_AI_AGENT_VERSION] == "1.0.0"
+        assert GenAI.GEN_AI_AGENT_VERSION not in attrs
         assert attrs[GenAI.GEN_AI_USAGE_INPUT_TOKENS] == 100
         assert attrs[GenAI.GEN_AI_USAGE_OUTPUT_TOKENS] == 200
         assert attrs[GenAI.GEN_AI_CONVERSATION_ID] == "conv-456"
@@ -158,8 +158,8 @@ class TestLocalAgentInvocation(unittest.TestCase):  # pylint: disable=too-many-p
 
         attrs = self.span_exporter.get_finished_spans()[0].attributes
         assert attrs[GenAI.GEN_AI_USAGE_INPUT_TOKENS] == 100
-        assert attrs[GenAI.GEN_AI_USAGE_CACHE_CREATION_INPUT_TOKENS] == 25
-        assert attrs[GenAI.GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS] == 50
+        assert GenAI.GEN_AI_USAGE_CACHE_CREATION_INPUT_TOKENS not in attrs
+        assert GenAI.GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS not in attrs
 
     def test_fail_sets_error_status(self):
         invocation = self.handler.invoke_local_agent()
@@ -554,44 +554,25 @@ class TestAgentInvocationMetrics(TestBase):
             meter_provider=self.meter_provider,
         )
         with patch("timeit.default_timer", return_value=1000.0):
-            invocation = handler.invoke_local_agent(request_model="model")
-        invocation.input_tokens = 5
-        invocation.output_tokens = 7
+            invocation = handler.invoke_local_agent(
+                request_model="model", agent_name="LocalAgent"
+            )
 
         with patch("timeit.default_timer", return_value=1002.0):
             invocation.stop()
 
         metrics = self._harvest_metrics()
-        self.assertIn("gen_ai.client.operation.duration", metrics)
-        duration_points = metrics["gen_ai.client.operation.duration"]
+        self.assertIn("gen_ai.invoke_agent.duration", metrics)
+        duration_points = metrics["gen_ai.invoke_agent.duration"]
         self.assertEqual(len(duration_points), 1)
         duration_point = duration_points[0]
         self.assertEqual(
-            duration_point.attributes[GenAI.GEN_AI_OPERATION_NAME],
-            GenAI.GenAiOperationNameValues.INVOKE_AGENT.value,
+            duration_point.attributes[GenAI.GEN_AI_AGENT_NAME], "LocalAgent"
         )
         self.assertEqual(
             duration_point.attributes[GenAI.GEN_AI_REQUEST_MODEL], "model"
         )
         self.assertAlmostEqual(duration_point.sum, 2.0, places=3)
-
-        self.assertIn("gen_ai.client.token.usage", metrics)
-        token_points = metrics["gen_ai.client.token.usage"]
-        token_by_type = {
-            point.attributes[GenAI.GEN_AI_TOKEN_TYPE]: point
-            for point in token_points
-        }
-        self.assertEqual(len(token_by_type), 2)
-        self.assertAlmostEqual(
-            token_by_type[GenAI.GenAiTokenTypeValues.INPUT.value].sum,
-            5.0,
-            places=3,
-        )
-        self.assertAlmostEqual(
-            token_by_type[GenAI.GenAiTokenTypeValues.OUTPUT.value].sum,
-            7.0,
-            places=3,
-        )
 
     def test_remote_agent_records_duration_with_server_attrs(self) -> None:
         handler = TelemetryHandler(
@@ -601,19 +582,21 @@ class TestAgentInvocationMetrics(TestBase):
         invocation = handler.invoke_remote_agent(
             "prov",
             request_model="model",
+            agent_name="RemoteAgent",
             server_address="agent.example.com",
             server_port=443,
         )
-        invocation.input_tokens = 10
         invocation.stop()
 
         metrics = self._harvest_metrics()
-        self.assertIn("gen_ai.client.operation.duration", metrics)
-        duration_point = metrics["gen_ai.client.operation.duration"][0]
+        self.assertIn("gen_ai.invoke_agent.duration", metrics)
+        duration_point = metrics["gen_ai.invoke_agent.duration"][0]
         self.assertEqual(
-            duration_point.attributes["server.address"], "agent.example.com"
+            duration_point.attributes[GenAI.GEN_AI_AGENT_NAME], "RemoteAgent"
         )
-        self.assertEqual(duration_point.attributes["server.port"], 443)
+        self.assertEqual(
+            duration_point.attributes[GenAI.GEN_AI_REQUEST_MODEL], "model"
+        )
 
     def test_fail_agent_records_error_metric(self) -> None:
         handler = TelemetryHandler(
@@ -621,18 +604,22 @@ class TestAgentInvocationMetrics(TestBase):
             meter_provider=self.meter_provider,
         )
         with patch("timeit.default_timer", return_value=2000.0):
-            invocation = handler.invoke_local_agent(request_model="err-model")
-        invocation.input_tokens = 11
+            invocation = handler.invoke_local_agent(
+                request_model="err-model", agent_name="ErrAgent"
+            )
 
         error = Error(message="boom", type="ValueError")
         with patch("timeit.default_timer", return_value=2001.0):
             invocation.fail(error)
 
         metrics = self._harvest_metrics()
-        self.assertIn("gen_ai.client.operation.duration", metrics)
-        duration_point = metrics["gen_ai.client.operation.duration"][0]
+        self.assertIn("gen_ai.invoke_agent.duration", metrics)
+        duration_point = metrics["gen_ai.invoke_agent.duration"][0]
         self.assertEqual(
             duration_point.attributes.get("error.type"), "ValueError"
+        )
+        self.assertEqual(
+            duration_point.attributes.get(GenAI.GEN_AI_AGENT_NAME), "ErrAgent"
         )
         self.assertAlmostEqual(duration_point.sum, 1.0, places=3)
 

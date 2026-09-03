@@ -1,0 +1,1 @@
+Stop setting `agent_id` on internal agent spans.

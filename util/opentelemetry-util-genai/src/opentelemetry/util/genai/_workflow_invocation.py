@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+from typing import Final
 
 from opentelemetry._logs import Logger
 from opentelemetry.semconv._incubating.attributes import (
@@ -22,6 +23,8 @@ from opentelemetry.util.genai.utils import (
     should_capture_content_on_spans,
 )
 from opentelemetry.util.types import AttributeValue
+
+_GEN_AI_CONVERSATION_COMPACTED: Final = "gen_ai.conversation.compacted"
 
 
 class WorkflowInvocation(GenAIInvocation):
@@ -42,7 +45,7 @@ class WorkflowInvocation(GenAIInvocation):
         name: str | None,
     ) -> None:
         """Use handler.workflow(name) rather than calling this directly."""
-        _operation_name = "invoke_workflow"
+        _operation_name = GenAI.GenAiOperationNameValues.INVOKE_WORKFLOW.value
         super().__init__(
             tracer,
             metrics_recorder,
@@ -54,9 +57,9 @@ class WorkflowInvocation(GenAIInvocation):
         )
         self._name: str | None = name
         self.conversation_id: str | None = None
+        self.conversation_compacted: bool | None = None
         self.input_messages: list[InputMessage] = []
         self.output_messages: list[OutputMessage] = []
-        self.conversation_id: str | None = None
         self._start(self._get_start_attributes())
 
     def _get_start_attributes(self) -> dict[str, AttributeValue]:
@@ -90,9 +93,7 @@ class WorkflowInvocation(GenAIInvocation):
         }
 
     def _get_metric_attributes(self) -> dict[str, AttributeValue]:
-        attrs: dict[str, AttributeValue] = {
-            GenAI.GEN_AI_OPERATION_NAME: self._operation_name,
-        }
+        attrs: dict[str, AttributeValue] = {}
         if self._name is not None:
             attrs[GenAI.GEN_AI_WORKFLOW_NAME] = self._name
         attrs.update(self.metric_attributes)
@@ -102,10 +103,10 @@ class WorkflowInvocation(GenAIInvocation):
         attributes: dict[str, AttributeValue] = self._get_messages_for_span()
         if self.conversation_id is not None:
             attributes[GenAI.GEN_AI_CONVERSATION_ID] = self.conversation_id
+        if self.conversation_compacted is True:
+            attributes[_GEN_AI_CONVERSATION_COMPACTED] = True
         if error is not None:
             self._apply_error_attributes(error)
-        if self.conversation_id is not None:
-            attributes[GenAI.GEN_AI_CONVERSATION_ID] = self.conversation_id
         attributes.update(self.attributes)
         self.span.set_attributes(attributes)
         self._call_completion_hook(

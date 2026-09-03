@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Final
 
 from opentelemetry._logs import Logger, LogRecord
 from opentelemetry.semconv._incubating.attributes import (
@@ -23,12 +24,39 @@ from opentelemetry.util.genai.types import (
     InputMessage,
     MessagePart,
     OutputMessage,
+    SystemInstructionPart,
     ToolDefinition,
 )
 from opentelemetry.util.genai.utils import (
     should_emit_event,
 )
 from opentelemetry.util.types import AttributeValue
+
+_GEN_AI_USAGE_CACHE_WRITE_INPUT_TOKENS: Final = (
+    "gen_ai.usage.cache_write.input_tokens"
+)
+_GEN_AI_USAGE_TEXT_INPUT_TOKENS: Final = "gen_ai.usage.text.input_tokens"
+_GEN_AI_USAGE_IMAGE_INPUT_TOKENS: Final = "gen_ai.usage.image.input_tokens"
+_GEN_AI_USAGE_AUDIO_INPUT_TOKENS: Final = "gen_ai.usage.audio.input_tokens"
+_GEN_AI_USAGE_TEXT_OUTPUT_TOKENS: Final = "gen_ai.usage.text.output_tokens"
+_GEN_AI_USAGE_IMAGE_OUTPUT_TOKENS: Final = "gen_ai.usage.image.output_tokens"
+_GEN_AI_USAGE_AUDIO_OUTPUT_TOKENS: Final = "gen_ai.usage.audio.output_tokens"
+_GEN_AI_USAGE_TEXT_CACHE_READ_INPUT_TOKENS: Final = (
+    "gen_ai.usage.text.cache_read.input_tokens"
+)
+_GEN_AI_USAGE_IMAGE_CACHE_READ_INPUT_TOKENS: Final = (
+    "gen_ai.usage.image.cache_read.input_tokens"
+)
+_GEN_AI_USAGE_AUDIO_CACHE_READ_INPUT_TOKENS: Final = (
+    "gen_ai.usage.audio.cache_read.input_tokens"
+)
+_GEN_AI_REQUEST_REASONING_LEVEL: Final = "gen_ai.request.reasoning.level"
+_GEN_AI_REQUEST_PREVIOUS_RESPONSE_ID: Final = (
+    "gen_ai.request.previous_response.id"
+)
+_GEN_AI_CONVERSATION_COMPACTED: Final = "gen_ai.conversation.compacted"
+_GEN_AI_PROMPT_VERSION: Final = "gen_ai.prompt.version"
+_GEN_AI_PROMPT_VARIABLE_PREFIX: Final = "gen_ai.prompt.variable."
 
 
 class InferenceInvocation(GenAIInvocation):
@@ -72,10 +100,13 @@ class InferenceInvocation(GenAIInvocation):
         self._server_address: str | None = server_address
         self._server_port: int | None = server_port
         self.conversation_id: str | None = None
+        self.conversation_compacted: bool | None = None
 
         self.input_messages: list[InputMessage] = []
         self.output_messages: list[OutputMessage] = []
-        self.system_instruction: list[MessagePart] = []
+        self.system_instruction: (
+            list[SystemInstructionPart] | list[MessagePart]
+        ) = []
         self._response_model_name: str | None = None
         self.response_id: str | None = None
         self.finish_reasons: list[str] | None = None
@@ -89,8 +120,22 @@ class InferenceInvocation(GenAIInvocation):
         self.max_tokens: int | None = None
         self.stop_sequences: list[str] | None = None
         self.seed: int | None = None
-        self.cache_creation_input_tokens: int | None = None
+        self.cache_write_input_tokens: int | None = None
         self.cache_read_input_tokens: int | None = None
+        self.text_input_tokens: int | None = None
+        self.image_input_tokens: int | None = None
+        self.audio_input_tokens: int | None = None
+        self.text_output_tokens: int | None = None
+        self.image_output_tokens: int | None = None
+        self.audio_output_tokens: int | None = None
+        self.text_cache_read_input_tokens: int | None = None
+        self.image_cache_read_input_tokens: int | None = None
+        self.audio_cache_read_input_tokens: int | None = None
+        self.reasoning_level: str | None = None
+        self.previous_response_id: str | None = None
+        self.prompt_name: str | None = None
+        self.prompt_version: str | None = None
+        self.prompt_variables: dict[str, str] | None = None
         self.tool_definitions: list[ToolDefinition] | None = None
         self.top_k: float | None = None
         self.request_choice_count: int | None = None
@@ -99,6 +144,18 @@ class InferenceInvocation(GenAIInvocation):
         # _invalidate_metric_attributes whenever an input changes.
         self._cached_metric_attributes: dict[str, AttributeValue] | None = None
         self._start(self._get_start_attributes())
+
+    @property
+    def cache_creation_input_tokens(self) -> int | None:
+        """
+        .. deprecated:: 1.3b0
+            Use :attr:`cache_write_input_tokens` instead.
+        """
+        return self.cache_write_input_tokens
+
+    @cache_creation_input_tokens.setter
+    def cache_creation_input_tokens(self, value: int | None) -> None:
+        self.cache_write_input_tokens = value
 
     @property
     def response_model_name(self) -> str | None:
@@ -166,8 +223,8 @@ class InferenceInvocation(GenAIInvocation):
             (GenAI.GEN_AI_REQUEST_CHOICE_COUNT, self.request_choice_count),
             (GenAI.GEN_AI_OUTPUT_TYPE, self.output_type),
             (
-                GenAI.GEN_AI_USAGE_CACHE_CREATION_INPUT_TOKENS,
-                self.cache_creation_input_tokens,
+                _GEN_AI_USAGE_CACHE_WRITE_INPUT_TOKENS,
+                self.cache_write_input_tokens,
             ),
             (
                 GenAI.GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS,
@@ -178,11 +235,70 @@ class InferenceInvocation(GenAIInvocation):
                 self.thinking_tokens,
             ),
             (
+                _GEN_AI_USAGE_TEXT_INPUT_TOKENS,
+                self.text_input_tokens,
+            ),
+            (
+                _GEN_AI_USAGE_IMAGE_INPUT_TOKENS,
+                self.image_input_tokens,
+            ),
+            (
+                _GEN_AI_USAGE_AUDIO_INPUT_TOKENS,
+                self.audio_input_tokens,
+            ),
+            (
+                _GEN_AI_USAGE_TEXT_OUTPUT_TOKENS,
+                self.text_output_tokens,
+            ),
+            (
+                _GEN_AI_USAGE_IMAGE_OUTPUT_TOKENS,
+                self.image_output_tokens,
+            ),
+            (
+                _GEN_AI_USAGE_AUDIO_OUTPUT_TOKENS,
+                self.audio_output_tokens,
+            ),
+            (
+                _GEN_AI_USAGE_TEXT_CACHE_READ_INPUT_TOKENS,
+                self.text_cache_read_input_tokens,
+            ),
+            (
+                _GEN_AI_USAGE_IMAGE_CACHE_READ_INPUT_TOKENS,
+                self.image_cache_read_input_tokens,
+            ),
+            (
+                _GEN_AI_USAGE_AUDIO_CACHE_READ_INPUT_TOKENS,
+                self.audio_cache_read_input_tokens,
+            ),
+            (
+                _GEN_AI_REQUEST_REASONING_LEVEL,
+                self.reasoning_level,
+            ),
+            (
+                _GEN_AI_REQUEST_PREVIOUS_RESPONSE_ID,
+                self.previous_response_id,
+            ),
+            (
+                _GEN_AI_CONVERSATION_COMPACTED,
+                True if self.conversation_compacted else None,
+            ),
+            (
+                GenAI.GEN_AI_PROMPT_NAME,
+                self.prompt_name,
+            ),
+            (
+                _GEN_AI_PROMPT_VERSION,
+                self.prompt_version,
+            ),
+            (
                 GenAI.GEN_AI_RESPONSE_TIME_TO_FIRST_CHUNK,
                 self._ttfc_seconds,
             ),
         )
         attrs.update({k: v for k, v in optional_attrs if v is not None})
+        if self.prompt_variables:
+            for k, v in self.prompt_variables.items():
+                attrs[f"{_GEN_AI_PROMPT_VARIABLE_PREFIX}{k}"] = str(v)
         return attrs
 
     def _invalidate_metric_attributes(self) -> None:
@@ -269,7 +385,9 @@ class LLMInvocation:
     request_model: str | None = None
     input_messages: list[InputMessage] = field(default_factory=list)  # pyright: ignore[reportUnknownVariableType]
     output_messages: list[OutputMessage] = field(default_factory=list)  # pyright: ignore[reportUnknownVariableType]
-    system_instruction: list[MessagePart] = field(default_factory=list)  # pyright: ignore[reportUnknownVariableType]
+    system_instruction: (  # pyright: ignore[reportUnknownVariableType]
+        list[SystemInstructionPart] | list[MessagePart]
+    ) = field(default_factory=list)
     provider: str | None = None
     response_model_name: str | None = None
     response_id: str | None = None

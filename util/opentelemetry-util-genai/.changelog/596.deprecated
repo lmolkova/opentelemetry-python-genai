@@ -1,0 +1,1 @@
+Deprecate `gen_ai.agent.id`, `gen_ai.agent.version`, and cache token attributes on internal agent spans, and deprecate `InferenceInvocation.cache_creation_input_tokens` in favor of `cache_write_input_tokens`.

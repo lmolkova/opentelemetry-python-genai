@@ -109,8 +109,12 @@ class ToolInvocation(GenAIInvocation):
 
     def _get_metric_attributes(self) -> dict[str, AttributeValue]:
         attrs: dict[str, AttributeValue] = {
-            GenAI.GEN_AI_OPERATION_NAME: self._operation_name,
+            GenAI.GEN_AI_TOOL_NAME: self._name,
         }
+        if self._tool_type is not None:
+            attrs[GenAI.GEN_AI_TOOL_TYPE] = self._tool_type
+        if self._agent_name is not None:
+            attrs[GenAI.GEN_AI_AGENT_NAME] = self._agent_name
         attrs.update(self.metric_attributes)
         return attrs
 
@@ -141,4 +145,4 @@ class ToolInvocation(GenAIInvocation):
         }
         attributes.update(self.attributes)
         self.span.set_attributes(attributes)
-        self._metrics_recorder.record(self)
+        self._metrics_recorder.record_tool(self)
