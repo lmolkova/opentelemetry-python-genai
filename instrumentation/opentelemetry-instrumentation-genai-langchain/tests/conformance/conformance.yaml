@@ -194,8 +194,9 @@ scenarios:
 
   inference:
     run: opentelemetry-instrument python inference.py
-    # TODO: was asserting gen_ai.system_instructions is set once and carries the
-    # SystemMessage text. Needs expectations on complex values - https://github.com/open-telemetry/semantic-conventions-conformance/issues/177
+    # TODO: assert the SystemMessage lands on gen_ai.input.messages as a
+    # system-role message. Needs expectations on complex values -
+    # https://github.com/open-telemetry/semantic-conventions-conformance/issues/177
     expected_violations:
       - id: genai_expected_attribute_missing
         context:
@@ -214,8 +215,9 @@ scenarios:
 
   streaming:
     run: opentelemetry-instrument python streaming.py
-    # TODO: was asserting gen_ai.system_instructions is set once and carries the
-    # SystemMessage text. Needs expectations on complex values - https://github.com/open-telemetry/semantic-conventions-conformance/issues/177
+    # TODO: assert the SystemMessage lands on gen_ai.input.messages as a
+    # system-role message. Needs expectations on complex values -
+    # https://github.com/open-telemetry/semantic-conventions-conformance/issues/177
     expected_violations:
       - id: genai_expected_attribute_missing
         context:

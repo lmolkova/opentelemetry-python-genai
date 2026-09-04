@@ -28,7 +28,6 @@
       "gen_ai.response.id",
       "gen_ai.response.model",
       "gen_ai.response.time_to_first_chunk",
-      "gen_ai.system_instructions",
       "gen_ai.tool.definitions",
       "gen_ai.usage.cache_creation.input_tokens",
       "gen_ai.usage.cache_read.input_tokens",
