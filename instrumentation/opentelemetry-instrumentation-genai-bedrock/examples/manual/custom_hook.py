@@ -30,8 +30,8 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.util.genai.completion_hook import CompletionHook
 from opentelemetry.util.genai.types import (
     InputMessage,
-    MessagePart,
     OutputMessage,
+    SystemInstructionPart,
     ToolDefinition,
 )
 
@@ -48,7 +48,7 @@ class PrintCompletionHook(CompletionHook):
         *,
         inputs: list[InputMessage],
         outputs: list[OutputMessage],
-        system_instruction: list[MessagePart],
+        system_instruction: list[SystemInstructionPart],
         tool_definitions: list[ToolDefinition] | None = None,
         span=None,
         log_record=None,

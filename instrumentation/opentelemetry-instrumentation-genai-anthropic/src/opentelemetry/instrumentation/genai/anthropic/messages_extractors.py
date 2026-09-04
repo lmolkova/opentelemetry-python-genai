@@ -25,8 +25,9 @@ from opentelemetry.semconv._incubating.attributes import (
 from opentelemetry.util.genai.invocation import InferenceInvocation
 from opentelemetry.util.genai.types import (
     InputMessage,
-    MessagePart,
     OutputMessage,
+    SystemInstructionPart,
+    TextPart,
 )
 from opentelemetry.util.types import AttributeValue
 
@@ -125,10 +126,16 @@ def get_input_messages(
 
 def get_system_instruction(
     system: str | Iterable[TextBlockParam] | None,
-) -> list[MessagePart]:
-    if system is None:
+) -> list[SystemInstructionPart]:
+    if not system:
         return []
-    return convert_content_to_parts(system)
+    if isinstance(system, str):
+        return [TextPart(content=system)]
+    return [
+        TextPart(content=block["text"])
+        for block in system
+        if block.get("text")
+    ]
 
 
 def get_output_messages_from_message(
