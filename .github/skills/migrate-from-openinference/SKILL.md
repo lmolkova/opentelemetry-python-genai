@@ -165,8 +165,6 @@ violate:
    add an `expected_violation` in the scenario that covers the missing piece.
    All these must be documented in `MIGRATION_REPORT.md` as well, with links to the skipped scenario and the expected violation.
 
-8. **Do not modify weaver policies.**
-
 ## Augment mode: the package already exists
 
 The package already has a working, conformant implementation; OpenInference
