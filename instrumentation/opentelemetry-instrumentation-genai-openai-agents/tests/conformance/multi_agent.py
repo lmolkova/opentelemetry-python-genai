@@ -1,14 +1,9 @@
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
 
-"""Conformance scenario: a triage agent handing off to a specialist.
+"""Conformance scenario: a triage agent handing off to a specialist with a tool."""
 
-The specialist has no tools: a handoff is itself a tool call, and the mock
-server reuses one call id, which the agents SDK rejects as a duplicate. Tool
-execution is covered by ``automatic_tool_calling``.
-"""
-
-from agents import Agent, ModelSettings, RunConfig, Runner
+from agents import Agent, ModelSettings, RunConfig, Runner, function_tool
 
 DEFAULT_MODEL = "gpt-4o-mini"
 MODEL_SETTINGS = ModelSettings(
@@ -19,12 +14,21 @@ MODEL_SETTINGS = ModelSettings(
     presence_penalty=0.2,
 )
 
+
+@function_tool
+def get_weather(city: str) -> str:
+    """Return a canned weather forecast for the requested city."""
+    return f"The forecast for {city} is sunny with a high of 24C."
+
+
 weather_specialist = Agent(
     name="weather_specialist",
     instructions=(
-        "You answer weather questions in one short sentence with a packing "
-        "suggestion."
+        "You answer weather questions. Always call the get_weather tool for "
+        "the requested city, then summarize the result in one short sentence "
+        "with a packing suggestion."
     ),
+    tools=[get_weather],
     model=DEFAULT_MODEL,
     model_settings=MODEL_SETTINGS,
 )
