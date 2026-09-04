@@ -191,6 +191,9 @@ Apply to packages under `instrumentation/`.
 - Spans, logs, metrics, and events should go through `opentelemetry-util-genai`. Do not call OTel
   `Tracer`/`Meter`/`Logger` directly, and import only its public surface — never an
   `opentelemetry.util.genai._*` module.
+- Construct the `TelemetryHandler` with `instrumentation_scope_name=__name__` and
+  `instrumentation_scope_version=__version__` so telemetry carries the instrumentation's own scope
+  rather than the util's. Cover it with unit tests.
 - Content capture, hooks, and configuration are owned by the util. Don't add instrumentation-local
   env vars or settings.
 - Models describing complex attributes are owned by `opentelemetry.util.genai.types`. Land new type
@@ -208,8 +211,7 @@ as the reference:
 
 - In `_instrument(**kwargs)`, resolve the hook as
   `kwargs.get("completion_hook") or load_completion_hook()` and pass it to the handler
-  (`TelemetryHandler(..., completion_hook=...)` or
-  `get_telemetry_handler(..., completion_hook=...)`). `load_completion_hook()` returns the hook
+  (`TelemetryHandler(..., completion_hook=...)`). `load_completion_hook()` returns the hook
   named by `OTEL_INSTRUMENTATION_GENAI_COMPLETION_HOOK` (e.g. `upload`) via its entry point, or a
   no-op. An explicit `instrument(completion_hook=…)` argument takes precedence over the env var.
 - Don't define your own hook interface, call `on_completion` yourself, or wrap it in `try/except` —

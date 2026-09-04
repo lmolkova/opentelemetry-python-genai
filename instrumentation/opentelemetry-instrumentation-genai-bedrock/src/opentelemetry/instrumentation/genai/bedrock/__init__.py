@@ -14,6 +14,7 @@ from opentelemetry.util.genai.handler import TelemetryHandler
 
 from .package import _instruments
 from .patch import patch_bedrock, unpatch_bedrock
+from .version import __version__
 
 __all__ = ["BedrockInstrumentor"]
 
@@ -36,6 +37,8 @@ class BedrockInstrumentor(BaseInstrumentor):
             meter_provider=kwargs.get("meter_provider"),
             logger_provider=kwargs.get("logger_provider"),
             completion_hook=completion_hook,
+            instrumentation_scope_name=__name__,
+            instrumentation_scope_version=__version__,
         )
         patch_bedrock(self._handler)
 

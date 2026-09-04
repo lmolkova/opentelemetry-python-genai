@@ -70,6 +70,7 @@ from opentelemetry.util.genai.handler import TelemetryHandler
 
 from .package import _instruments
 from .patch import model_generate, model_generate_stream
+from .version import __version__
 
 __all__ = ["SmolagentsInstrumentor"]
 
@@ -140,6 +141,8 @@ class SmolagentsInstrumentor(BaseInstrumentor):
             logger_provider=kwargs.get("logger_provider"),
             completion_hook=kwargs.get("completion_hook")
             or load_completion_hook(),
+            instrumentation_scope_name=__name__,
+            instrumentation_scope_version=__version__,
         )
 
         self._wrapped_generate_classes = []
