@@ -1,1 +1,1 @@
-Change `RetrievalInvocation.top_k` type to integer recording `gen_ai.retrieval.top_k`, and make `finish_reason` optional on `OutputMessage`.
+Record span attribute `gen_ai.retrieval.top_k` as an integer on retrieval spans, and make `finish_reason` optional in the `gen_ai.output.messages` message model.

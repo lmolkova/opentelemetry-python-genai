@@ -27,6 +27,36 @@ _GEN_AI_CLIENT_OPERATION_DURATION_BUCKETS = [
     81.92,
 ]
 
+_GEN_AI_INVOKE_WORKFLOW_DURATION_BUCKETS = [
+    1,
+    5,
+    10,
+    30,
+    60,
+    120,
+    300,
+    600,
+    1800,
+    3600,
+    7200,
+]
+
+_GEN_AI_INVOKE_AGENT_DURATION_BUCKETS = [
+    0.1,
+    0.2,
+    0.4,
+    0.8,
+    1.6,
+    3.2,
+    6.4,
+    12.8,
+    25.6,
+    51.2,
+    102.4,
+    204.8,
+    409.6,
+]
+
 _GEN_AI_CLIENT_TOKEN_USAGE_BUCKETS = [
     1,
     4,
@@ -59,7 +89,7 @@ def create_workflow_duration_histogram(meter: Meter) -> Histogram:
         name=_GEN_AI_INVOKE_WORKFLOW_DURATION,
         description="Measures the duration of a workflow execution.",
         unit="s",
-        explicit_bucket_boundaries_advisory=_GEN_AI_CLIENT_OPERATION_DURATION_BUCKETS,
+        explicit_bucket_boundaries_advisory=_GEN_AI_INVOKE_WORKFLOW_DURATION_BUCKETS,
     )
 
 
@@ -68,7 +98,7 @@ def create_invoke_agent_duration_histogram(meter: Meter) -> Histogram:
         name=_GEN_AI_INVOKE_AGENT_DURATION,
         description="Measures the duration of an in-process agent invocation.",
         unit="s",
-        explicit_bucket_boundaries_advisory=_GEN_AI_CLIENT_OPERATION_DURATION_BUCKETS,
+        explicit_bucket_boundaries_advisory=_GEN_AI_INVOKE_AGENT_DURATION_BUCKETS,
     )
 
 

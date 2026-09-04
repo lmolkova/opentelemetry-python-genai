@@ -1,1 +1,1 @@
-Add support for cache write tokens, per-modality token breakdown, reasoning level, continuation response ID, conversation compaction, prompt template attributes, and agent/tool duration metrics.
+Add support for span attributes `gen_ai.usage.cache_write.input_tokens`, per-modality `gen_ai.usage.*_tokens` breakdowns, `gen_ai.request.reasoning.effort`, `gen_ai.response.id`, `gen_ai.conversation.compacted`, `gen_ai.prompt.*` attributes on inference spans, and duration metrics `gen_ai.invoke_agent.duration` and `gen_ai.execute_tool.duration`.

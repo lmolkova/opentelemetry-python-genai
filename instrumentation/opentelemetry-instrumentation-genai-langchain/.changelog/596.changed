@@ -1,1 +1,1 @@
-Stop setting `agent_id` on internal agent spans.
+Record span attribute `gen_ai.usage.cache_write.input_tokens` instead of `gen_ai.usage.cache_creation.input_tokens` on inference spans, and stop setting span attribute `gen_ai.agent.id` on internal agent spans.

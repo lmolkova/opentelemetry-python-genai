@@ -113,10 +113,3 @@ class TestWorkflowInvocation(unittest.TestCase):
         spans = self.span_exporter.get_finished_spans()
         assert spans[0].attributes is not None
         assert spans[0].attributes[GenAI.GEN_AI_CONVERSATION_ID] == "conv-123"
-
-    def test_conversation_compacted(self):
-        invocation = self.handler.workflow(name="test")
-        invocation.conversation_compacted = True
-        invocation.stop()
-        spans = self.span_exporter.get_finished_spans()
-        assert spans[0].attributes["gen_ai.conversation.compacted"] is True

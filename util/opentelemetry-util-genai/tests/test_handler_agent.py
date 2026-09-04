@@ -589,13 +589,27 @@ class TestAgentInvocationMetrics(TestBase):
         invocation.stop()
 
         metrics = self._harvest_metrics()
-        self.assertIn("gen_ai.invoke_agent.duration", metrics)
-        duration_point = metrics["gen_ai.invoke_agent.duration"][0]
+        self.assertIn("gen_ai.client.operation.duration", metrics)
+        duration_point = metrics["gen_ai.client.operation.duration"][0]
+        self.assertEqual(
+            duration_point.attributes[GenAI.GEN_AI_OPERATION_NAME],
+            "invoke_agent",
+        )
+        self.assertEqual(
+            duration_point.attributes[GenAI.GEN_AI_PROVIDER_NAME], "prov"
+        )
         self.assertEqual(
             duration_point.attributes[GenAI.GEN_AI_AGENT_NAME], "RemoteAgent"
         )
         self.assertEqual(
             duration_point.attributes[GenAI.GEN_AI_REQUEST_MODEL], "model"
+        )
+        self.assertEqual(
+            duration_point.attributes[server_attributes.SERVER_ADDRESS],
+            "agent.example.com",
+        )
+        self.assertEqual(
+            duration_point.attributes[server_attributes.SERVER_PORT], 443
         )
 
     def test_fail_agent_records_error_metric(self) -> None:

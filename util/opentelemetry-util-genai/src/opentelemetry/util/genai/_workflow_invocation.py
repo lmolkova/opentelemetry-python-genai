@@ -4,14 +4,16 @@
 from __future__ import annotations
 
 from dataclasses import asdict
-from typing import Final
 
 from opentelemetry._logs import Logger
 from opentelemetry.semconv._incubating.attributes import (
     gen_ai_attributes as GenAI,
 )
 from opentelemetry.trace import SpanKind, Tracer
-from opentelemetry.util.genai._invocation import Error, GenAIInvocation
+from opentelemetry.util.genai._invocation import (
+    Error,
+    GenAIInvocation,
+)
 from opentelemetry.util.genai.completion_hook import CompletionHook
 from opentelemetry.util.genai.metrics import InvocationMetricsRecorder
 from opentelemetry.util.genai.types import (
@@ -23,8 +25,6 @@ from opentelemetry.util.genai.utils import (
     should_capture_content_on_spans,
 )
 from opentelemetry.util.types import AttributeValue
-
-_GEN_AI_CONVERSATION_COMPACTED: Final = "gen_ai.conversation.compacted"
 
 
 class WorkflowInvocation(GenAIInvocation):
@@ -57,7 +57,6 @@ class WorkflowInvocation(GenAIInvocation):
         )
         self._name: str | None = name
         self.conversation_id: str | None = None
-        self.conversation_compacted: bool | None = None
         self.input_messages: list[InputMessage] = []
         self.output_messages: list[OutputMessage] = []
         self._start(self._get_start_attributes())
@@ -103,8 +102,6 @@ class WorkflowInvocation(GenAIInvocation):
         attributes: dict[str, AttributeValue] = self._get_messages_for_span()
         if self.conversation_id is not None:
             attributes[GenAI.GEN_AI_CONVERSATION_ID] = self.conversation_id
-        if self.conversation_compacted is True:
-            attributes[_GEN_AI_CONVERSATION_COMPACTED] = True
         if error is not None:
             self._apply_error_attributes(error)
         attributes.update(self.attributes)
