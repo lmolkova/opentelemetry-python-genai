@@ -10,7 +10,7 @@ from contextlib import AbstractContextManager
 from contextvars import Token
 from dataclasses import asdict
 from types import TracebackType
-from typing import TYPE_CHECKING, Any, TypeAlias
+from typing import TYPE_CHECKING, Any, TypeAlias, cast
 
 from typing_extensions import Self
 
@@ -187,7 +187,9 @@ class GenAIInvocation(AbstractContextManager["GenAIInvocation"]):
         self._completion_hook.on_completion(
             inputs=inputs or [],
             outputs=outputs or [],
-            system_instruction=system_instruction or [],
+            system_instruction=cast(
+                "list[MessagePart]", system_instruction or []
+            ),
             tool_definitions=tool_definitions,
             span=self.span,
             log_record=log_record,

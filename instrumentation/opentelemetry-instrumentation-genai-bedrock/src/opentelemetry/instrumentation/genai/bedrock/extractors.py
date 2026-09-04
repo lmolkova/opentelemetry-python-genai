@@ -237,7 +237,7 @@ def extract_content_block(block: dict[str, Any]) -> MessagePart | None:
         "toolRemoval",
     ):
         if key in block:
-            return GenericPart(type=key, value=None)
+            return GenericPart(type=key)
 
     return None
 
@@ -258,6 +258,18 @@ def _extract_parts(content: Any) -> list[MessagePart]:
     return parts
 
 
+def _extract_system_content_block(
+    block: Mapping[str, Any],
+) -> SystemInstructionPart | None:
+    text = block.get("text")
+    if isinstance(text, str) and text:
+        return TextPart(content=text)
+    for key in block:
+        if key != "text":
+            return GenericPart(type=key)
+    return None
+
+
 def _extract_system_parts(
     content: str | Sequence[Mapping[str, Any] | str] | None,
 ) -> list[SystemInstructionPart]:
@@ -270,10 +282,10 @@ def _extract_system_parts(
         if isinstance(item, str):
             if item:
                 parts.append(TextPart(content=item))
-        else:
-            text = item.get("text")
-            if isinstance(text, str) and text:
-                parts.append(TextPart(content=text))
+        elif _is_dict(item):
+            part = _extract_system_content_block(item)
+            if part is not None:
+                parts.append(part)
     return parts
 
 

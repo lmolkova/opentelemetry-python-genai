@@ -363,7 +363,6 @@ def to_input_messages(
     return result
 
 
-
 def to_output_messages(
     messages: Iterable[BaseMessage],
     *,

@@ -17,7 +17,7 @@ from concurrent.futures import (
     ThreadPoolExecutor,
 )
 from contextlib import ExitStack
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from functools import partial
 from time import time
 from typing import Any, Final, Literal
@@ -28,13 +28,11 @@ import fsspec
 from opentelemetry._logs import LogRecord
 from opentelemetry.semconv._incubating.attributes import gen_ai_attributes
 from opentelemetry.trace import Span
-
 from opentelemetry.util.genai.completion_hook import CompletionHook
 from opentelemetry.util.genai.types import (
     InputMessage,
     MessagePart,
     OutputMessage,
-    SystemInstructionPart,
     TextPart,
     ToolDefinition,
 )
@@ -69,7 +67,7 @@ _logger = logging.getLogger(__name__)
 class Completion:
     inputs: list[InputMessage] | None
     outputs: list[OutputMessage] | None
-    system_instruction: list[SystemInstructionPart] | list[MessagePart] | None
+    system_instruction: list[MessagePart] | None
     tool_definitions: list[ToolDefinition] | None
 
 
@@ -88,7 +86,7 @@ UploadData = dict[tuple[str, bool], Callable[[], JsonEncodeable]]
 
 
 def is_message_part_list_hashable(
-    message_parts: Sequence[SystemInstructionPart | MessagePart] | None,
+    message_parts: Sequence[MessagePart] | None,
 ) -> bool:
     return bool(message_parts) and all(
         isinstance(x, TextPart) for x in message_parts
@@ -226,7 +224,7 @@ class UploadCompletionHook(CompletionHook):
 
     def _calculate_ref_path(
         self,
-        system_instruction: Sequence[SystemInstructionPart | MessagePart],
+        system_instruction: Sequence[MessagePart],
         tool_definitions: list[ToolDefinition] | None = None,
     ) -> CompletionRefs:
         # TODO: experimental with using the trace_id and span_id, or fetching
@@ -310,7 +308,7 @@ class UploadCompletionHook(CompletionHook):
         *,
         inputs: list[InputMessage],
         outputs: list[OutputMessage],
-        system_instruction: list[SystemInstructionPart] | list[MessagePart],
+        system_instruction: list[MessagePart],
         tool_definitions: list[ToolDefinition] | None = None,
         span: Span | None = None,
         log_record: LogRecord | None = None,
@@ -333,7 +331,6 @@ class UploadCompletionHook(CompletionHook):
         def to_dict(
             dataclass_list: list[InputMessage]
             | list[OutputMessage]
-            | list[SystemInstructionPart]
             | list[MessagePart]
             | list[ToolDefinition],
         ) -> JsonEncodeable:

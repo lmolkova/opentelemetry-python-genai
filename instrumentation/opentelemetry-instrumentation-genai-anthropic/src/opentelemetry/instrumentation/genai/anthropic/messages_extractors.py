@@ -127,10 +127,10 @@ def get_input_messages(
 def get_system_instruction(
     system: str | Iterable[TextBlockParam] | None,
 ) -> list[SystemInstructionPart]:
-    if not system:
+    if system is None:
         return []
     if isinstance(system, str):
-        return [TextPart(content=system)]
+        return [TextPart(content=system)] if system else []
     return [
         TextPart(content=block["text"])
         for block in system

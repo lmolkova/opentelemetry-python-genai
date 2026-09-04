@@ -12,6 +12,7 @@ from langchain_core.language_models.fake_chat_models import (
     FakeMessagesListChatModel,
 )
 from langchain_core.messages import (
+    AIMessage,
     AIMessageChunk,
     FunctionMessage,
     HumanMessage,
@@ -751,14 +752,13 @@ def test_system_message_handles_system_message_chunk():
     assert result[1].role == "user"
 
 
-def test_split_system_and_input_messages_preserves_name():
-    system, inputs = split_system_and_input_messages(
+def test_to_input_messages_preserves_name():
+    inputs = to_input_messages(
         [
             HumanMessage(content="Hi", name="Alice"),
             AIMessage(content="Hello", name="Bob"),
         ]
     )
-    assert len(inputs) == 2
     assert inputs[0].name == "Alice"
     assert inputs[1].name == "Bob"
 
