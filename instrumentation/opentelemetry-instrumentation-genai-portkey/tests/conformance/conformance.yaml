@@ -24,8 +24,8 @@ scenarios:
       - gen_ai.client.operation.duration
       - gen_ai.client.token.usage
 
-  inference_streaming:
-    run: opentelemetry-instrument python inference_streaming.py
+  streaming:
+    run: opentelemetry-instrument python streaming.py
     spans:
       - match:
           attributes:

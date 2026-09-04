@@ -4,11 +4,25 @@
 from langchain.agents import create_agent
 from langchain_openai import ChatOpenAI
 
-agent = create_agent(
-    model=ChatOpenAI(model="gpt-4o-mini", temperature=0.5, max_tokens=100),
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.5, max_tokens=100)
+
+# 1. Unnamed agent
+unnamed_agent = create_agent(
+    model=llm,
+    tools=[],
+    system_prompt="You are a helpful assistant.",
+)
+unnamed_agent.invoke(
+    {"messages": [{"role": "user", "content": "Say this is a test"}]}
+)
+
+# 2. Named agent
+named_agent = create_agent(
+    model=llm,
     tools=[],
     system_prompt="You are a helpful assistant.",
     name="weather_assistant",
 )
-
-agent.invoke({"messages": [{"role": "user", "content": "Say this is a test"}]})
+named_agent.invoke(
+    {"messages": [{"role": "user", "content": "Say this is a test"}]}
+)

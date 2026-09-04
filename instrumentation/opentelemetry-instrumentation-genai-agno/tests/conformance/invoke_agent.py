@@ -47,7 +47,7 @@ func_call = FunctionCall(
     arguments={"x": 5},
     call_id="call-conformance",
 )
-func_call.execute()
+tool_result = func_call.execute()
 
 agent = Agent(
     name="test-conformance-agent",
@@ -55,9 +55,9 @@ agent = Agent(
     session_id="session-conformance",
     tools=[sample_tool],
 )
-mock_output = ModelResponse(content="Conformance Hello back!")
+mock_output = ModelResponse(content=f"Double 5 is {tool_result}")
 with (
     patch.object(Agent, "run", wraps=agent.run),
     patch("agno.models.base.Model.response", return_value=mock_output),
 ):
-    agent.run("hello conformance world")
+    agent.run(f"Calculate double 5. Tool result: {tool_result}")

@@ -34,6 +34,30 @@ tool_config = {
     ]
 }
 client = boto3.client("bedrock-runtime", region_name="us-east-1")
+first = client.converse(
+    messages=messages,
+    modelId="amazon.nova-micro-v1:0",
+    toolConfig=tool_config,
+)
+
+assistant_message = first["output"]["message"]
+messages.append(assistant_message)
+
+tool_results = []
+for block in assistant_message["content"]:
+    if "toolUse" in block:
+        tool_results.append(
+            {
+                "toolResult": {
+                    "toolUseId": block["toolUse"]["toolUseId"],
+                    "content": [{"text": "70 degrees and sunny"}],
+                    "status": "success",
+                }
+            }
+        )
+
+messages.append({"role": "user", "content": tool_results})
+
 client.converse(
     messages=messages,
     modelId="amazon.nova-micro-v1:0",

@@ -27,9 +27,13 @@ class GetWeatherTool(Tool):
 
 MESSAGES: list[dict[str, Any]] = [
     {
+        "role": "system",
+        "content": [{"type": "text", "text": "You are a helpful assistant."}],
+    },
+    {
         "role": "user",
         "content": [{"type": "text", "text": "Where is the Louvre?"}],
-    }
+    },
 ]
 
 

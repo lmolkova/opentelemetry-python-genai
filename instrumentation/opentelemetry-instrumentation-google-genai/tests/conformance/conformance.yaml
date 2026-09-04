@@ -28,6 +28,16 @@ expected_violations:
       operation: embeddings
       missing_attribute: gen_ai.request.encoding_formats
     reason: does not set request encoding formats
+  - id: genai_expected_attribute_missing
+    context:
+      operation: generate_content
+      missing_attribute: gen_ai.response.id
+    reason: streaming generate_content does not record response id
+  - id: genai_expected_attribute_missing
+    context:
+      operation: generate_content
+      missing_attribute: gen_ai.response.model
+    reason: streaming generate_content does not record response model
 
 scenarios:
   generate_content:
@@ -54,12 +64,50 @@ scenarios:
       - gen_ai.client.operation.duration
       - gen_ai.client.token.usage
 
-  embedding:
-    run: opentelemetry-instrument python embedding.py
+  embeddings:
+    run: opentelemetry-instrument python embeddings.py
     spans:
       - match:
           attributes:
             gen_ai.operation.name: embeddings
+        expect:
+          count: 1
+    metrics:
+      - gen_ai.client.operation.duration
+      - gen_ai.client.token.usage
+
+  streaming:
+    run: opentelemetry-instrument python streaming.py
+    spans:
+      - match:
+          attributes:
+            gen_ai.operation.name: generate_content
+        expect:
+          count: 1
+    metrics:
+      - gen_ai.client.operation.duration
+      - gen_ai.client.token.usage
+      - gen_ai.client.operation.time_to_first_chunk
+      - gen_ai.client.operation.time_per_output_chunk
+
+  structured_output:
+    run: opentelemetry-instrument python structured_output.py
+    spans:
+      - match:
+          attributes:
+            gen_ai.operation.name: generate_content
+        expect:
+          count: 1
+    metrics:
+      - gen_ai.client.operation.duration
+      - gen_ai.client.token.usage
+
+  multimodal:
+    run: opentelemetry-instrument python multimodal.py
+    spans:
+      - match:
+          attributes:
+            gen_ai.operation.name: generate_content
         expect:
           count: 1
     metrics:
@@ -73,7 +121,7 @@ scenarios:
           attributes:
             gen_ai.operation.name: generate_content
         expect:
-          count: 1
+          count: 2
       - match:
           attributes:
             gen_ai.operation.name: execute_tool
@@ -82,3 +130,4 @@ scenarios:
     metrics:
       - gen_ai.client.operation.duration
       - gen_ai.client.token.usage
+
