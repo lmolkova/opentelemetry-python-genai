@@ -15,21 +15,20 @@ env:
   AWS_DEFAULT_REGION: us-east-1
   OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT: SPAN_ONLY
 
-expected_violations:
-  - id: genai_expected_attribute_missing
-    context:
-      operation: chat
-      missing_attribute: gen_ai.response.id
-    reason: does not return response ID
-  - id: genai_expected_attribute_missing
-    context:
-      operation: chat
-      missing_attribute: gen_ai.response.model
-    reason: does not return response model
-
 scenarios:
   inference:
     run: opentelemetry-instrument python inference.py
+    expected_violations:
+      - id: genai_expected_attribute_missing
+        context:
+          operation: chat
+          missing_attribute: gen_ai.response.id
+        reason: does not return response ID
+      - id: genai_expected_attribute_missing
+        context:
+          operation: chat
+          missing_attribute: gen_ai.response.model
+        reason: does not return response model
     spans:
       - match:
           attributes:
@@ -42,6 +41,17 @@ scenarios:
 
   streaming:
     run: opentelemetry-instrument python streaming.py
+    expected_violations:
+      - id: genai_expected_attribute_missing
+        context:
+          operation: chat
+          missing_attribute: gen_ai.response.id
+        reason: does not return response ID
+      - id: genai_expected_attribute_missing
+        context:
+          operation: chat
+          missing_attribute: gen_ai.response.model
+        reason: does not return response model
     spans:
       - match:
           attributes:
@@ -58,6 +68,17 @@ scenarios:
 
   tool_calling:
     run: opentelemetry-instrument python tool_calling.py
+    expected_violations:
+      - id: genai_expected_attribute_missing
+        context:
+          operation: chat
+          missing_attribute: gen_ai.response.id
+        reason: does not return response ID
+      - id: genai_expected_attribute_missing
+        context:
+          operation: chat
+          missing_attribute: gen_ai.response.model
+        reason: does not return response model
     spans:
       - match:
           attributes:
@@ -70,6 +91,17 @@ scenarios:
 
   invoke_model:
     run: opentelemetry-instrument python invoke_model.py
+    expected_violations:
+      - id: genai_expected_attribute_missing
+        context:
+          operation: chat
+          missing_attribute: gen_ai.response.id
+        reason: does not return response ID
+      - id: genai_expected_attribute_missing
+        context:
+          operation: chat
+          missing_attribute: gen_ai.response.model
+        reason: does not return response model
     spans:
       - match:
           attributes:
@@ -82,6 +114,17 @@ scenarios:
 
   invoke_model_streaming:
     run: opentelemetry-instrument python invoke_model_streaming.py
+    expected_violations:
+      - id: genai_expected_attribute_missing
+        context:
+          operation: chat
+          missing_attribute: gen_ai.response.id
+        reason: does not return response ID
+      - id: genai_expected_attribute_missing
+        context:
+          operation: chat
+          missing_attribute: gen_ai.response.model
+        reason: does not return response model
     spans:
       - match:
           attributes:

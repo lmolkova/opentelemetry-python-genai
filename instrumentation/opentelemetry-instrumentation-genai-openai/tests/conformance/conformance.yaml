@@ -13,12 +13,6 @@ env:
   OPENAI_API_KEY: test_openai_api_key
   OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT: SPAN_ONLY
 
-expected_violations:
-  - id: missing_attribute
-    context:
-      attribute_key: gen_ai.usage.cache_write.input_tokens
-    reason: pending semconv release
-
 scenarios:
   inference:
     run: opentelemetry-instrument python inference.py
