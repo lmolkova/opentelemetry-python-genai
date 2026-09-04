@@ -82,6 +82,7 @@ class InferenceInvocation(GenAIInvocation):
         self.system_instruction: (
             list[SystemInstructionPart] | list[MessagePart]
         ) = []
+        """System instructions for the model. Passing ``MessagePart`` is deprecated; use ``SystemInstructionPart``."""
         self._response_model_name: str | None = None
         self.response_id: str | None = None
         self.finish_reasons: list[str] | None = None

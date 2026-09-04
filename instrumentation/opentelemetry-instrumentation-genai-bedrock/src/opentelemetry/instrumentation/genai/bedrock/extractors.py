@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping, Sequence
 from typing import Any, TypeGuard
 from urllib.parse import urlparse
 
@@ -19,6 +20,7 @@ from opentelemetry.util.genai.types import (
     OutputMessage,
     ReasoningPart,
     Role,
+    SystemInstructionPart,
     TextPart,
     ToolCallRequestPart,
     ToolCallResponsePart,
@@ -256,6 +258,25 @@ def _extract_parts(content: Any) -> list[MessagePart]:
     return parts
 
 
+def _extract_system_parts(
+    content: str | Sequence[Mapping[str, Any] | str] | None,
+) -> list[SystemInstructionPart]:
+    if not content:
+        return []
+    if isinstance(content, str):
+        return [TextPart(content=content)] if content else []
+    parts: list[SystemInstructionPart] = []
+    for item in content:
+        if isinstance(item, str):
+            if item:
+                parts.append(TextPart(content=item))
+        else:
+            text = item.get("text")
+            if isinstance(text, str) and text:
+                parts.append(TextPart(content=text))
+    return parts
+
+
 def _extract_guardrail_id(
     params: dict[str, Any], invocation: InferenceInvocation
 ) -> None:
@@ -324,7 +345,7 @@ def extract_converse_request(
     # system instruction
     raw_system = kwargs.get("system")
     if capture_content and raw_system:
-        system_parts = _extract_parts(raw_system)
+        system_parts = _extract_system_parts(raw_system)
         if system_parts:
             invocation.system_instruction = system_parts
 
@@ -533,7 +554,7 @@ def extract_invoke_model_request(
     # System instruction (e.g. Anthropic / Nova)
     raw_system = body.get("system")
     if raw_system:
-        system_parts = _extract_parts(raw_system)
+        system_parts = _extract_system_parts(raw_system)
         if system_parts:
             invocation.system_instruction = system_parts
 

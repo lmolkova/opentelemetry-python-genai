@@ -14,6 +14,7 @@ from opentelemetry.util.genai.types import (
     MessagePart,
     OutputMessage,
     Role,
+    SystemInstructionPart,
     TextPart,
     ToolCallRequestPart,
     ToolCallResponsePart,
@@ -56,11 +57,12 @@ def to_output_messages(
 def to_system_instructions(
     *,
     content: genai_types.Content,
-) -> list[MessagePart]:
-    parts = (
-        _to_part(part, idx) for idx, part in enumerate(content.parts or [])
-    )
-    return [part for part in parts if part is not None]
+) -> list[SystemInstructionPart]:
+    return [
+        TextPart(content=part.text)
+        for part in content.parts or []
+        if part.text is not None
+    ]
 
 
 def _to_input_message(

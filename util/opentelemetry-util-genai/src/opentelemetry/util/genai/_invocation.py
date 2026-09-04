@@ -278,7 +278,8 @@ def get_content_attributes(
     Args:
         input_messages: Input messages to serialize.
         output_messages: Output messages to serialize.
-        system_instruction: System instructions to serialize.
+        system_instruction: System instructions to serialize. Passing ``MessagePart``
+            is deprecated; use ``SystemInstructionPart``.
         tool_definitions: Tool definitions to serialize (may be None).
         for_span: If True, serialize for span attributes (JSON string);
                   if False, serialize for event attributes (list of dicts).
