@@ -43,11 +43,11 @@ client has no `embeddings` scenario).
 | Scenario | File | Covers |
 |---|---|---|
 | Inference | `inference.py` | A `chat` operation. |
-| Streaming | `inference_streaming.py` | A streamed `chat` operation, draining the stream completely. |
+| Streaming | `streaming.py` | A streamed `chat` operation, draining the stream completely. |
 | Tool calling | `tool_calling.py` | A `chat` turn where the model returns tool calls and a follow-up turn feeds tool results back. Asserts tool calls and tool results are present on input/output messages. Do **not** expect `execute_tool` spans unless the client library itself instruments tool execution - most don't; tool execution is the caller's code. |
 | Multimodal content | `multimodal.py` | A `chat` turn carrying the non-text parts the client accepts (inline image/audio bytes, media URLs, file refs, …), asserting each round-trips onto the messages. |
 | Reasoning | `reasoning.py` | A `chat` turn against a reasoning model where the response carries reasoning/thinking content. |
-| Embeddings | `embedding.py` | An `embeddings` operation. |
+| Embeddings | `embeddings.py` | An `embeddings` operation. |
 
 **Agent / orchestration instrumentations:**
 
@@ -56,7 +56,9 @@ client has no `embeddings` scenario).
 | Agent invocation | `invoke_agent.py` | An `invoke_agent` run. |
 | Tool calling | `automatic_tool_calling.py` | An `invoke_agent` run that calls at least one tool - expects `invoke_agent` plus nested `execute_tool` / `chat` spans. |
 | Multi-agent orchestration | `multi_agent.py` | One agent handing off to or invoking another - expects nested `invoke_agent` spans under the orchestrator. |
-| Workflows | `workflow.py` | An `invoke_workflow` run wrapping the agent/tool spans it drives. |## Message-part coverage
+| Workflows | `workflow.py` | An `invoke_workflow` run wrapping the agent/tool spans it drives. |
+
+## Message-part coverage
 
 Weaver validates a part's *shape*, not *which* part types a scenario
 exercised. Exercise **every non-text part type the library can
@@ -119,8 +121,7 @@ It defines:
 - `instrumentation_library`: name of the instrumentation package (e.g. `opentelemetry-instrumentation-genai-openai`).
 - `server`: mock server startup command, usually `genai-mock-server --port ${PORT}`.
 - `env`: environment variables injected into the scenario execution environment.
-- `expected_violations`: package-wide declared violations/gaps.
-- `scenarios`: dictionary of scenario configurations.
+- `scenarios`: dictionary of scenario configurations with per-scenario expectations and declared gaps (`expected_violations`).
 
 Example:
 
@@ -139,12 +140,6 @@ env:
   OPENAI_BASE_URL: ${MOCK_SERVER_URL}/v1
   OPENAI_API_KEY: test_openai_api_key
   OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT: SPAN_ONLY
-
-expected_violations:
-  - id: missing_attribute
-    context:
-      attribute_key: gen_ai.usage.cache_write.input_tokens
-    reason: cache write tokens are not reported
 
 scenarios:
   inference:
