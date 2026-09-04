@@ -16,7 +16,7 @@ from typing_extensions import Self
 
 from opentelemetry._logs import Logger, LogRecord
 from opentelemetry.context import Context, attach, detach
-from opentelemetry.metrics import Meter
+from opentelemetry.metrics import Histogram, Meter
 from opentelemetry.semconv._incubating.attributes import (
     gen_ai_attributes as GenAI,
 )
@@ -131,6 +131,7 @@ class GenAIInvocation(AbstractContextManager["GenAIInvocation"]):
         self._request_stream: bool | None = None
         self._ttfc_seconds: float | None = None
         self._stream_last_chunk_at: float | None = None
+        self._tpc_histogram: Histogram | None = None
 
     def _start(
         self, attributes: dict[str, AttributeValue] | None = None
@@ -195,13 +196,14 @@ class GenAIInvocation(AbstractContextManager["GenAIInvocation"]):
                 context=self._span_context,
             )
         else:
-            tpc_histogram = self._meter.create_histogram(
-                name=gen_ai_metrics.GEN_AI_CLIENT_OPERATION_TIME_PER_OUTPUT_CHUNK,
-                description="Time per output chunk, recorded for each chunk received after the first one, measured as the time elapsed from the end of the previous chunk to the end of the current chunk.",
-                unit="s",
-                explicit_bucket_boundaries_advisory=_GEN_AI_CLIENT_OPERATION_DURATION_BUCKETS,
-            )
-            tpc_histogram.record(
+            if self._tpc_histogram is None:
+                self._tpc_histogram = self._meter.create_histogram(
+                    name=gen_ai_metrics.GEN_AI_CLIENT_OPERATION_TIME_PER_OUTPUT_CHUNK,
+                    description="Time per output chunk, recorded for each chunk received after the first one, measured as the time elapsed from the end of the previous chunk to the end of the current chunk.",
+                    unit="s",
+                    explicit_bucket_boundaries_advisory=_GEN_AI_CLIENT_OPERATION_DURATION_BUCKETS,
+                )
+            self._tpc_histogram.record(
                 delta,
                 attributes=attributes,
                 context=self._span_context,
