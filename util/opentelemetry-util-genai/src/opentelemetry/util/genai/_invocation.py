@@ -23,7 +23,10 @@ from opentelemetry.semconv.attributes import error_attributes
 from opentelemetry.trace import INVALID_SPAN as _INVALID_SPAN
 from opentelemetry.trace import Span, SpanKind, Tracer, set_span_in_context
 from opentelemetry.trace.status import Status, StatusCode
-from opentelemetry.util.genai.completion_hook import CompletionHook
+from opentelemetry.util.genai.completion_hook import (
+    CompletionHook,
+    _NoOpCompletionHook,
+)
 from opentelemetry.util.genai.types import (
     Error,
     ErrorTypeResolver,
@@ -69,6 +72,8 @@ class GenAIInvocation(AbstractContextManager["GenAIInvocation"]):
         attributes: dict[str, AttributeValue] | None = None,
         metric_attributes: dict[str, AttributeValue] | None = None,
         error_type_resolver: ErrorTypeResolver | None = None,
+        *,
+        content_capturing_mode: ContentCapturingMode | None = None,
     ) -> None:
         self._tracer = tracer
         self._metrics_recorder = metrics_recorder
@@ -76,6 +81,11 @@ class GenAIInvocation(AbstractContextManager["GenAIInvocation"]):
         self._completion_hook = completion_hook
         self._error_type_resolver = error_type_resolver
         self._operation_name: str = operation_name
+        self._content_capturing_mode: ContentCapturingMode = (
+            get_content_capturing_mode()
+            if content_capturing_mode is None
+            else content_capturing_mode
+        )
         self.attributes: dict[str, AttributeValue] = (
             {} if attributes is None else attributes
         )
@@ -97,6 +107,22 @@ class GenAIInvocation(AbstractContextManager["GenAIInvocation"]):
         self._request_stream: bool | None = None
         self._ttfc_seconds: float | None = None
         self._stream_last_chunk_at: float | None = None
+
+    @property
+    def should_capture_content(self) -> bool:
+        """Return True when message content should be captured for this invocation."""
+        return self._content_capturing_mode in (
+            ContentCapturingMode.SPAN_ONLY,
+            ContentCapturingMode.EVENT_ONLY,
+            ContentCapturingMode.SPAN_AND_EVENT,
+        ) or not isinstance(self._completion_hook, _NoOpCompletionHook)
+
+    @property
+    def _should_capture_content_on_span(self) -> bool:
+        return self._content_capturing_mode in (
+            ContentCapturingMode.SPAN_ONLY,
+            ContentCapturingMode.SPAN_AND_EVENT,
+        )
 
     def _start(
         self, attributes: dict[str, AttributeValue] | None = None
@@ -242,6 +268,7 @@ def get_content_attributes(
     system_instruction: Sequence[MessagePart],
     tool_definitions: Sequence[ToolDefinition] | None,
     for_span: bool,
+    content_capturing_mode: ContentCapturingMode | None = None,
 ) -> dict[str, Any]:
     """Serialize messages, system instructions, and tool definitions into attributes.
 
@@ -252,8 +279,14 @@ def get_content_attributes(
         tool_definitions: Tool definitions to serialize (may be None).
         for_span: If True, serialize for span attributes (JSON string);
                   if False, serialize for event attributes (list of dicts).
+        content_capturing_mode: Configured content capturing mode; if None,
+                                reads from environment.
     """
-    mode = get_content_capturing_mode()
+    mode = (
+        get_content_capturing_mode()
+        if content_capturing_mode is None
+        else content_capturing_mode
+    )
     allowed_modes = (
         (
             ContentCapturingMode.SPAN_ONLY,

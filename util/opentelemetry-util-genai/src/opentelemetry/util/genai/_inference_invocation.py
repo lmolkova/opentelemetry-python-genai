@@ -26,6 +26,7 @@ from opentelemetry.util.genai.types import (
     ToolDefinition,
 )
 from opentelemetry.util.genai.utils import (
+    ContentCapturingMode,
     should_emit_event,
 )
 from opentelemetry.util.types import AttributeValue
@@ -50,6 +51,7 @@ class InferenceInvocation(GenAIInvocation):
         server_port: int | None = None,
         operation_name: str | None = None,
         error_type_resolver: ErrorTypeResolver | None = None,
+        content_capturing_mode: ContentCapturingMode | None = None,
     ) -> None:
         operation_name = (
             operation_name or GenAI.GenAiOperationNameValues.CHAT.value
@@ -66,6 +68,7 @@ class InferenceInvocation(GenAIInvocation):
             else operation_name,
             span_kind=SpanKind.CLIENT,
             error_type_resolver=error_type_resolver,
+            content_capturing_mode=content_capturing_mode,
         )
         self._provider: str = provider
         self._request_model: str | None = request_model
@@ -119,6 +122,7 @@ class InferenceInvocation(GenAIInvocation):
             system_instruction=self.system_instruction,
             tool_definitions=self.tool_definitions,
             for_span=for_span,
+            content_capturing_mode=self._content_capturing_mode,
         )
 
     def _get_finish_reasons(self) -> list[str] | None:
@@ -300,6 +304,8 @@ class LLMInvocation:
         metrics_recorder: InvocationMetricsRecorder,
         logger: Logger,
         completion_hook: CompletionHook,
+        *,
+        content_capturing_mode: ContentCapturingMode | None = None,
     ) -> None:
         """Create and start an InferenceInvocation from this data container. Called by handler.start_llm()."""
         inv = InferenceInvocation(
@@ -311,6 +317,7 @@ class LLMInvocation:
             request_model=self.request_model,
             server_address=self.server_address,
             server_port=self.server_port,
+            content_capturing_mode=content_capturing_mode,
         )
         inv.input_messages = self.input_messages
         inv.output_messages = self.output_messages
