@@ -1,1 +1,1 @@
-Deprecate span attribute `gen_ai.usage.cache_creation.input_tokens` on inference spans in favor of `gen_ai.usage.cache_write.input_tokens`.
+Deprecate `cache_creation_input_tokens` invocation property in favor of `cache_write_input_tokens`.

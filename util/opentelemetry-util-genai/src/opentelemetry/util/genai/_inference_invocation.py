@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import Final
 
 from opentelemetry._logs import Logger, LogRecord
+from opentelemetry.metrics import Meter
 from opentelemetry.semconv._incubating.attributes import (
     gen_ai_attributes as GenAI,
 )
@@ -18,7 +19,6 @@ from opentelemetry.util.genai._invocation import (
     get_content_attributes,
 )
 from opentelemetry.util.genai.completion_hook import CompletionHook
-from opentelemetry.util.genai.metrics import InvocationMetricsRecorder
 from opentelemetry.util.genai.types import (
     ErrorTypeResolver,
     InputMessage,
@@ -68,7 +68,7 @@ class InferenceInvocation(GenAIInvocation):
     def __init__(
         self,
         tracer: Tracer,
-        metrics_recorder: InvocationMetricsRecorder,
+        meter: Meter,
         logger: Logger,
         completion_hook: CompletionHook,
         provider: str,
@@ -85,7 +85,7 @@ class InferenceInvocation(GenAIInvocation):
         """Use handler.inference(provider) rather than calling this directly."""
         super().__init__(
             tracer,
-            metrics_recorder,
+            meter,
             logger,
             completion_hook,
             operation_name=operation_name,
@@ -342,7 +342,7 @@ class InferenceInvocation(GenAIInvocation):
         attributes.update(self._get_message_attributes(for_span=True))
         attributes.update(self.attributes)
         self.span.set_attributes(attributes)
-        self._metrics_recorder.record(self)
+        self._record_client_metrics()
         log_record = self._maybe_create_event()
         self._call_completion_hook(
             inputs=self.input_messages,
@@ -415,14 +415,14 @@ class LLMInvocation:
     def _start_with_handler(
         self,
         tracer: Tracer,
-        metrics_recorder: InvocationMetricsRecorder,
+        meter: Meter,
         logger: Logger,
         completion_hook: CompletionHook,
     ) -> None:
         """Create and start an InferenceInvocation from this data container. Called by handler.start_llm()."""
         inv = InferenceInvocation(
             tracer,
-            metrics_recorder,
+            meter,
             logger,
             completion_hook,
             self.provider or "",

@@ -3,9 +3,12 @@
 
 from __future__ import annotations
 
+import timeit
 from dataclasses import asdict
+from typing import Final
 
 from opentelemetry._logs import Logger
+from opentelemetry.metrics import Meter
 from opentelemetry.semconv._incubating.attributes import (
     gen_ai_attributes as GenAI,
 )
@@ -15,7 +18,6 @@ from opentelemetry.util.genai._invocation import (
     GenAIInvocation,
 )
 from opentelemetry.util.genai.completion_hook import CompletionHook
-from opentelemetry.util.genai.metrics import InvocationMetricsRecorder
 from opentelemetry.util.genai.types import (
     InputMessage,
     OutputMessage,
@@ -25,6 +27,21 @@ from opentelemetry.util.genai.utils import (
     should_capture_content_on_spans,
 )
 from opentelemetry.util.types import AttributeValue
+
+_GEN_AI_INVOKE_WORKFLOW_DURATION: Final = "gen_ai.invoke_workflow.duration"
+_GEN_AI_INVOKE_WORKFLOW_DURATION_BUCKETS: Final = [
+    1,
+    5,
+    10,
+    30,
+    60,
+    120,
+    300,
+    600,
+    1800,
+    3600,
+    7200,
+]
 
 
 class WorkflowInvocation(GenAIInvocation):
@@ -39,7 +56,7 @@ class WorkflowInvocation(GenAIInvocation):
     def __init__(
         self,
         tracer: Tracer,
-        metrics_recorder: InvocationMetricsRecorder,
+        meter: Meter,
         logger: Logger,
         completion_hook: CompletionHook,
         name: str | None,
@@ -48,7 +65,7 @@ class WorkflowInvocation(GenAIInvocation):
         _operation_name = GenAI.GenAiOperationNameValues.INVOKE_WORKFLOW.value
         super().__init__(
             tracer,
-            metrics_recorder,
+            meter,
             logger,
             completion_hook,
             operation_name=_operation_name,
@@ -110,4 +127,21 @@ class WorkflowInvocation(GenAIInvocation):
             inputs=self.input_messages,
             outputs=self.output_messages,
         )
-        self._metrics_recorder.record_workflow(self)
+        self._record_metrics()
+
+    def _record_metrics(self) -> None:
+        duration_seconds = max(
+            timeit.default_timer() - self._monotonic_start_s,
+            0.0,
+        )
+        histogram = self._meter.create_histogram(
+            name=_GEN_AI_INVOKE_WORKFLOW_DURATION,
+            description="Measures the duration of a workflow execution.",
+            unit="s",
+            explicit_bucket_boundaries_advisory=_GEN_AI_INVOKE_WORKFLOW_DURATION_BUCKETS,
+        )
+        histogram.record(
+            duration_seconds,
+            attributes=self._get_metric_attributes(),
+            context=self._span_context,
+        )

@@ -19,6 +19,11 @@ from opentelemetry.semconv.attributes import server_attributes
 from opentelemetry.test.test_base import TestBase
 from opentelemetry.trace import INVALID_SPAN, SpanKind
 from opentelemetry.util.genai.handler import TelemetryHandler
+from opentelemetry.util.genai.invocation import (
+    AgentInvocation,
+    LocalAgentInvocation,
+    RemoteAgentInvocation,
+)
 from opentelemetry.util.genai.types import (
     ContentCapturingMode,
     Error,
@@ -43,6 +48,8 @@ class TestLocalAgentInvocation(unittest.TestCase):  # pylint: disable=too-many-p
             request_model="gpt-4",
             agent_name="Math Tutor",
         )
+        assert isinstance(invocation, LocalAgentInvocation)
+        assert isinstance(invocation, AgentInvocation)
         invocation.stop()
 
         spans = self.span_exporter.get_finished_spans()
@@ -92,9 +99,7 @@ class TestLocalAgentInvocation(unittest.TestCase):  # pylint: disable=too-many-p
             request_model="gpt-4",
             agent_name="Full Agent",
         )
-        invocation.agent_id = "agent-123"
         invocation.agent_description = "A test agent"
-        invocation.agent_version = "1.0.0"
         invocation.conversation_id = "conv-456"
         invocation.data_source_id = "ds-789"
         invocation.output_type = "text"
@@ -149,18 +154,6 @@ class TestLocalAgentInvocation(unittest.TestCase):  # pylint: disable=too-many-p
         assert GenAI.GEN_AI_RESPONSE_MODEL not in attrs
         assert GenAI.GEN_AI_RESPONSE_FINISH_REASONS not in attrs
 
-    def test_cache_token_attributes(self):
-        invocation = self.handler.invoke_local_agent()
-        invocation.input_tokens = 100
-        invocation.cache_creation_input_tokens = 25
-        invocation.cache_read_input_tokens = 50
-        invocation.stop()
-
-        attrs = self.span_exporter.get_finished_spans()[0].attributes
-        assert attrs[GenAI.GEN_AI_USAGE_INPUT_TOKENS] == 100
-        assert GenAI.GEN_AI_USAGE_CACHE_CREATION_INPUT_TOKENS not in attrs
-        assert GenAI.GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS not in attrs
-
     def test_fail_sets_error_status(self):
         invocation = self.handler.invoke_local_agent()
         invocation.fail(RuntimeError("agent crashed"))
@@ -201,16 +194,21 @@ class TestLocalAgentInvocation(unittest.TestCase):  # pylint: disable=too-many-p
     def test_default_values(self):
         invocation = self.handler.invoke_local_agent()
         invocation.stop()
+        assert isinstance(invocation, LocalAgentInvocation)
+        assert isinstance(invocation, AgentInvocation)
         assert invocation._operation_name == "invoke_agent"
         assert invocation.agent_name is None
         assert invocation._request_model is None
         assert not invocation.input_messages
         assert not invocation.output_messages
         assert invocation.tool_definitions is None
-        assert invocation.cache_creation_input_tokens is None
-        assert invocation.cache_read_input_tokens is None
         assert invocation.span is not INVALID_SPAN
         assert not invocation.attributes
+        assert not hasattr(invocation, "agent_id")
+        assert not hasattr(invocation, "agent_version")
+        assert not hasattr(invocation, "previous_response_id")
+        assert not hasattr(invocation, "cache_write_input_tokens")
+        assert not hasattr(invocation, "cache_read_input_tokens")
 
     def test_with_messages(self):
         invocation = self.handler.invoke_local_agent()
@@ -422,10 +420,55 @@ class TestRemoteAgentInvocation(unittest.TestCase):
 
     def test_span_kind_client(self):
         invocation = self.handler.invoke_remote_agent("openai")
+        assert isinstance(invocation, RemoteAgentInvocation)
+        assert isinstance(invocation, AgentInvocation)
         invocation.stop()
         assert (
             self.span_exporter.get_finished_spans()[0].kind == SpanKind.CLIENT
         )
+
+    def test_default_values(self):
+        invocation = self.handler.invoke_remote_agent("openai")
+        invocation.stop()
+        assert isinstance(invocation, RemoteAgentInvocation)
+        assert isinstance(invocation, AgentInvocation)
+        assert invocation._operation_name == "invoke_agent"
+        assert invocation.agent_name is None
+        assert invocation._request_model is None
+        assert invocation.agent_id is None
+        assert invocation.agent_version is None
+        assert invocation.previous_response_id is None
+        assert invocation.cache_write_input_tokens is None
+        assert invocation.cache_creation_input_tokens is None
+        assert invocation.cache_read_input_tokens is None
+        assert not invocation.input_messages
+        assert not invocation.output_messages
+        assert invocation.tool_definitions is None
+        assert invocation.span is not INVALID_SPAN
+        assert not invocation.attributes
+
+    def test_constructor_agent_id_and_version(self):
+        invocation = self.handler.invoke_remote_agent(
+            "openai",
+            agent_id="agent-999",
+            agent_version="2.0.0",
+        )
+        invocation.stop()
+        attrs = self.span_exporter.get_finished_spans()[0].attributes
+        assert attrs[GenAI.GEN_AI_AGENT_ID] == "agent-999"
+        assert attrs[GenAI.GEN_AI_AGENT_VERSION] == "2.0.0"
+
+    def test_cache_token_attributes(self):
+        invocation = self.handler.invoke_remote_agent("openai")
+        invocation.input_tokens = 100
+        invocation.cache_creation_input_tokens = 25
+        invocation.cache_read_input_tokens = 50
+        invocation.stop()
+
+        attrs = self.span_exporter.get_finished_spans()[0].attributes
+        assert attrs[GenAI.GEN_AI_USAGE_INPUT_TOKENS] == 100
+        assert attrs["gen_ai.usage.cache_write.input_tokens"] == 25
+        assert attrs[GenAI.GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS] == 50
 
     def test_server_attributes(self):
         invocation = self.handler.invoke_remote_agent(
@@ -449,8 +492,11 @@ class TestRemoteAgentInvocation(unittest.TestCase):
         invocation.agent_id = "agent-123"
         invocation.agent_description = "A remote test agent"
         invocation.agent_version = "1.0.0"
+        invocation.previous_response_id = "resp_123"
         invocation.input_tokens = 100
         invocation.output_tokens = 200
+        invocation.cache_write_input_tokens = 30
+        invocation.cache_read_input_tokens = 15
         invocation.stop()
 
         attrs = self.span_exporter.get_finished_spans()[0].attributes
@@ -458,8 +504,11 @@ class TestRemoteAgentInvocation(unittest.TestCase):
         assert attrs[GenAI.GEN_AI_AGENT_ID] == "agent-123"
         assert attrs[GenAI.GEN_AI_AGENT_DESCRIPTION] == "A remote test agent"
         assert attrs[GenAI.GEN_AI_AGENT_VERSION] == "1.0.0"
+        assert attrs["gen_ai.request.previous_response.id"] == "resp_123"
         assert attrs[GenAI.GEN_AI_USAGE_INPUT_TOKENS] == 100
         assert attrs[GenAI.GEN_AI_USAGE_OUTPUT_TOKENS] == 200
+        assert attrs["gen_ai.usage.cache_write.input_tokens"] == 30
+        assert attrs[GenAI.GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS] == 15
         assert attrs[GenAI.GEN_AI_REQUEST_MODEL] == "gpt-4"
 
     def test_fail_sets_error_status(self):
@@ -598,9 +647,7 @@ class TestAgentInvocationMetrics(TestBase):
         self.assertEqual(
             duration_point.attributes[GenAI.GEN_AI_PROVIDER_NAME], "prov"
         )
-        self.assertEqual(
-            duration_point.attributes[GenAI.GEN_AI_AGENT_NAME], "RemoteAgent"
-        )
+        self.assertNotIn(GenAI.GEN_AI_AGENT_NAME, duration_point.attributes)
         self.assertEqual(
             duration_point.attributes[GenAI.GEN_AI_REQUEST_MODEL], "model"
         )

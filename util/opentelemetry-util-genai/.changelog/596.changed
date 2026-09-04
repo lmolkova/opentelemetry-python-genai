@@ -1,1 +1,1 @@
-Record span attribute `gen_ai.retrieval.top_k` as an integer on retrieval spans, and make `finish_reason` optional in the `gen_ai.output.messages` message model.
+Record span attribute `gen_ai.usage.cache_write.input_tokens` instead of `gen_ai.usage.cache_creation.input_tokens` on inference and remote agent spans, record span attribute `gen_ai.retrieval.top_k` as an integer on retrieval spans, and make `finish_reason` optional in the `gen_ai.output.messages` message model.
