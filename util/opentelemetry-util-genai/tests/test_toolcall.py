@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
@@ -475,13 +476,14 @@ def test_direct_invocation_instantiation_falls_back_to_env():
     tracer_provider = TracerProvider()
     tracer_provider.add_span_processor(SimpleSpanProcessor(span_exporter))
     tracer = tracer_provider.get_tracer(__name__)
-    mock_recorder = MagicMock()
+    meter_provider = MeterProvider()
+    meter = meter_provider.get_meter(__name__)
     mock_logger = MagicMock()
     mock_hook = MagicMock(spec=CompletionHook)
 
     invocation = ToolInvocation(
         tracer=tracer,
-        metrics_recorder=mock_recorder,
+        meter=meter,
         logger=mock_logger,
         completion_hook=mock_hook,
         name="direct_tool",
