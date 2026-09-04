@@ -412,6 +412,32 @@ class TestTelemetryHandler(unittest.TestCase):
             "OTEL_INSTRUMENTATION_GENAI_EMIT_EVENT": "false",
         },
     )
+    def test_system_instruction_generic_part_on_span(self):
+        with self.telemetry_handler.inference("test-provider") as invocation:
+            invocation.system_instruction = [
+                TextPart(content="You are helpful"),
+                GenericPart(type="custom"),
+            ]
+
+        span = _get_single_span(self.span_exporter)
+        span_attrs = _get_span_attributes(span)
+        self.assertIn(GenAI.GEN_AI_SYSTEM_INSTRUCTIONS, span_attrs)
+        instructions = json.loads(span_attrs[GenAI.GEN_AI_SYSTEM_INSTRUCTIONS])
+        self.assertEqual(
+            instructions,
+            [
+                {"type": "text", "content": "You are helpful"},
+                {"type": "custom"},
+            ],
+        )
+
+    @patch.dict(
+        os.environ,
+        {
+            "OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT": "SPAN_ONLY",
+            "OTEL_INSTRUMENTATION_GENAI_EMIT_EVENT": "false",
+        },
+    )
     def test_llm_manual_start_and_stop_creates_span(self):
         message = _create_input_message("hi")
         chat_generation = _create_output_message("ok")
@@ -1117,12 +1143,17 @@ class TestMessageModels(unittest.TestCase):
 
     def test_system_instruction_part(self):
         text_part: SystemInstructionPart = TextPart(content="You are helpful")
-        generic_part: SystemInstructionPart = GenericPart(
-            type="custom", value={"k": "v"}
-        )
+        generic_part: SystemInstructionPart = GenericPart(type="custom")
         self.assertEqual(text_part.content, "You are helpful")
         self.assertEqual(generic_part.type, "custom")
-        self.assertEqual(generic_part.value, {"k": "v"})
+        self.assertEqual(
+            json.loads(gen_ai_json_dumps(asdict(text_part))),
+            {"type": "text", "content": "You are helpful"},
+        )
+        self.assertEqual(
+            json.loads(gen_ai_json_dumps(asdict(generic_part))),
+            {"type": "custom"},
+        )
 
 
 _REAL_PNG_BYTES = (

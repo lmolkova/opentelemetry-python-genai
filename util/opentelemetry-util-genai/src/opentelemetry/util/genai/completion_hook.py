@@ -28,7 +28,6 @@ from opentelemetry.util.genai.types import (
     InputMessage,
     MessagePart,
     OutputMessage,
-    SystemInstructionPart,
     ToolDefinition,
 )
 
@@ -62,8 +61,8 @@ class CompletionHook(Protocol):
     Args:
         inputs: The inputs of the GenAI interaction.
         outputs: The outputs of the GenAI interaction.
-        system_instruction: The system instruction parts. Passing ``MessagePart``
-            is deprecated; use ``SystemInstructionPart``.
+        system_instruction: The system instruction of the GenAI
+            interaction.
         tool_definitions: The list of source system tool definitions
             available to the GenAI agent or model.
         span: The span associated with the GenAI interaction.
@@ -76,7 +75,7 @@ class CompletionHook(Protocol):
         *,
         inputs: list[InputMessage],
         outputs: list[OutputMessage],
-        system_instruction: list[SystemInstructionPart] | list[MessagePart],
+        system_instruction: list[MessagePart],
         tool_definitions: list[ToolDefinition] | None = None,
         span: Span | None = None,
         log_record: LogRecord | None = None,
