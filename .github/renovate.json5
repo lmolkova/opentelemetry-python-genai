@@ -27,9 +27,18 @@
       "managerFilePatterns": ["/^versions\\.env$/"],
       "matchStrings": [
         "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+) versioning=(?<versioning>\\S+)\\s+WEAVER_VERSION=(?<currentValue>\\S+)",
-        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+) packageName=(?<packageName>\\S+) versioning=(?<versioning>\\S+)\\s+SEMCONV_GENAI_REF=(?<currentValue>\\S+)",
-        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+) packageName=(?<packageName>\\S+) versioning=(?<versioning>\\S+)\\s+CONFORMANCE_REF=(?<currentValue>\\S+)"
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+) packageName=(?<packageName>\\S+) versioning=(?<versioning>\\S+)\\s+SEMCONV_GENAI_REF=(?<currentValue>\\S+)"
       ]
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^dev-requirements-conformance\\.txt$/"],
+      "matchStrings": [
+        "git\\+https://github\\.com/(?<packageName>open-telemetry/semantic-conventions-conformance)\\.git@(?<currentValue>[0-9a-f]{40})"
+      ],
+      "datasourceTemplate": "git-refs",
+      "depNameTemplate": "open-telemetry/semantic-conventions-conformance",
+      "versioningTemplate": "git"
     },
     {
       // Keep .weaver.toml schema URL pinned to the latest Weaver tag.

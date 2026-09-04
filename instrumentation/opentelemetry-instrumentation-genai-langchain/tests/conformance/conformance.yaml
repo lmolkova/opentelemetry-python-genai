@@ -1,0 +1,172 @@
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+
+runner: genai-conformance
+instrumented_library: langchain
+instrumentation_library: opentelemetry-instrumentation-genai-langchain
+
+server:
+  run: genai-mock-server --port ${PORT}
+
+env:
+  OPENAI_BASE_URL: ${MOCK_SERVER_URL}/v1
+  OPENAI_API_KEY: test_openai_api_key
+  OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT: SPAN_ONLY
+
+expected_violations:
+  - id: genai_expected_attribute_missing
+    context:
+      operation: chat
+      missing_attribute: server.address
+    reason: does not expose server address
+  - id: genai_expected_attribute_missing
+    context:
+      operation: chat
+      missing_attribute: gen_ai.response.id
+    reason: does not surface response ID
+  - id: genai_expected_attribute_missing
+    context:
+      operation: retrieval
+      missing_attribute: server.address
+    reason: does not listen on socket
+  - id: genai_expected_attribute_missing
+    context:
+      operation: retrieval
+      missing_attribute: gen_ai.retrieval.top_k
+    reason: does not specify top_k
+  - id: genai_expected_attribute_missing
+    context:
+      operation: invoke_agent
+      missing_attribute: gen_ai.response.finish_reasons
+    reason: does not surface finish reasons
+  - id: genai_expected_attribute_missing
+    context:
+      operation: invoke_agent
+      missing_attribute: gen_ai.usage.input_tokens
+    reason: does not surface input tokens
+  - id: genai_expected_attribute_missing
+    context:
+      operation: invoke_agent
+      missing_attribute: gen_ai.usage.output_tokens
+    reason: does not surface output tokens
+
+scenarios:
+  workflow:
+    run: opentelemetry-instrument python workflow.py
+    spans:
+      - match:
+          attributes:
+            gen_ai.operation.name: invoke_workflow
+        expect:
+          count: 1
+      - match:
+          attributes:
+            gen_ai.operation.name: chat
+        expect:
+          count: 1
+    metrics:
+      - gen_ai.client.operation.duration
+      - gen_ai.client.token.usage
+      - gen_ai.invoke_workflow.duration
+
+  invoke_agent:
+    run: opentelemetry-instrument python invoke_agent.py
+    spans:
+      - match:
+          attributes:
+            gen_ai.operation.name: invoke_agent
+        expect:
+          count: 1
+      - match:
+          attributes:
+            gen_ai.operation.name: chat
+        expect:
+          count: 1
+    metrics:
+      - gen_ai.client.operation.duration
+      - gen_ai.client.token.usage
+
+  automatic_tool_calling:
+    run: opentelemetry-instrument python automatic_tool_calling.py
+    spans:
+      - match:
+          attributes:
+            gen_ai.operation.name: invoke_agent
+        expect:
+          count: 1
+      - match:
+          attributes:
+            gen_ai.operation.name: execute_tool
+        expect:
+          count: 1
+      - match:
+          attributes:
+            gen_ai.operation.name: chat
+        expect:
+          count: 2
+    metrics:
+      - gen_ai.client.operation.duration
+      - gen_ai.client.token.usage
+
+  retrieval:
+    run: opentelemetry-instrument python retrieval.py
+    spans:
+      - match:
+          attributes:
+            gen_ai.operation.name: retrieval
+        expect:
+          count: 1
+    metrics:
+      - gen_ai.client.operation.duration
+
+  inference:
+    run: opentelemetry-instrument python inference.py
+    spans:
+      - match:
+          attributes:
+            gen_ai.operation.name: chat
+        expect:
+          count: 1
+    metrics:
+      - gen_ai.client.operation.duration
+      - gen_ai.client.token.usage
+
+  streaming:
+    run: opentelemetry-instrument python streaming.py
+    spans:
+      - match:
+          attributes:
+            gen_ai.operation.name: chat
+        expect:
+          count: 1
+          attributes:
+            gen_ai.request.stream: true
+    metrics:
+      - gen_ai.client.operation.duration
+      - gen_ai.client.token.usage
+      - gen_ai.client.operation.time_to_first_chunk
+      - gen_ai.client.operation.time_per_output_chunk
+
+  tool_calling:
+    run: opentelemetry-instrument python tool_calling.py
+    spans:
+      - match:
+          attributes:
+            gen_ai.operation.name: chat
+        expect:
+          count: 2
+    metrics:
+      - gen_ai.client.operation.duration
+      - gen_ai.client.token.usage
+
+  multimodal:
+    run: opentelemetry-instrument python multimodal.py
+    spans:
+      - match:
+          attributes:
+            gen_ai.operation.name: chat
+        expect:
+          count: 1
+    metrics:
+      - gen_ai.client.operation.duration
+      - gen_ai.client.token.usage

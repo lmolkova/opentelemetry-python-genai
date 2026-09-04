@@ -62,6 +62,7 @@ first = client.chat.completions.create(
 )
 
 assistant_message = first.choices[0].message
+assert assistant_message.tool_calls
 messages.append(assistant_message.model_dump(exclude_none=True))
 for tc in assistant_message.tool_calls or []:
     messages.append(
