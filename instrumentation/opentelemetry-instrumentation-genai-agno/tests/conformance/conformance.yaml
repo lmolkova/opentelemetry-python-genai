@@ -8,26 +8,25 @@ instrumentation_library: opentelemetry-instrumentation-genai-agno
 env:
   OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT: SPAN_ONLY
 
-expected_violations:
-  - id: genai_expected_attribute_missing
-    context:
-      operation: invoke_agent
-      missing_attribute: gen_ai.response.finish_reasons
-    reason: does not emit finish reasons
-  - id: genai_expected_attribute_missing
-    context:
-      operation: invoke_agent
-      missing_attribute: gen_ai.usage.input_tokens
-    reason: does not emit input tokens
-  - id: genai_expected_attribute_missing
-    context:
-      operation: invoke_agent
-      missing_attribute: gen_ai.usage.output_tokens
-    reason: does not emit output tokens
-
 scenarios:
   invoke_agent:
     run: opentelemetry-instrument python invoke_agent.py
+    expected_violations:
+      - id: genai_expected_attribute_missing
+        context:
+          operation: invoke_agent
+          missing_attribute: gen_ai.response.finish_reasons
+        reason: does not emit finish reasons
+      - id: genai_expected_attribute_missing
+        context:
+          operation: invoke_agent
+          missing_attribute: gen_ai.usage.input_tokens
+        reason: does not emit input tokens
+      - id: genai_expected_attribute_missing
+        context:
+          operation: invoke_agent
+          missing_attribute: gen_ai.usage.output_tokens
+        reason: does not emit output tokens
     spans:
       - match:
           attributes:

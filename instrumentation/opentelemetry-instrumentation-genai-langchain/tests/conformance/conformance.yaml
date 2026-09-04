@@ -15,46 +15,15 @@ env:
   ANTHROPIC_API_KEY: test_anthropic_api_key
   OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT: SPAN_ONLY
 
-expected_violations:
-  - id: genai_expected_attribute_missing
-    context:
-      operation: chat
-      missing_attribute: server.address
-    reason: does not expose server address
-  - id: genai_expected_attribute_missing
-    context:
-      operation: chat
-      missing_attribute: gen_ai.response.id
-    reason: does not surface response ID
-  - id: genai_expected_attribute_missing
-    context:
-      operation: retrieval
-      missing_attribute: server.address
-    reason: does not listen on socket
-  - id: genai_expected_attribute_missing
-    context:
-      operation: retrieval
-      missing_attribute: gen_ai.retrieval.top_k
-    reason: does not specify top_k
-  - id: genai_expected_attribute_missing
-    context:
-      operation: invoke_agent
-      missing_attribute: gen_ai.response.finish_reasons
-    reason: does not surface finish reasons
-  - id: genai_expected_attribute_missing
-    context:
-      operation: invoke_agent
-      missing_attribute: gen_ai.usage.input_tokens
-    reason: does not surface input tokens
-  - id: genai_expected_attribute_missing
-    context:
-      operation: invoke_agent
-      missing_attribute: gen_ai.usage.output_tokens
-    reason: does not surface output tokens
-
 scenarios:
   workflow:
     run: opentelemetry-instrument python workflow.py
+    expected_violations:
+      - id: genai_expected_attribute_missing
+        context:
+          operation: chat
+          missing_attribute: server.address
+        reason: does not expose server address
     spans:
       - match:
           attributes:
@@ -73,6 +42,27 @@ scenarios:
 
   invoke_agent:
     run: opentelemetry-instrument python invoke_agent.py
+    expected_violations:
+      - id: genai_expected_attribute_missing
+        context:
+          operation: chat
+          missing_attribute: server.address
+        reason: does not expose server address
+      - id: genai_expected_attribute_missing
+        context:
+          operation: invoke_agent
+          missing_attribute: gen_ai.response.finish_reasons
+        reason: does not surface finish reasons
+      - id: genai_expected_attribute_missing
+        context:
+          operation: invoke_agent
+          missing_attribute: gen_ai.usage.input_tokens
+        reason: does not surface input tokens
+      - id: genai_expected_attribute_missing
+        context:
+          operation: invoke_agent
+          missing_attribute: gen_ai.usage.output_tokens
+        reason: does not surface output tokens
     spans:
       - match:
           attributes:
@@ -90,6 +80,27 @@ scenarios:
 
   automatic_tool_calling:
     run: opentelemetry-instrument python automatic_tool_calling.py
+    expected_violations:
+      - id: genai_expected_attribute_missing
+        context:
+          operation: chat
+          missing_attribute: server.address
+        reason: does not expose server address
+      - id: genai_expected_attribute_missing
+        context:
+          operation: invoke_agent
+          missing_attribute: gen_ai.response.finish_reasons
+        reason: does not surface finish reasons
+      - id: genai_expected_attribute_missing
+        context:
+          operation: invoke_agent
+          missing_attribute: gen_ai.usage.input_tokens
+        reason: does not surface input tokens
+      - id: genai_expected_attribute_missing
+        context:
+          operation: invoke_agent
+          missing_attribute: gen_ai.usage.output_tokens
+        reason: does not surface output tokens
     spans:
       - match:
           attributes:
@@ -112,6 +123,17 @@ scenarios:
 
   retrieval:
     run: opentelemetry-instrument python retrieval.py
+    expected_violations:
+      - id: genai_expected_attribute_missing
+        context:
+          operation: retrieval
+          missing_attribute: server.address
+        reason: does not listen on socket
+      - id: genai_expected_attribute_missing
+        context:
+          operation: retrieval
+          missing_attribute: gen_ai.retrieval.top_k
+        reason: does not specify top_k
     spans:
       - match:
           attributes:
@@ -123,6 +145,12 @@ scenarios:
 
   inference:
     run: opentelemetry-instrument python inference.py
+    expected_violations:
+      - id: genai_expected_attribute_missing
+        context:
+          operation: chat
+          missing_attribute: server.address
+        reason: does not expose server address
     spans:
       - match:
           attributes:
@@ -135,6 +163,17 @@ scenarios:
 
   streaming:
     run: opentelemetry-instrument python streaming.py
+    expected_violations:
+      - id: genai_expected_attribute_missing
+        context:
+          operation: chat
+          missing_attribute: server.address
+        reason: does not expose server address
+      - id: genai_expected_attribute_missing
+        context:
+          operation: chat
+          missing_attribute: gen_ai.response.id
+        reason: does not surface response ID
     spans:
       - match:
           attributes:
@@ -151,6 +190,12 @@ scenarios:
 
   tool_calling:
     run: opentelemetry-instrument python tool_calling.py
+    expected_violations:
+      - id: genai_expected_attribute_missing
+        context:
+          operation: chat
+          missing_attribute: server.address
+        reason: does not expose server address
     spans:
       - match:
           attributes:
@@ -163,6 +208,12 @@ scenarios:
 
   multimodal:
     run: opentelemetry-instrument python multimodal.py
+    expected_violations:
+      - id: genai_expected_attribute_missing
+        context:
+          operation: chat
+          missing_attribute: server.address
+        reason: does not expose server address
     spans:
       - match:
           attributes:

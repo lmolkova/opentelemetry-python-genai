@@ -24,7 +24,10 @@ client.messages.create(
         {
             "role": "user",
             "content": [
-                {"type": "text", "text": "What is in this image and document?"},
+                {
+                    "type": "text",
+                    "text": "What is in this image and document?",
+                },
                 {
                     "type": "image",
                     "source": {
