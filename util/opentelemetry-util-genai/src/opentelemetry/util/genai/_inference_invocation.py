@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any, Final
+from typing import Final
 
 from opentelemetry._logs import Logger, LogRecord
 from opentelemetry.semconv._incubating.attributes import (
@@ -29,6 +29,8 @@ from opentelemetry.util.genai.types import (
     ToolDefinition,
 )
 from opentelemetry.util.genai.utils import (
+    should_capture_content_on_events,
+    should_capture_content_on_spans,
     should_emit_event,
 )
 from opentelemetry.util.types import AttributeValue
@@ -137,7 +139,7 @@ class InferenceInvocation(GenAIInvocation):
         self.conversation_compacted: bool | None = None
         self.prompt_name: str | None = None
         self.prompt_version: str | None = None
-        self.prompt_variables: Mapping[str, Any] | None = None
+        self.prompt_variables: Mapping[str, object] | None = None
         self.tool_definitions: list[ToolDefinition] | None = None
         self.top_k: float | None = None
         self.request_choice_count: int | None = None
@@ -298,10 +300,24 @@ class InferenceInvocation(GenAIInvocation):
             ),
         )
         attrs.update({k: v for k, v in optional_attrs if v is not None})
-        if self.prompt_variables:
-            for k, v in self.prompt_variables.items():
-                attrs[f"{_GEN_AI_PROMPT_VARIABLE_PREFIX}{k}"] = str(v)
         return attrs
+
+    def _get_prompt_variable_attributes(
+        self, *, for_span: bool
+    ) -> dict[str, AttributeValue]:
+        if not self.prompt_variables:
+            return {}
+        should_capture = (
+            should_capture_content_on_spans()
+            if for_span
+            else should_capture_content_on_events()
+        )
+        if not should_capture:
+            return {}
+        return {
+            f"{_GEN_AI_PROMPT_VARIABLE_PREFIX}{k}": str(v)
+            for k, v in self.prompt_variables.items()
+        }
 
     def _invalidate_metric_attributes(self) -> None:
         """Drop the cached metric attributes so the next read rebuilds them.
@@ -342,6 +358,7 @@ class InferenceInvocation(GenAIInvocation):
             self._apply_error_attributes(error)
         attributes = self._get_attributes()
         attributes.update(self._get_message_attributes(for_span=True))
+        attributes.update(self._get_prompt_variable_attributes(for_span=True))
         attributes.update(self.attributes)
         self.span.set_attributes(attributes)
         self._metrics_recorder.record(self)
@@ -368,6 +385,7 @@ class InferenceInvocation(GenAIInvocation):
         attributes = self._get_start_attributes()
         attributes.update(self._get_attributes())
         attributes.update(self._get_message_attributes(for_span=False))
+        attributes.update(self._get_prompt_variable_attributes(for_span=False))
         attributes.update(self.attributes)
         return LogRecord(
             event_name="gen_ai.client.inference.operation.details",
