@@ -10,6 +10,7 @@ from google.genai import types as genai_types
 from opentelemetry.util.genai.types import (
     BlobPart,
     FinishReason,
+    GenericPart,
     InputMessage,
     MessagePart,
     OutputMessage,
@@ -58,11 +59,14 @@ def to_system_instructions(
     *,
     content: genai_types.Content,
 ) -> list[SystemInstructionPart]:
-    return [
-        TextPart(content=part.text)
-        for part in content.parts or []
-        if part.text is not None
-    ]
+    instructions: list[SystemInstructionPart] = []
+    for idx, part in enumerate(content.parts or []):
+        msg_part = _to_part(part, idx)
+        if isinstance(msg_part, TextPart):
+            instructions.append(msg_part)
+        elif msg_part is not None:
+            instructions.append(GenericPart(type=msg_part.type))
+    return instructions
 
 
 def _to_input_message(
