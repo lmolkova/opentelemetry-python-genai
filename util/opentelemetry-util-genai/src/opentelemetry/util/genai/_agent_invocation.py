@@ -60,8 +60,8 @@ class AgentInvocation(GenAIInvocation):
     rather than constructing this directly.
 
     Reference:
-        Client span: https://github.com/open-telemetry/semantic-conventions/blob/main/docs/gen-ai/gen-ai-agent-spans.md#invoke-agent-client-span
-        Internal span: https://github.com/open-telemetry/semantic-conventions/blob/main/docs/gen-ai/gen-ai-agent-spans.md#invoke-agent-internal-span
+        Client span: https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-agent-spans.md#invoke-agent-client-span
+        Internal span: https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-agent-spans.md#invoke-agent-internal-span
     """
 
     def __init__(
@@ -172,7 +172,7 @@ class LocalAgentInvocation(AgentInvocation):
     Use handler.invoke_local_agent() rather than constructing this directly.
 
     Reference:
-        https://github.com/open-telemetry/semantic-conventions/blob/main/docs/gen-ai/gen-ai-agent-spans.md#invoke-agent-internal-span
+        https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-agent-spans.md#invoke-agent-internal-span
     """
 
     def __init__(
@@ -259,7 +259,7 @@ class RemoteAgentInvocation(AgentInvocation):
     Use handler.invoke_remote_agent() rather than constructing this directly.
 
     Reference:
-        https://github.com/open-telemetry/semantic-conventions/blob/main/docs/gen-ai/gen-ai-agent-spans.md#invoke-agent-client-span
+        https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-agent-spans.md#invoke-agent-client-span
     """
 
     def __init__(
