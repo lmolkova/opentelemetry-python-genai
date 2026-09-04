@@ -101,6 +101,11 @@ def _normalize_role(message: BaseMessage) -> str | None:
     return None
 
 
+def _message_name(message: BaseMessage) -> str | None:
+    name = getattr(message, "name", None)
+    return str(name) if name is not None else None
+
+
 def _blob_from_base64(data: Any, mime_type: Any) -> MessagePart | None:
     if not isinstance(data, str):
         return None
@@ -356,6 +361,7 @@ def to_input_messages(
             InputMessage(
                 role=_normalize_role(message) or Role.USER.value,
                 parts=parts,
+                name=_message_name(message),
             )
         )
     return result
@@ -389,6 +395,7 @@ def split_system_and_input_messages(
                 InputMessage(
                     role=_normalize_role(message) or Role.USER.value,
                     parts=parts,
+                    name=_message_name(message),
                 )
             )
 
@@ -422,6 +429,7 @@ def to_output_messages(
                 role=_normalize_role(message) or Role.ASSISTANT.value,
                 parts=parts,
                 finish_reason=finish_reason,
+                name=_message_name(message),
             )
         )
     return result
