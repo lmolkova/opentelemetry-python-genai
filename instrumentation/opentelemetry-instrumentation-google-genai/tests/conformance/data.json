@@ -28,7 +28,6 @@
       "gen_ai.request.seed",
       "gen_ai.request.stop_sequences",
       "gen_ai.request.temperature",
-      "gen_ai.request.top_k",
       "gen_ai.request.top_p",
       "gen_ai.response.finish_reasons",
       "gen_ai.response.id",
@@ -55,7 +54,6 @@
       "gen_ai.request.seed",
       "gen_ai.request.stop_sequences",
       "gen_ai.request.temperature",
-      "gen_ai.request.top_k",
       "gen_ai.request.top_p",
       "gen_ai.response.finish_reasons",
       "gen_ai.response.id",
@@ -101,6 +99,17 @@
   "entities": {},
   "findings": [
     {
+      "id": "type_mismatch",
+      "message": "Attribute 'gen_ai.request.top_k' has type 'double'. Type should be 'int'.",
+      "signal_type": "log",
+      "signal_name": "gen_ai.client.inference.operation.details",
+      "context": {
+        "attribute_key": "gen_ai.request.top_k",
+        "attribute_type": "double",
+        "expected": "int"
+      }
+    },
+    {
       "id": "genai_expected_attribute_missing",
       "message": "Span 'embeddings gemini-embedding-2' (operation 'embeddings') is missing expected attribute 'gen_ai.request.encoding_formats'",
       "signal_type": "span",
@@ -118,6 +127,17 @@
       "context": {
         "missing_attribute": "gen_ai.response.model",
         "operation": "embeddings"
+      }
+    },
+    {
+      "id": "type_mismatch",
+      "message": "Attribute 'gen_ai.request.top_k' has type 'double'. Type should be 'int'.",
+      "signal_type": "span",
+      "signal_name": "generate_content gemini-2.5-flash",
+      "context": {
+        "attribute_key": "gen_ai.request.top_k",
+        "attribute_type": "double",
+        "expected": "int"
       }
     },
     {

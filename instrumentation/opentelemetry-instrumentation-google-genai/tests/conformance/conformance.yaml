@@ -5,6 +5,11 @@ runner: genai-conformance
 instrumented_library: google-genai
 instrumentation_library: opentelemetry-instrumentation-google-genai
 
+# TODO: point at the pin directly once the runner takes a Git URL with a ref -
+# https://github.com/open-telemetry/semantic-conventions-conformance/issues/176
+weaver:
+  registry: ../../../../.semconv/model
+
 server:
   run: genai-mock-server --port ${PORT}
 
@@ -16,6 +21,13 @@ env:
 scenarios:
   generate_content:
     run: opentelemetry-instrument python generate_content.py
+    expected_violations:
+      - id: type_mismatch
+        context:
+          attribute_key: gen_ai.request.top_k
+          attribute_type: double
+          expected: int
+        reason: util-genai types InferenceInvocation.top_k as float; semconv says int
     spans:
       - match:
           attributes:
@@ -69,6 +81,12 @@ scenarios:
   streaming:
     run: opentelemetry-instrument python streaming.py
     expected_violations:
+      - id: type_mismatch
+        context:
+          attribute_key: gen_ai.request.top_k
+          attribute_type: double
+          expected: int
+        reason: util-genai types InferenceInvocation.top_k as float; semconv says int
       - id: genai_expected_attribute_missing
         context:
           operation: generate_content

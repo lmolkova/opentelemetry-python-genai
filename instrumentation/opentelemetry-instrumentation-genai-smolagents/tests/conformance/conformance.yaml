@@ -5,6 +5,11 @@ runner: genai-conformance
 instrumented_library: smolagents
 instrumentation_library: opentelemetry-instrumentation-genai-smolagents
 
+# TODO: point at the pin directly once the runner takes a Git URL with a ref -
+# https://github.com/open-telemetry/semantic-conventions-conformance/issues/176
+weaver:
+  registry: ../../../../.semconv/model
+
 env:
   OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT: SPAN_ONLY
 
@@ -117,6 +122,9 @@ scenarios:
 
   multimodal:
     run: opentelemetry-instrument python multimodal.py
+    # TODO: was asserting a uri/image part on gen_ai.input.messages. The present:
+    # true check below only says the attribute exists, not that the image is in
+    # it. Needs expectations on complex values - https://github.com/open-telemetry/semantic-conventions-conformance/issues/177
     expected_violations:
       - id: genai_expected_attribute_missing
         context:

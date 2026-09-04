@@ -44,8 +44,8 @@ client has no `embeddings` scenario).
 |---|---|---|
 | Inference | `inference.py` | A `chat` operation. |
 | Streaming | `streaming.py` | A streamed `chat` operation, draining the stream completely. |
-| Tool calling | `tool_calling.py` | A `chat` turn where the model returns tool calls and a follow-up turn feeds tool results back. Asserts tool calls and tool results are present on input/output messages. Do **not** expect `execute_tool` spans unless the client library itself instruments tool execution - most don't; tool execution is the caller's code. |
-| Multimodal content | `multimodal.py` | A `chat` turn carrying the non-text parts the client accepts (inline image/audio bytes, media URLs, file refs, …), asserting each round-trips onto the messages. |
+| Tool calling | `tool_calling.py` | A `chat` turn where the model returns tool calls and a follow-up turn feeds tool results back. Do **not** expect `execute_tool` spans unless the client library itself instruments tool execution - most don't; tool execution is the caller's code. |
+| Multimodal content | `multimodal.py` | A `chat` turn carrying the non-text parts the client accepts (inline image/audio bytes, media URLs, file refs, …). |
 | Reasoning | `reasoning.py` | A `chat` turn against a reasoning model where the response carries reasoning/thinking content. |
 | Embeddings | `embeddings.py` | An `embeddings` operation. |
 
@@ -60,11 +60,15 @@ client has no `embeddings` scenario).
 
 ## Message-part coverage
 
-Weaver validates a part's *shape*, not *which* part types a scenario
-exercised. Exercise **every non-text part type the library can
-emit** and assert it landed on a message. Cover only what the package
-instruments: check its message serializer for which
+Exercise **every non-text part type the library can emit**. Cover only what the
+package instruments: check its message serializer for which
 `opentelemetry.util.genai.types` parts it produces.
+
+Weaver validates a part's *shape*, not that a part type was emitted at all, and
+`expect.attributes` can't reach inside a JSON-valued attribute - so a scenario
+that stopped producing `blob` parts still passes. Exercising the part is what
+we have; asserting it arrived is
+[open upstream](https://github.com/open-telemetry/semantic-conventions-conformance/issues/177).
 
 | Part `type` | util-genai type | Emitted when the library accepts… |
 |---|---|---|
@@ -120,6 +124,7 @@ It defines:
 - `instrumented_library`: name of the underlying SDK (e.g. `openai`, `anthropic`).
 - `instrumentation_library`: name of the instrumentation package (e.g. `opentelemetry-instrumentation-genai-openai`).
 - `server`: mock server startup command, usually `genai-mock-server --port ${PORT}`.
+- `weaver.registry`: always `../../../../.semconv/model` - see [Which registry](#which-registry).
 - `env`: environment variables injected into the scenario execution environment.
 - `scenarios`: dictionary of scenario configurations with per-scenario expectations and declared gaps (`expected_violations`).
 
@@ -132,6 +137,11 @@ Example:
 runner: genai-conformance
 instrumented_library: openai
 instrumentation_library: opentelemetry-instrumentation-genai-openai
+
+# TODO: point at the pin directly once the runner takes a Git URL with a ref -
+# https://github.com/open-telemetry/semantic-conventions-conformance/issues/176
+weaver:
+  registry: ../../../../.semconv/model
 
 server:
   run: genai-mock-server --port ${PORT}
@@ -167,19 +177,43 @@ scenarios:
       - gen_ai.client.token.usage
 ```
 
+## Which registry
+
+The runner ships a `semantic-conventions-genai` pin of its own, which lags the
+`SEMCONV_GENAI_REF` in `versions.env` that util-genai's types are written against. Left alone, a
+run would validate against conventions the code doesn't target and an attribute renamed, retyped or
+deprecated in between would pass unnoticed.
+
+So every `conformance.yaml` overrides it:
+
+```yaml
+weaver:
+  registry: ../../../../.semconv/model
+```
+
+`scripts/provision_semconv_registry.py` stages that directory from the pin in `versions.env`; the
+`conformance` tox envs run it in `commands_pre`, so `uv run tox -e py314-test-…-conformance` needs
+no extra step. A caller's registry wins outright in the runner - validation, the coverage model and
+the content JSON schemas all come from it. Only the rego policies and weaver config stay the
+runner's, so a convention needing a *new rule* still waits on a runner bump.
+
+Bumping `SEMCONV_GENAI_REF` is the one thing that moves this; the path never changes.
+
 ## Span and metric expectations
 
 The runner validates scenario telemetry strictly:
 
 1. **Span counts**: `expect.count` defines the exact number of matching spans.
    Any extra undeclared spans cause the scenario to fail.
-2. **Span attributes**: under `expect.attributes`, matchers check attribute presence or values:
+2. **Span attributes**: under `expect.attributes`, a bare value asserts equality on every
+   matched span; a mapping takes `present` or `distinct` (one or the other, not both):
    ```yaml
    attributes:
-     gen_ai.request.stream:
-       equals: true
+     gen_ai.request.stream: true
      gen_ai.response.id:
        present: true
+     gen_ai.response.model:
+       distinct: 1
    ```
 3. **Metrics**: listed under `metrics:` must appear in the emitted telemetry.
    Missing expected metrics or extra undeclared metrics fail the test.
@@ -188,8 +222,13 @@ The runner validates scenario telemetry strictly:
 
 Known semconv departures or util-genai gaps are declared under `expected_violations:` in `conformance.yaml`.
 Each entry requires:
-- `id`: Weaver advice/violation rule ID (e.g. `genai_expected_attribute_missing`, `genai_operation_name_unknown`, `missing_attribute`).
-- `context`: specific key-value pairs identifying the gap (e.g. `operation`, `missing_attribute`, `attribute_key`).
+- `id`: the advice rule that fired - one of `genai_expected_attribute_missing`,
+  `genai_operation_name_unknown`, `genai_span_name_format`, `genai_span_kind_unexpected`,
+  `genai_content_schema`, `span_status_ok_set_by_instrumentation`. Matched exactly, so an
+  id that isn't one of these matches nothing.
+- `context`: the key-value pairs the rule reported, identifying which signal it fired on
+  (e.g. `operation`, `missing_attribute`). Matched as a whole - declare every key the
+  violation carries, or leave `context` out to match any.
 - `reason`: short explanation of why the violation exists.
 
 ```yaml
@@ -222,14 +261,19 @@ Conformance tests run against `genai-mock-server` (provided by `semantic-convent
 
 ## Coverage data file (`data.json`)
 
-When all scenarios in `conformance.yaml` pass, the runner writes a summarized coverage report
+Once every scenario in `conformance.yaml` has run, the runner writes a summarized coverage report
 to `tests/conformance/data.json`. This file records:
 - Emitted spans and their carried attributes.
 - Emitted metrics and events.
 - Recorded findings / violations.
 
+Failing scenarios still count as run, so a red run rewrites `data.json` too - only a partial run
+(a single `--scenario`, or a session that raised) leaves it alone. Check the run was green before
+committing the result.
+
 Commit `data.json` alongside `conformance.yaml`. Reviewing diffs in `data.json` makes telemetry
-changes visible during PR reviews.
+changes visible during PR reviews, and CI fails the conformance job when the committed file no
+longer matches what the run emitted.
 
 ## Running
 

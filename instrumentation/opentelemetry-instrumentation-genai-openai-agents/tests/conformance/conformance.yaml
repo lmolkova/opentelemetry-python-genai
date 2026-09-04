@@ -5,6 +5,11 @@ runner: genai-conformance
 instrumented_library: openai-agents
 instrumentation_library: opentelemetry-instrumentation-genai-openai-agents
 
+# TODO: point at the pin directly once the runner takes a Git URL with a ref -
+# https://github.com/open-telemetry/semantic-conventions-conformance/issues/176
+weaver:
+  registry: ../../../../.semconv/model
+
 server:
   run: genai-mock-server --port ${PORT}
 
@@ -81,6 +86,43 @@ scenarios:
             gen_ai.operation.name: execute_tool
         expect:
           count: 1
+    metrics:
+      - gen_ai.client.operation.duration
+      - gen_ai.invoke_workflow.duration
+
+  multi_agent:
+    run: opentelemetry-instrument python multi_agent.py
+    expected_violations:
+      - id: genai_expected_attribute_missing
+        context:
+          operation: invoke_agent
+          missing_attribute: gen_ai.response.finish_reasons
+        reason: does not emit finish reasons
+      - id: genai_expected_attribute_missing
+        context:
+          operation: invoke_agent
+          missing_attribute: gen_ai.usage.input_tokens
+        reason: does not emit input tokens
+      - id: genai_expected_attribute_missing
+        context:
+          operation: invoke_agent
+          missing_attribute: gen_ai.usage.output_tokens
+        reason: does not emit output tokens
+    spans:
+      - match:
+          attributes:
+            gen_ai.operation.name: invoke_workflow
+        expect:
+          count: 1
+      - match:
+          attributes:
+            gen_ai.operation.name: invoke_agent
+        expect:
+          count: 2
+          attributes:
+            # Triage and specialist must each surface their own name.
+            gen_ai.agent.name:
+              distinct: 2
     metrics:
       - gen_ai.client.operation.duration
       - gen_ai.invoke_workflow.duration

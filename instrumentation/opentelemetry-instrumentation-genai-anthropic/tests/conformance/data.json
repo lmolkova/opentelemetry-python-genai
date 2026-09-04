@@ -60,5 +60,15 @@
     ]
   },
   "entities": {},
-  "findings": []
+  "findings": [
+    {
+      "id": "missing_attribute",
+      "message": "Attribute 'gen_ai.usage.cache_creation.input_tokens' does not exist in the registry.",
+      "signal_type": "span",
+      "signal_name": "chat claude-sonnet-4-20250514",
+      "context": {
+        "attribute_key": "gen_ai.usage.cache_creation.input_tokens"
+      }
+    }
+  ]
 }
