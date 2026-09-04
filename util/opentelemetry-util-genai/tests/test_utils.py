@@ -413,7 +413,8 @@ class TestTelemetryHandler(unittest.TestCase):
         },
     )
     def test_system_instruction_generic_part_on_span(self):
-        with self.telemetry_handler.inference("test-provider") as invocation:
+        handler = TelemetryHandler(tracer_provider=self.tracer_provider)
+        with handler.inference("test-provider") as invocation:
             invocation.system_instruction = [
                 TextPart(content="You are helpful"),
                 GenericPart(type="custom"),
