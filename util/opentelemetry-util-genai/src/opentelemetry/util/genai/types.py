@@ -308,6 +308,9 @@ class Role(str, Enum):
     TOOL = "tool"
 
 
+SystemInstructionPart = Union[TextPart, GenericPart]
+
+
 @dataclass()
 class InputMessage:
     role: str

@@ -41,12 +41,14 @@ from opentelemetry.util.genai.types import (
     ContentCapturingMode,
     File,
     FilePart,
+    GenericPart,
     InputMessage,
     MessagePart,
     OutputMessage,
     Reasoning,
     ReasoningPart,
     Role,
+    SystemInstructionPart,
     Text,
     TextPart,
     Uri,
@@ -1068,6 +1070,15 @@ class TestMessageModels(unittest.TestCase):
         self.assertEqual(out_msg.name, "bot")
         serialized_out = json.loads(gen_ai_json_dumps(asdict(out_msg)))
         self.assertEqual(serialized_out["name"], "bot")
+
+    def test_system_instruction_part(self):
+        text_part: SystemInstructionPart = TextPart(content="You are helpful")
+        generic_part: SystemInstructionPart = GenericPart(
+            type="custom", value={"k": "v"}
+        )
+        self.assertEqual(text_part.content, "You are helpful")
+        self.assertEqual(generic_part.type, "custom")
+        self.assertEqual(generic_part.value, {"k": "v"})
 
 
 _REAL_PNG_BYTES = (
