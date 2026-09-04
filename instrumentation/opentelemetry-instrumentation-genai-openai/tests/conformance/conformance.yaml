@@ -94,6 +94,18 @@ scenarios:
     metrics:
       - gen_ai.client.operation.duration
 
+  responses_tool_calling:
+    run: opentelemetry-instrument python responses_tool_calling.py
+    spans:
+      - match:
+          attributes:
+            gen_ai.operation.name: chat
+        expect:
+          count: 2
+    metrics:
+      - gen_ai.client.operation.duration
+      - gen_ai.client.token.usage
+
   responses_stream:
     run: opentelemetry-instrument python responses_stream.py
     spans:
