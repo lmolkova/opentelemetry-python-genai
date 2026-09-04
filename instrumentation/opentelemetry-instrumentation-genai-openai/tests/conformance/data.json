@@ -79,15 +79,5 @@
     ]
   },
   "entities": {},
-  "findings": [
-    {
-      "id": "missing_attribute",
-      "message": "Attribute 'gen_ai.usage.cache_write.input_tokens' does not exist in the registry.",
-      "signal_type": "span",
-      "signal_name": "chat gpt-4o-mini",
-      "context": {
-        "attribute_key": "gen_ai.usage.cache_write.input_tokens"
-      }
-    }
-  ]
+  "findings": []
 }

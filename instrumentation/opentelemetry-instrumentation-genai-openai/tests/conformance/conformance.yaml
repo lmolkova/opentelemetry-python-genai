@@ -17,8 +17,7 @@ expected_violations:
   - id: missing_attribute
     context:
       attribute_key: gen_ai.usage.cache_write.input_tokens
-    reason: >-
-      gen_ai.usage.cache_write.input_tokens is pending semconv release
+    reason: pending semconv release
 
 scenarios:
   inference:

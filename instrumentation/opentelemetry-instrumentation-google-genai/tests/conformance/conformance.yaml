@@ -1,0 +1,84 @@
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+
+runner: genai-conformance
+instrumented_library: google-genai
+instrumentation_library: opentelemetry-instrumentation-google-genai
+
+server:
+  run: genai-mock-server --port ${PORT}
+
+env:
+  GOOGLE_GEMINI_BASE_URL: ${MOCK_SERVER_URL}
+  GOOGLE_API_KEY: test_google_api_key
+  OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT: SPAN_ONLY
+
+expected_violations:
+  - id: genai_operation_name_unknown
+    context:
+      operation: interactions.create
+    reason: experimental operation name
+  - id: genai_expected_attribute_missing
+    context:
+      operation: embeddings
+      missing_attribute: gen_ai.response.model
+    reason: does not include model
+  - id: genai_expected_attribute_missing
+    context:
+      operation: embeddings
+      missing_attribute: gen_ai.request.encoding_formats
+    reason: does not set request encoding formats
+
+scenarios:
+  generate_content:
+    run: opentelemetry-instrument python generate_content.py
+    spans:
+      - match:
+          attributes:
+            gen_ai.operation.name: generate_content
+        expect:
+          count: 1
+    metrics:
+      - gen_ai.client.operation.duration
+      - gen_ai.client.token.usage
+
+  inference:
+    run: opentelemetry-instrument python inference.py
+    spans:
+      - match:
+          attributes:
+            gen_ai.operation.name: interactions.create
+        expect:
+          count: 1
+    metrics:
+      - gen_ai.client.operation.duration
+      - gen_ai.client.token.usage
+
+  embedding:
+    run: opentelemetry-instrument python embedding.py
+    spans:
+      - match:
+          attributes:
+            gen_ai.operation.name: embeddings
+        expect:
+          count: 1
+    metrics:
+      - gen_ai.client.operation.duration
+      - gen_ai.client.token.usage
+
+  tool_calling:
+    run: opentelemetry-instrument python tool_calling.py
+    spans:
+      - match:
+          attributes:
+            gen_ai.operation.name: generate_content
+        expect:
+          count: 1
+      - match:
+          attributes:
+            gen_ai.operation.name: execute_tool
+        expect:
+          count: 1
+    metrics:
+      - gen_ai.client.operation.duration
+      - gen_ai.client.token.usage
