@@ -26,8 +26,8 @@ scenarios:
       - gen_ai.client.operation.duration
       - gen_ai.client.token.usage
 
-  inference_streaming:
-    run: opentelemetry-instrument python inference_streaming.py
+  streaming:
+    run: opentelemetry-instrument python streaming.py
     spans:
       - match:
           attributes:
@@ -72,6 +72,18 @@ scenarios:
 
   tool_calling:
     run: opentelemetry-instrument python tool_calling.py
+    spans:
+      - match:
+          attributes:
+            gen_ai.operation.name: chat
+        expect:
+          count: 2
+    metrics:
+      - gen_ai.client.operation.duration
+      - gen_ai.client.token.usage
+
+  multimodal:
+    run: opentelemetry-instrument python multimodal.py
     spans:
       - match:
           attributes:

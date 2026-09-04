@@ -31,8 +31,8 @@ expected_violations:
     reason: does not return finish reasons
 
 scenarios:
-  chat:
-    run: opentelemetry-instrument python chat.py
+  inference:
+    run: opentelemetry-instrument python inference.py
     spans:
       - match:
           attributes:
@@ -43,8 +43,8 @@ scenarios:
       - gen_ai.client.operation.duration
       - gen_ai.client.token.usage
 
-  streamed_chat:
-    run: opentelemetry-instrument python streamed_chat.py
+  streaming:
+    run: opentelemetry-instrument python streaming.py
     spans:
       - match:
           attributes:
@@ -59,14 +59,14 @@ scenarios:
       - gen_ai.client.operation.time_to_first_chunk
       - gen_ai.client.operation.time_per_output_chunk
 
-  tool_definitions:
-    run: opentelemetry-instrument python tool_definitions.py
+  tool_calling:
+    run: opentelemetry-instrument python tool_calling.py
     spans:
       - match:
           attributes:
             gen_ai.operation.name: chat
         expect:
-          count: 1
+          count: 2
           attributes:
             gen_ai.tool.definitions:
               present: true

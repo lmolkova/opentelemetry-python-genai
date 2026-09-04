@@ -26,8 +26,8 @@ expected_violations:
     reason: does not emit output tokens
 
 scenarios:
-  agent:
-    run: opentelemetry-instrument python agent.py
+  invoke_agent:
+    run: opentelemetry-instrument python invoke_agent.py
     spans:
       - match:
           attributes:

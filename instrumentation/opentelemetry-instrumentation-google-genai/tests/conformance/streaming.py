@@ -1,12 +1,12 @@
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
 
-"""Conformance scenario: google-genai generate_content."""
+"""Conformance scenario: google-genai streaming."""
 
 from google.genai import Client, types
 
 client = Client()
-client.models.generate_content(
+for chunk in client.models.generate_content_stream(
     model="gemini-2.5-flash",
     contents="Say this is a test",
     config=types.GenerateContentConfig(
@@ -20,4 +20,5 @@ client.models.generate_content(
         presence_penalty=0.5,
         frequency_penalty=0.5,
     ),
-)
+):
+    _ = chunk

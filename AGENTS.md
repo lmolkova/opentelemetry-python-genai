@@ -365,7 +365,7 @@ under `expected_violations` in `conformance.yaml`) so it fails loudly once the g
 Run via `uv run tox -e py314-test-instrumentation-genai-<lib>-conformance`. The
 `*-conformance` tox envs run pytest against `conformance.yaml` directly; the
 regular `*-{oldest,latest}` envs `--ignore` the `tests/conformance` directory so they
-don't need the OTLP/gRPC exporter, `weaver_live_check`, or conformance dependencies.
+don't need the conformance dependencies.
 
 The parallel PR-review rules live in
 [`.github/instructions/instrumentation.instructions.md`](.github/instructions/instrumentation.instructions.md)

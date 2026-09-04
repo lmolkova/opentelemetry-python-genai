@@ -32,8 +32,8 @@ scenarios:
       - gen_ai.client.operation.duration
       - gen_ai.client.token.usage
 
-  inference_streaming:
-    run: opentelemetry-instrument python inference_streaming.py
+  streaming:
+    run: opentelemetry-instrument python streaming.py
     spans:
       - match:
           attributes:
@@ -48,8 +48,8 @@ scenarios:
       - gen_ai.client.operation.time_to_first_chunk
       - gen_ai.client.operation.time_per_output_chunk
 
-  embedding:
-    run: opentelemetry-instrument python embedding.py
+  embeddings:
+    run: opentelemetry-instrument python embeddings.py
     spans:
       - match:
           attributes:
@@ -126,3 +126,27 @@ scenarios:
       - gen_ai.client.token.usage
       - gen_ai.client.operation.time_to_first_chunk
       - gen_ai.client.operation.time_per_output_chunk
+
+  structured_output:
+    run: opentelemetry-instrument python structured_output.py
+    spans:
+      - match:
+          attributes:
+            gen_ai.operation.name: chat
+        expect:
+          count: 1
+    metrics:
+      - gen_ai.client.operation.duration
+      - gen_ai.client.token.usage
+
+  multimodal:
+    run: opentelemetry-instrument python multimodal.py
+    spans:
+      - match:
+          attributes:
+            gen_ai.operation.name: chat
+        expect:
+          count: 1
+    metrics:
+      - gen_ai.client.operation.duration
+      - gen_ai.client.token.usage

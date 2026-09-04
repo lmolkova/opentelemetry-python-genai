@@ -18,6 +18,11 @@ class _FakeRetriever(BaseRetriever):
                 id="doc-1",
                 metadata={"source": "wiki"},
             ),
+            Document(
+                page_content="The Eiffel Tower is located in Paris.",
+                id="doc-2",
+                metadata={"source": "wiki"},
+            ),
         ]
 
     def _get_ls_params(self, **kwargs: Any) -> Any:

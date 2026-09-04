@@ -1,17 +1,11 @@
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
 
-import os
+"""Conformance scenario: openai streaming chat completion."""
 
-from portkey_ai import Portkey
+from openai import OpenAI
 
-client = Portkey(
-    api_key="test_portkey_api_key",
-    base_url=f"{os.environ['MOCK_SERVER_URL']}/v1",
-    provider="openai",
-)
-
-client.chat.completions.create(
+stream = OpenAI().chat.completions.create(
     messages=[
         {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": "Say this is a test"},
@@ -24,5 +18,8 @@ client.chat.completions.create(
     seed=42,
     frequency_penalty=0.5,
     presence_penalty=0.5,
-    stream=False,
+    stream=True,
 )
+
+for chunk in stream:
+    _ = chunk

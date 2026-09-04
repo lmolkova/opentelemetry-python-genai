@@ -308,7 +308,7 @@ def _apply_request_attributes(
 ) -> None:
     invocation.temperature = config.temperature
     invocation.top_p = config.top_p
-    invocation.top_k = config.top_k
+    invocation.top_k = int(config.top_k) if config.top_k is not None else None
     invocation.request_choice_count = config.candidate_count
     invocation.max_tokens = config.max_output_tokens
     invocation.stop_sequences = config.stop_sequences
