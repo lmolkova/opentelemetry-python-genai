@@ -120,10 +120,12 @@ Flag, with a link to the rule:
   `openai-project`, `Set-Cookie`, and any response-body field tied to a real
   account.
 - Conformance: packages ship `tests/conformance/conformance.yaml` (declaring
-  runner, mock server, environment variables, expected spans/metrics, and
-  `expected_violations`), standalone scenario scripts (`tests/conformance/<scenario>.py`)
-  executed under `opentelemetry-instrument`, and a committed `tests/conformance/data.json`.
-  They run via `pytest …/tests/conformance/conformance.yaml`.
+  runner, mock server, environment variables, the `weaver.registry` override,
+  expected spans/metrics, and `expected_violations`), standalone scenario scripts
+  (`tests/conformance/<scenario>.py`) executed under `opentelemetry-instrument`, and a
+  committed `tests/conformance/data.json`. They run via
+  `pytest …/tests/conformance/conformance.yaml`. Flag a `conformance.yaml` with no
+  `weaver.registry` — it would validate against the runner's pin, not `versions.env`'s.
 
 ## 7. Examples
 

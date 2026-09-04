@@ -1,7 +1,7 @@
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
 
-"""Conformance scenario: langchain image_url data URI (ChatOpenAI)."""
+"""Conformance scenario: langchain standard image block (ChatOpenAI)."""
 
 from langchain_core.messages import HumanMessage
 from langchain_openai import ChatOpenAI
@@ -18,10 +18,9 @@ ChatOpenAI(model="gpt-4o", temperature=0.1, max_tokens=100).invoke(
             content=[
                 {"type": "text", "text": "What is in this image?"},
                 {
-                    "type": "image_url",
-                    "image_url": {
-                        "url": f"data:image/png;base64,{_REAL_PNG_B64}"
-                    },
+                    "type": "image",
+                    "base64": _REAL_PNG_B64,
+                    "mime_type": "image/png",
                 },
             ]
         ),

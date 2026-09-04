@@ -356,6 +356,14 @@ via the shared conformance runner (`genai-conformance`).
 variables, declares expected spans/metrics, and documents known gaps under `expected_violations`.
 Scenarios are standalone Python scripts executed under `opentelemetry-instrument python <scenario>.py`.
 
+Every `conformance.yaml` overrides `weaver.registry` to `../../../../.semconv/model`, the registry
+`scripts/provision_semconv_registry.py` stages from `SEMCONV_GENAI_REF` in `versions.env`. Without
+it a run would validate against the runner's own, older pin instead of the conventions util-genai
+targets. The `conformance` tox envs stage it in `commands_pre`.
+
+`data.json` is rewritten by every complete run and committed; CI fails the conformance job when it
+no longer matches what the run emitted, so commit the file a green run produced.
+
 Ship a scenario for **every** semconv operation the library emits, even an
 operation currently blocked by a util-genai or semconv gap. Skipping the
 scenario hides the gap; writing it records the gap (as a declared violation

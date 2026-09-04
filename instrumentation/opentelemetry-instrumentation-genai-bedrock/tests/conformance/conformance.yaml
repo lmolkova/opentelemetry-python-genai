@@ -5,6 +5,11 @@ runner: genai-conformance
 instrumented_library: boto3
 instrumentation_library: opentelemetry-instrumentation-genai-bedrock
 
+# TODO: point at the pin directly once the runner takes a Git URL with a ref -
+# https://github.com/open-telemetry/semantic-conventions-conformance/issues/176
+weaver:
+  registry: ../../../../.semconv/model
+
 server:
   run: genai-mock-server --port ${PORT}
 
