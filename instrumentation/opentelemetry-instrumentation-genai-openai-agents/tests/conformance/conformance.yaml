@@ -123,6 +123,11 @@ scenarios:
             # Triage and specialist must each surface their own name.
             gen_ai.agent.name:
               distinct: 2
+      - match:
+          attributes:
+            gen_ai.operation.name: execute_tool
+        expect:
+          count: 1
     metrics:
       - gen_ai.client.operation.duration
       - gen_ai.invoke_workflow.duration
