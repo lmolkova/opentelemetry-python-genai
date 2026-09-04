@@ -23,22 +23,26 @@ Use `/tmp/openinference` or clone:
 if [ ! -d "/tmp/openinference" ]; then
   git clone --depth=1 https://github.com/open-telemetry/donation-openinference.git /tmp/openinference
 fi
-ls /tmp/openinference/python/instrumentation/ | grep -i <lib>
+ls /tmp/openinference/python/instrumentation/ | grep -i "$LIB"
 ```
 
 Identify target package in `/tmp/openinference/python/instrumentation/openinference-instrumentation-<lib>/`.
 
 ### 2. Semantic Conventions Schema Repository
-Locate `semantic-conventions-genai` registry:
-- Check cached copy under `~/.cache/otel-conformance/semconv/semantic-conventions-genai-*`
-- Or clone:
+Locate `semantic-conventions-genai` registry using the pinned `SEMCONV_GENAI_REF` from `versions.env`:
+
 ```sh
-if [ ! -d "/tmp/semconv-genai" ]; then
-  git clone --depth=1 https://github.com/open-telemetry/semantic-conventions-genai.git /tmp/semconv-genai
+SEMCONV_REF=$(grep SEMCONV_GENAI_REF versions.env | cut -d= -f2)
+SEMCONV_DIR="${HOME}/.cache/otel-conformance/semconv/genai-${SEMCONV_REF}"
+
+if [ ! -d "$SEMCONV_DIR" ]; then
+  git clone https://github.com/open-telemetry/semantic-conventions-genai.git /tmp/semconv-genai
+  git -C /tmp/semconv-genai checkout "$SEMCONV_REF"
+  SEMCONV_DIR="/tmp/semconv-genai"
 fi
 ```
 
-Key schema definitions:
+Key schema definitions (under `$SEMCONV_DIR`):
 - Spans: `model/gen-ai/spans.yaml` and `docs/gen-ai/` (`gen-ai-spans.md`, `gen-ai-agent-spans.md`, provider docs).
 - Attributes: `model/gen-ai/registry.yaml` and `model/<provider>/`.
 
