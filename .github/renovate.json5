@@ -27,7 +27,8 @@
       "managerFilePatterns": ["/^versions\\.env$/"],
       "matchStrings": [
         "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+) versioning=(?<versioning>\\S+)\\s+WEAVER_VERSION=(?<currentValue>\\S+)",
-        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+) packageName=(?<packageName>\\S+) versioning=(?<versioning>\\S+)\\s+SEMCONV_GENAI_REF=(?<currentValue>\\S+)"
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+) packageName=(?<packageName>\\S+) versioning=(?<versioning>\\S+)\\s+SEMCONV_GENAI_REF=(?<currentValue>\\S+)",
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+) packageName=(?<packageName>\\S+) versioning=(?<versioning>\\S+)\\s+CONFORMANCE_REF=(?<currentValue>\\S+)"
       ]
     },
     {
