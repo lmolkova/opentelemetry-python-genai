@@ -101,10 +101,12 @@ class TelemetryHandler:
                 library, reported as the instrumentation scope version.
         """
         schema_url = Schemas.V1_37_0.value
+        # The scope name and version must describe the same library, so a
+        # version passed without a name is dropped rather than pinned onto the
+        # util's own scope name.
         if instrumentation_scope_name is None:
             instrumentation_scope_name = __name__
-            if instrumentation_scope_version is None:
-                instrumentation_scope_version = __version__
+            instrumentation_scope_version = __version__
         version = instrumentation_scope_version or ""
         self._tracer = get_tracer(
             instrumentation_scope_name,

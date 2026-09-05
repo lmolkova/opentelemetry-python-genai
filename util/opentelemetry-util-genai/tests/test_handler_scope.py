@@ -90,3 +90,14 @@ class TelemetryHandlerScopeTest(TestBase):
         span = self.memory_exporter.get_finished_spans()[0]
         self.assertEqual(span.instrumentation_scope.name, _UTIL_SCOPE)
         self.assertEqual(span.instrumentation_scope.version, __version__)
+
+    def test_version_without_name_falls_back_to_util_scope(self) -> None:
+        handler = TelemetryHandler(
+            tracer_provider=self.tracer_provider,
+            instrumentation_scope_version="4.2b0",
+        )
+        self._emit(handler)
+
+        span = self.memory_exporter.get_finished_spans()[0]
+        self.assertEqual(span.instrumentation_scope.name, _UTIL_SCOPE)
+        self.assertEqual(span.instrumentation_scope.version, __version__)
