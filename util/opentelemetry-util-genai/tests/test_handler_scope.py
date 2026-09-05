@@ -3,10 +3,8 @@
 
 from __future__ import annotations
 
-import warnings
 from unittest.mock import patch
 
-import pytest
 from opentelemetry.sdk._logs import LoggerProvider
 from opentelemetry.sdk._logs.export import (
     InMemoryLogRecordExporter,
@@ -92,4 +90,3 @@ class TelemetryHandlerScopeTest(TestBase):
         span = self.memory_exporter.get_finished_spans()[0]
         self.assertEqual(span.instrumentation_scope.name, _UTIL_SCOPE)
         self.assertEqual(span.instrumentation_scope.version, __version__)
-

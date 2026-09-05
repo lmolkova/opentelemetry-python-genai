@@ -8,13 +8,13 @@ from __future__ import annotations
 from collections.abc import Collection
 from typing import Any
 
+from opentelemetry.instrumentation.genai.bedrock.version import __version__
 from opentelemetry.instrumentation.instrumentor import BaseInstrumentor
 from opentelemetry.util.genai.completion_hook import load_completion_hook
 from opentelemetry.util.genai.handler import TelemetryHandler
 
 from .package import _instruments
 from .patch import patch_bedrock, unpatch_bedrock
-from .version import __version__
 
 __all__ = ["BedrockInstrumentor"]
 

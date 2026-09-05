@@ -103,7 +103,8 @@ class TelemetryHandler:
         schema_url = Schemas.V1_37_0.value
         if instrumentation_scope_name is None:
             instrumentation_scope_name = __name__
-            instrumentation_scope_version = __version__
+            if instrumentation_scope_version is None:
+                instrumentation_scope_version = __version__
         version = instrumentation_scope_version or ""
         self._tracer = get_tracer(
             instrumentation_scope_name,

@@ -63,6 +63,7 @@ from typing import Any
 from smolagents import models
 from wrapt import wrap_function_wrapper
 
+from opentelemetry.instrumentation.genai.smolagents.version import __version__
 from opentelemetry.instrumentation.instrumentor import BaseInstrumentor
 from opentelemetry.instrumentation.utils import unwrap
 from opentelemetry.util.genai.completion_hook import load_completion_hook
@@ -70,7 +71,6 @@ from opentelemetry.util.genai.handler import TelemetryHandler
 
 from .package import _instruments
 from .patch import model_generate, model_generate_stream
-from .version import __version__
 
 __all__ = ["SmolagentsInstrumentor"]
 

@@ -43,6 +43,7 @@ from typing import Any
 
 from wrapt import wrap_function_wrapper
 
+from opentelemetry.instrumentation.genai.anthropic.version import __version__
 from opentelemetry.instrumentation.instrumentor import BaseInstrumentor
 from opentelemetry.instrumentation.utils import unwrap
 from opentelemetry.util.genai.completion_hook import load_completion_hook
@@ -57,7 +58,6 @@ from .patch import (
     messages_stream,
     response_context_manager_exit,
 )
-from .version import __version__
 
 
 def _is_parse_supported() -> bool:

@@ -193,7 +193,10 @@ Apply to packages under `instrumentation/`.
   `opentelemetry.util.genai._*` module.
 - Construct the `TelemetryHandler` with `instrumentation_scope_name=__name__` and
   `instrumentation_scope_version=__version__` so telemetry carries the instrumentation's own scope
-  rather than the util's. Cover it with unit tests.
+  rather than the util's. Import the version as
+  `from opentelemetry.instrumentation.genai.<lib>.version import __version__`, not relatively.
+  An autouse fixture in `opentelemetry.test_util_genai.fixtures` checks this on every handler
+  built during a test, so no dedicated per-package scope test is needed.
 - Content capture, hooks, and configuration are owned by the util. Don't add instrumentation-local
   env vars or settings.
 - Models describing complex attributes are owned by `opentelemetry.util.genai.types`. Land new type

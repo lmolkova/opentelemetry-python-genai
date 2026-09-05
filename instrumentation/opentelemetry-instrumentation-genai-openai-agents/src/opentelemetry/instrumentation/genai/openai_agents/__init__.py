@@ -42,6 +42,9 @@ from agents.tracing import (
     set_trace_processors,
 )
 
+from opentelemetry.instrumentation.genai.openai_agents.version import (
+    __version__,
+)
 from opentelemetry.instrumentation.instrumentor import BaseInstrumentor
 from opentelemetry.semconv._incubating.attributes import (
     gen_ai_attributes as GenAI,
@@ -51,7 +54,6 @@ from opentelemetry.util.genai.handler import TelemetryHandler
 
 from .package import _instruments
 from .processor import GenAITracingProcessor
-from .version import __version__
 
 __all__ = ["OpenAIAgentsInstrumentor"]
 
