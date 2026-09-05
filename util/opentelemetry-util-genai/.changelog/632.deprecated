@@ -1,1 +1,1 @@
-Deprecate get_telemetry_handler, construct a TelemetryHandler with instrumentation_scope_name instead
+Deprecate get_telemetry_handler, construct and cache  TelemetryHandler instead.
