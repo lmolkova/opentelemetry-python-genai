@@ -6,6 +6,25 @@ from __future__ import annotations
 import inspect
 import logging
 from collections.abc import Callable
+
+try:
+    from anthropic.lib.streaming._beta_messages import (  # pylint: disable=no-name-in-module
+        accumulate_event as _sdk_beta_accumulate_event,
+    )
+
+    _beta_accumulate_parameters = inspect.signature(
+        _sdk_beta_accumulate_event
+    ).parameters
+    _beta_accumulate_accepts_headers = (
+        "request_headers" in _beta_accumulate_parameters
+    )
+    _beta_accumulate_takes_json_bufs = (
+        "json_bufs" in _beta_accumulate_parameters
+    )
+except (ImportError, ValueError, TypeError):
+    _sdk_beta_accumulate_event = None
+    _beta_accumulate_accepts_headers = False
+    _beta_accumulate_takes_json_bufs = False
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -42,6 +61,15 @@ except ImportError:
 
 if TYPE_CHECKING:
     from anthropic._streaming import AsyncStream, Stream
+    from anthropic.lib.streaming._beta_messages import (  # pylint: disable=no-name-in-module
+        BetaAsyncMessageStream,
+        BetaAsyncMessageStreamManager,
+        BetaMessageStream,
+        BetaMessageStreamManager,
+    )
+    from anthropic.lib.streaming._beta_types import (  # pylint: disable=no-name-in-module
+        ParsedBetaMessageStreamEvent,
+    )
     from anthropic.lib.streaming._messages import (  # pylint: disable=no-name-in-module
         AsyncMessageStream,
         AsyncMessageStreamManager,
@@ -55,6 +83,11 @@ if TYPE_CHECKING:
         Message,
         RawMessageStreamEvent,
     )
+    from anthropic.types.beta import (
+        BetaMessage,
+        BetaRawMessageStreamEvent,
+    )
+    from anthropic.types.beta.parsed_beta_message import ParsedBetaMessage
     from anthropic.types.parsed_message import ParsedMessage
 
     from opentelemetry.util.genai.invocation import InferenceInvocation
@@ -62,6 +95,9 @@ if TYPE_CHECKING:
 
 ResponseFormatT = TypeVar("ResponseFormatT")
 accumulate_event = cast("Callable[..., Message] | None", _sdk_accumulate_event)
+beta_accumulate_event = cast(
+    "Callable[..., ParsedBetaMessage[Any]] | None", _sdk_beta_accumulate_event
+)
 
 _accumulate_takes_json_bufs = False
 if accumulate_event is not None:
@@ -82,7 +118,13 @@ class _StreamWrapperWithStream(Protocol):
 
 def _set_response_attributes(
     invocation: InferenceInvocation,
-    result: Message | None,
+    result: (
+        Message
+        | BetaMessage
+        | ParsedMessage[Any]
+        | ParsedBetaMessage[Any]
+        | None
+    ),
     capture_content: bool,
 ) -> None:
     set_invocation_response_attributes(invocation, result, capture_content)
@@ -91,7 +133,7 @@ def _set_response_attributes(
 class MessageWrapper:
     """Wrapper for non-streaming Message response that handles telemetry."""
 
-    def __init__(self, message: Message, capture_content: bool):
+    def __init__(self, message: Message | BetaMessage, capture_content: bool):
         self._message = message
         self._capture_content = capture_content
 
@@ -102,17 +144,24 @@ class MessageWrapper:
         )
 
     @property
-    def message(self) -> Message:
+    def message(self) -> Message | BetaMessage:
         """Return the wrapped Message object."""
         return self._message
 
 
 class _MessagesStreamMixin(Generic[ResponseFormatT]):
     _self_invocation: InferenceInvocation
-    _self_message: Message | ParsedMessage[ResponseFormatT] | None
+    _self_message: (
+        Message
+        | BetaMessage
+        | ParsedMessage[ResponseFormatT]
+        | ParsedBetaMessage[ResponseFormatT]
+        | None
+    )
     _self_capture_content: bool
     _self_message_telemetry_finalized: bool
     _self_json_bufs: dict[int, bytes]
+    _self_is_beta: bool
 
     def _stop(self) -> None:
         if self._self_message_telemetry_finalized:
@@ -139,23 +188,55 @@ class _MessagesStreamMixin(Generic[ResponseFormatT]):
 
     def _process_chunk(
         self,
-        chunk: RawMessageStreamEvent
-        | ParsedMessageStreamEvent[ResponseFormatT],
+        chunk: (
+            RawMessageStreamEvent
+            | BetaRawMessageStreamEvent
+            | ParsedMessageStreamEvent[ResponseFormatT]
+            | ParsedBetaMessageStreamEvent[ResponseFormatT]
+        ),
     ) -> None:
         """Accumulate a final message snapshot from a streaming chunk."""
         global _accumulation_disabled
         stream = cast(_StreamWrapperWithStream, self).stream
         snapshot = cast(
-            "ParsedMessage[ResponseFormatT] | None",
+            "ParsedMessage[ResponseFormatT] | ParsedBetaMessage[ResponseFormatT] | None",
             getattr(stream, "current_message_snapshot", None),
         )
         if snapshot is not None:
             self._self_message = snapshot
             return
+        is_beta = self._self_is_beta or getattr(
+            chunk.__class__, "__module__", ""
+        ).startswith("anthropic.types.beta")
+        if is_beta and beta_accumulate_event is not None:
+            kwargs: dict[str, Any] = {
+                "event": chunk,
+                "current_snapshot": self._self_message,
+            }
+            if _beta_accumulate_takes_json_bufs:
+                kwargs["json_bufs"] = self._self_json_bufs
+            if _beta_accumulate_accepts_headers:
+                response = getattr(stream, "response", None)
+                request = getattr(response, "request", None)
+                headers = getattr(request, "headers", None)
+                kwargs["request_headers"] = (
+                    headers if headers is not None else _http_lib.Headers()
+                )
+            try:
+                self._self_message = beta_accumulate_event(**kwargs)
+            except BaseException as exc:
+                if not isinstance(exc, Exception):
+                    raise
+                _logger.debug(
+                    "Failed to accumulate beta stream event", exc_info=True
+                )
+            else:
+                return
+
         if accumulate_event is None or _accumulation_disabled:
             return
 
-        kwargs: dict[str, Any] = {
+        kwargs = {
             "event": cast("RawMessageStreamEvent", chunk),
             "current_snapshot": cast(
                 "ParsedMessage[ResponseFormatT] | None", self._self_message
@@ -182,7 +263,7 @@ class _MessagesStreamMixin(Generic[ResponseFormatT]):
 class MessagesStreamWrapper(
     _MessagesStreamMixin[ResponseFormatT],
     SyncStreamWrapper[
-        "RawMessageStreamEvent | ParsedMessageStreamEvent[ResponseFormatT]"
+        "RawMessageStreamEvent | BetaRawMessageStreamEvent | ParsedMessageStreamEvent[ResponseFormatT] | ParsedBetaMessageStreamEvent[ResponseFormatT]"
     ],
     Generic[ResponseFormatT],
 ):
@@ -190,9 +271,15 @@ class MessagesStreamWrapper(
 
     def __init__(
         self,
-        stream: Stream[RawMessageStreamEvent] | MessageStream[ResponseFormatT],
+        stream: (
+            Stream[RawMessageStreamEvent]
+            | Stream[BetaRawMessageStreamEvent]
+            | MessageStream[ResponseFormatT]
+            | BetaMessageStream[ResponseFormatT]
+        ),
         invocation: InferenceInvocation,
         capture_content: bool,
+        is_beta: bool = False,
     ):
         super().__init__(stream, invocation=invocation)
         self._self_invocation = invocation
@@ -200,6 +287,7 @@ class MessagesStreamWrapper(
         self._self_capture_content = capture_content
         self._self_message_telemetry_finalized = False
         self._self_json_bufs = {}
+        self._self_is_beta = is_beta
 
     @property
     def response(self) -> _http_lib.Response:
@@ -208,13 +296,23 @@ class MessagesStreamWrapper(
     @property
     def stream(
         self,
-    ) -> Stream[RawMessageStreamEvent] | MessageStream[ResponseFormatT]:
+    ) -> (
+        Stream[RawMessageStreamEvent]
+        | Stream[BetaRawMessageStreamEvent]
+        | MessageStream[ResponseFormatT]
+        | BetaMessageStream[ResponseFormatT]
+    ):
         return self._self_stream
 
     @stream.setter
     def stream(
         self,
-        stream: Stream[RawMessageStreamEvent] | MessageStream[ResponseFormatT],
+        stream: (
+            Stream[RawMessageStreamEvent]
+            | Stream[BetaRawMessageStreamEvent]
+            | MessageStream[ResponseFormatT]
+            | BetaMessageStream[ResponseFormatT]
+        ),
     ) -> None:
         self._set_stream(stream)
 
@@ -222,7 +320,7 @@ class MessagesStreamWrapper(
 class AsyncMessagesStreamWrapper(
     _MessagesStreamMixin[ResponseFormatT],
     AsyncStreamWrapper[
-        "RawMessageStreamEvent | ParsedMessageStreamEvent[ResponseFormatT]"
+        "RawMessageStreamEvent | BetaRawMessageStreamEvent | ParsedMessageStreamEvent[ResponseFormatT] | ParsedBetaMessageStreamEvent[ResponseFormatT]"
     ],
     Generic[ResponseFormatT],
 ):
@@ -230,10 +328,15 @@ class AsyncMessagesStreamWrapper(
 
     def __init__(
         self,
-        stream: AsyncStream[RawMessageStreamEvent]
-        | AsyncMessageStream[ResponseFormatT],
+        stream: (
+            AsyncStream[RawMessageStreamEvent]
+            | AsyncStream[BetaRawMessageStreamEvent]
+            | AsyncMessageStream[ResponseFormatT]
+            | BetaAsyncMessageStream[ResponseFormatT]
+        ),
         invocation: InferenceInvocation,
         capture_content: bool,
+        is_beta: bool = False,
     ):
         super().__init__(stream, invocation=invocation)
         self._self_invocation = invocation
@@ -241,6 +344,7 @@ class AsyncMessagesStreamWrapper(
         self._self_capture_content = capture_content
         self._self_message_telemetry_finalized = False
         self._self_json_bufs = {}
+        self._self_is_beta = is_beta
 
     @property
     def response(self) -> _http_lib.Response:
@@ -251,22 +355,28 @@ class AsyncMessagesStreamWrapper(
         self,
     ) -> (
         AsyncStream[RawMessageStreamEvent]
+        | AsyncStream[BetaRawMessageStreamEvent]
         | AsyncMessageStream[ResponseFormatT]
+        | BetaAsyncMessageStream[ResponseFormatT]
     ):
         return self._self_stream
 
     @stream.setter
     def stream(
         self,
-        stream: AsyncStream[RawMessageStreamEvent]
-        | AsyncMessageStream[ResponseFormatT],
+        stream: (
+            AsyncStream[RawMessageStreamEvent]
+            | AsyncStream[BetaRawMessageStreamEvent]
+            | AsyncMessageStream[ResponseFormatT]
+            | BetaAsyncMessageStream[ResponseFormatT]
+        ),
     ) -> None:
         self._set_stream(stream)
 
 
 class MessagesStreamManagerWrapper(
     SyncStreamManagerWrapper[
-        "MessageStream[ResponseFormatT]",
+        "MessageStream[ResponseFormatT] | BetaMessageStream[ResponseFormatT]",
         "InferenceInvocation",
         "MessagesStreamWrapper[ResponseFormatT]",
     ],
@@ -276,26 +386,36 @@ class MessagesStreamManagerWrapper(
 
     def __init__(
         self,
-        manager: MessageStreamManager[ResponseFormatT],
+        manager: (
+            MessageStreamManager[ResponseFormatT]
+            | BetaMessageStreamManager[ResponseFormatT]
+        ),
         invocation_factory: Callable[[], InferenceInvocation],
         capture_content: bool,
+        is_beta: bool = False,
     ):
         super().__init__(manager, invocation_factory)
         self._self_capture_content = capture_content
+        self._self_is_beta = is_beta
 
     def _wrap_stream(
         self,
-        stream: MessageStream[ResponseFormatT],
+        stream: (
+            MessageStream[ResponseFormatT] | BetaMessageStream[ResponseFormatT]
+        ),
         invocation: InferenceInvocation,
     ) -> MessagesStreamWrapper[ResponseFormatT]:
         return MessagesStreamWrapper(
-            stream, invocation, self._self_capture_content
+            stream,
+            invocation,
+            self._self_capture_content,
+            is_beta=self._self_is_beta,
         )
 
 
 class AsyncMessagesStreamManagerWrapper(
     AsyncStreamManagerWrapper[
-        "AsyncMessageStream[ResponseFormatT]",
+        "AsyncMessageStream[ResponseFormatT] | BetaAsyncMessageStream[ResponseFormatT]",
         "InferenceInvocation",
         "AsyncMessagesStreamWrapper[ResponseFormatT]",
     ],
@@ -309,18 +429,29 @@ class AsyncMessagesStreamManagerWrapper(
 
     def __init__(
         self,
-        manager: AsyncMessageStreamManager[ResponseFormatT],
+        manager: (
+            AsyncMessageStreamManager[ResponseFormatT]
+            | BetaAsyncMessageStreamManager[ResponseFormatT]
+        ),
         invocation_factory: Callable[[], InferenceInvocation],
         capture_content: bool,
+        is_beta: bool = False,
     ):
         super().__init__(manager, invocation_factory)
         self._self_capture_content = capture_content
+        self._self_is_beta = is_beta
 
     def _wrap_stream(
         self,
-        stream: AsyncMessageStream[ResponseFormatT],
+        stream: (
+            AsyncMessageStream[ResponseFormatT]
+            | BetaAsyncMessageStream[ResponseFormatT]
+        ),
         invocation: InferenceInvocation,
     ) -> AsyncMessagesStreamWrapper[ResponseFormatT]:
         return AsyncMessagesStreamWrapper(
-            stream, invocation, self._self_capture_content
+            stream,
+            invocation,
+            self._self_capture_content,
+            is_beta=self._self_is_beta,
         )

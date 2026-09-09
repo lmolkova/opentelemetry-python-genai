@@ -40,6 +40,54 @@ if TYPE_CHECKING:
         ContentBlockParam,
         RawContentBlockDelta,
     )
+    from anthropic.types.beta import (
+        BetaContentBlock,
+        BetaContentBlockParam,
+        BetaMCPToolResultBlock,
+        BetaMCPToolUseBlock,
+        BetaRedactedThinkingBlock,
+        BetaServerToolUseBlock,
+        BetaTextBlock,
+        BetaThinkingBlock,
+        BetaToolUseBlock,
+        BetaWebSearchToolResultBlock,
+    )
+    from anthropic.types.beta import (
+        BetaMessage as AnthropicBetaMessage,
+    )
+else:
+    try:
+        import anthropic.types.beta as _beta_types
+    except (ImportError, AttributeError):
+        _beta_types = None
+
+    def _get_beta_type(name: str) -> type:
+        cls = getattr(_beta_types, name, None)
+        return cls if isinstance(cls, type) else type(name, (), {})
+
+    AnthropicBetaMessage = _get_beta_type("BetaMessage")
+    BetaMCPToolResultBlock = _get_beta_type("BetaMCPToolResultBlock")
+    BetaMCPToolUseBlock = _get_beta_type("BetaMCPToolUseBlock")
+    BetaRedactedThinkingBlock = _get_beta_type("BetaRedactedThinkingBlock")
+    BetaServerToolUseBlock = _get_beta_type("BetaServerToolUseBlock")
+    BetaTextBlock = _get_beta_type("BetaTextBlock")
+    BetaThinkingBlock = _get_beta_type("BetaThinkingBlock")
+    BetaToolUseBlock = _get_beta_type("BetaToolUseBlock")
+    BetaWebSearchToolResultBlock = _get_beta_type(
+        "BetaWebSearchToolResultBlock"
+    )
+
+
+__all__ = [
+    "AnthropicBetaMessage",
+    "convert_content_to_parts",
+    "create_stream_block_state",
+    "is_anthropic_async_stream",
+    "is_anthropic_stream",
+    "normalize_finish_reason",
+    "stream_block_state_to_part",
+    "update_stream_block_state",
+]
 
 
 def is_anthropic_stream(value: object) -> bool:
@@ -129,7 +177,7 @@ def _convert_dict_block_to_part(
         text = block.get("text")
         return TextPart(content=str(text) if text is not None else "")
 
-    if block_type == "tool_use":
+    if block_type in ("tool_use", "server_tool_use", "mcp_tool_use"):
         inp = block.get("input")
         return ToolCallRequestPart(
             arguments=inp if isinstance(inp, dict) else None,
@@ -137,7 +185,11 @@ def _convert_dict_block_to_part(
             id=str(block.get("id", "")),
         )
 
-    if block_type == "tool_result":
+    if block_type in (
+        "tool_result",
+        "web_search_tool_result",
+        "mcp_tool_result",
+    ):
         return ToolCallResponsePart(
             response=block.get("content"),
             id=str(block.get("tool_use_id", "")),
@@ -156,24 +208,53 @@ def _convert_dict_block_to_part(
 
 
 def _convert_content_block_to_part(
-    block: ContentBlock | ContentBlockParam,
+    block: ContentBlock
+    | ContentBlockParam
+    | BetaContentBlock
+    | BetaContentBlockParam,
 ) -> MessagePart | None:
     """Convert an Anthropic content block to a MessagePart."""
-    if isinstance(block, TextBlock):
+    if isinstance(block, (TextBlock, BetaTextBlock)):
         return TextPart(content=block.text)
 
-    if isinstance(block, (ToolUseBlock, ServerToolUseBlock)):
+    if isinstance(
+        block,
+        (
+            ToolUseBlock,
+            ServerToolUseBlock,
+            BetaToolUseBlock,
+            BetaServerToolUseBlock,
+            BetaMCPToolUseBlock,
+        ),
+    ):
         return ToolCallRequestPart(
             arguments=block.input, name=block.name, id=block.id
         )
 
-    if isinstance(block, (ThinkingBlock, RedactedThinkingBlock)):
+    if isinstance(
+        block,
+        (
+            ThinkingBlock,
+            RedactedThinkingBlock,
+            BetaThinkingBlock,
+            BetaRedactedThinkingBlock,
+        ),
+    ):
         content = (
-            block.thinking if isinstance(block, ThinkingBlock) else block.data
+            block.thinking
+            if isinstance(block, (ThinkingBlock, BetaThinkingBlock))
+            else block.data
         )
         return ReasoningPart(content=content)
 
-    if isinstance(block, WebSearchToolResultBlock):
+    if isinstance(
+        block,
+        (
+            WebSearchToolResultBlock,
+            BetaWebSearchToolResultBlock,
+            BetaMCPToolResultBlock,
+        ),
+    ):
         return ToolCallResponsePart(
             response=block.model_dump().get("content"),
             id=block.tool_use_id,
@@ -185,7 +266,14 @@ def _convert_content_block_to_part(
 
 
 def convert_content_to_parts(
-    content: str | Iterable[ContentBlock | ContentBlockParam] | None,
+    content: str
+    | Iterable[
+        ContentBlock
+        | ContentBlockParam
+        | BetaContentBlock
+        | BetaContentBlockParam
+    ]
+    | None,
 ) -> list[MessagePart]:
     if content is None:
         return []
