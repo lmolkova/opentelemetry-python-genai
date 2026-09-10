@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import timeit
-from typing import Final
 
 from opentelemetry._logs import Logger
 from opentelemetry.metrics import Meter
@@ -12,6 +11,7 @@ from opentelemetry.semconv._incubating.attributes import (
     gen_ai_attributes as GenAI,
 )
 from opentelemetry.trace import SpanKind, Tracer
+from opentelemetry.util.genai._instruments import _Instruments
 from opentelemetry.util.genai._invocation import Error, GenAIInvocation
 from opentelemetry.util.genai.completion_hook import CompletionHook
 from opentelemetry.util.genai.utils import (
@@ -19,24 +19,6 @@ from opentelemetry.util.genai.utils import (
     gen_ai_json_dumps,
 )
 from opentelemetry.util.types import AnyValue, AttributeValue
-
-_GEN_AI_EXECUTE_TOOL_DURATION: Final = "gen_ai.execute_tool.duration"
-_GEN_AI_EXECUTE_TOOL_DURATION_BUCKETS: Final = [
-    0.01,
-    0.02,
-    0.04,
-    0.08,
-    0.16,
-    0.32,
-    0.64,
-    1.28,
-    2.56,
-    5.12,
-    10.24,
-    20.48,
-    40.96,
-    81.92,
-]
 
 
 def _any_value_to_attribute_value(value: AnyValue) -> AttributeValue | None:
@@ -76,7 +58,7 @@ class ToolInvocation(GenAIInvocation):
     def __init__(
         self,
         tracer: Tracer,
-        meter: Meter,
+        meter: Meter | _Instruments,
         logger: Logger,
         completion_hook: CompletionHook,
         name: str,
@@ -182,13 +164,7 @@ class ToolInvocation(GenAIInvocation):
             timeit.default_timer() - self._monotonic_start_s,
             0.0,
         )
-        histogram = self._meter.create_histogram(
-            name=_GEN_AI_EXECUTE_TOOL_DURATION,
-            description="Measures the duration of a tool execution.",
-            unit="s",
-            explicit_bucket_boundaries_advisory=_GEN_AI_EXECUTE_TOOL_DURATION_BUCKETS,
-        )
-        histogram.record(
+        self._instruments.execute_tool_duration.record(
             duration_seconds,
             attributes=self._get_metric_attributes(),
             context=self._span_context,

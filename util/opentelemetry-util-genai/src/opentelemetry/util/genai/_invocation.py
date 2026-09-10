@@ -16,15 +16,15 @@ from typing_extensions import Self
 
 from opentelemetry._logs import Logger, LogRecord
 from opentelemetry.context import Context, attach, detach
-from opentelemetry.metrics import Histogram, Meter
+from opentelemetry.metrics import Meter
 from opentelemetry.semconv._incubating.attributes import (
     gen_ai_attributes as GenAI,
 )
-from opentelemetry.semconv._incubating.metrics import gen_ai_metrics
 from opentelemetry.semconv.attributes import error_attributes
 from opentelemetry.trace import INVALID_SPAN as _INVALID_SPAN
 from opentelemetry.trace import Span, SpanKind, Tracer, set_span_in_context
 from opentelemetry.trace.status import Status, StatusCode
+from opentelemetry.util.genai._instruments import _Instruments
 from opentelemetry.util.genai.completion_hook import (
     CompletionHook,
     _NoOpCompletionHook,
@@ -47,40 +47,6 @@ from opentelemetry.util.types import AttributeValue
 
 _GEN_AI_PROMPT_VARIABLE_PREFIX: str = "gen_ai.prompt.variable."
 
-_GEN_AI_CLIENT_OPERATION_DURATION_BUCKETS = [
-    0.01,
-    0.02,
-    0.04,
-    0.08,
-    0.16,
-    0.32,
-    0.64,
-    1.28,
-    2.56,
-    5.12,
-    10.24,
-    20.48,
-    40.96,
-    81.92,
-]
-
-_GEN_AI_CLIENT_TOKEN_USAGE_BUCKETS = [
-    1,
-    4,
-    16,
-    64,
-    256,
-    1024,
-    4096,
-    16384,
-    65536,
-    262144,
-    1048576,
-    4194304,
-    16777216,
-    67108864,
-]
-
 
 ContextToken: TypeAlias = Token[Context]
 
@@ -99,7 +65,7 @@ class GenAIInvocation(AbstractContextManager["GenAIInvocation"]):
         # Individual components instead of TelemetryHandler to avoid a circular
         # import between handler.py and the invocation modules.
         tracer: Tracer,
-        meter: Meter,
+        meter: Meter | _Instruments,
         logger: Logger,
         completion_hook: CompletionHook,
         operation_name: str,
@@ -112,7 +78,9 @@ class GenAIInvocation(AbstractContextManager["GenAIInvocation"]):
         content_capturing_mode: ContentCapturingMode | None = None,
     ) -> None:
         self._tracer = tracer
-        self._meter = meter
+        self._instruments: _Instruments = (
+            meter if isinstance(meter, _Instruments) else _Instruments(meter)
+        )
         self._logger = logger
         self._completion_hook = completion_hook
         self._error_type_resolver = error_type_resolver
@@ -143,7 +111,6 @@ class GenAIInvocation(AbstractContextManager["GenAIInvocation"]):
         self._request_stream: bool | None = None
         self._ttfc_seconds: float | None = None
         self._stream_last_chunk_at: float | None = None
-        self._tpc_histogram: Histogram | None = None
 
     @property
     def should_capture_content(self) -> bool:
@@ -212,26 +179,13 @@ class GenAIInvocation(AbstractContextManager["GenAIInvocation"]):
         attributes = self._get_metric_attributes()
         if self._ttfc_seconds is None:
             self._ttfc_seconds = delta
-            ttfc_histogram = self._meter.create_histogram(
-                name=gen_ai_metrics.GEN_AI_CLIENT_OPERATION_TIME_TO_FIRST_CHUNK,
-                description="Time to receive the first chunk, measured from when the client issues the generation request to when the first chunk is received in the response stream.",
-                unit="s",
-                explicit_bucket_boundaries_advisory=_GEN_AI_CLIENT_OPERATION_DURATION_BUCKETS,
-            )
-            ttfc_histogram.record(
+            self._instruments.time_to_first_chunk.record(
                 delta,
                 attributes=attributes,
                 context=self._span_context,
             )
         else:
-            if self._tpc_histogram is None:
-                self._tpc_histogram = self._meter.create_histogram(
-                    name=gen_ai_metrics.GEN_AI_CLIENT_OPERATION_TIME_PER_OUTPUT_CHUNK,
-                    description="Time per output chunk, recorded for each chunk received after the first one, measured as the time elapsed from the end of the previous chunk to the end of the current chunk.",
-                    unit="s",
-                    explicit_bucket_boundaries_advisory=_GEN_AI_CLIENT_OPERATION_DURATION_BUCKETS,
-                )
-            self._tpc_histogram.record(
+            self._instruments.time_per_output_chunk.record(
                 delta,
                 attributes=attributes,
                 context=self._span_context,
@@ -244,13 +198,7 @@ class GenAIInvocation(AbstractContextManager["GenAIInvocation"]):
             timeit.default_timer() - self._monotonic_start_s,
             0.0,
         )
-        duration_histogram = self._meter.create_histogram(
-            name=gen_ai_metrics.GEN_AI_CLIENT_OPERATION_DURATION,
-            description="Duration of GenAI client operation",
-            unit="s",
-            explicit_bucket_boundaries_advisory=_GEN_AI_CLIENT_OPERATION_DURATION_BUCKETS,
-        )
-        duration_histogram.record(
+        self._instruments.operation_duration.record(
             duration_seconds,
             attributes=attributes,
             context=self._span_context,
@@ -258,14 +206,8 @@ class GenAIInvocation(AbstractContextManager["GenAIInvocation"]):
 
         token_counts = self._get_metric_token_counts()
         if token_counts:
-            token_histogram = self._meter.create_histogram(
-                name=gen_ai_metrics.GEN_AI_CLIENT_TOKEN_USAGE,
-                description="Number of input and output tokens used by GenAI clients",
-                unit="{token}",
-                explicit_bucket_boundaries_advisory=_GEN_AI_CLIENT_TOKEN_USAGE_BUCKETS,
-            )
             for token_type, token_count in token_counts.items():
-                token_histogram.record(
+                self._instruments.token_usage.record(
                     token_count,
                     attributes=attributes
                     | {GenAI.GEN_AI_TOKEN_TYPE: token_type},
