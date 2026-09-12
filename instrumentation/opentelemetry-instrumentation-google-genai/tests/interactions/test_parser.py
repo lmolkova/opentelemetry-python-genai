@@ -167,6 +167,9 @@ class TestInteractionsParser(unittest.TestCase):
     def test_response_to_messages_includes_tool_steps(self) -> None:
         interaction = Interaction.model_validate(
             {
+                "id": "interaction-1",
+                "created": "2026-06-24T18:51:26Z",
+                "updated": "2026-06-24T18:51:26Z",
                 "status": "completed",
                 "output_text": "Search complete",
                 "steps": [
