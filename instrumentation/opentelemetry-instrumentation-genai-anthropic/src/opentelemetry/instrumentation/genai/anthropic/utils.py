@@ -9,7 +9,7 @@ import base64
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Protocol, cast, runtime_checkable
+from typing import TYPE_CHECKING, cast
 
 from anthropic.types import (
     InputJSONDelta,
@@ -41,12 +41,6 @@ _SERVER_TOOL_RESULT_TYPES = {
     "text_editor_code_execution_tool_result": "text_editor_code_execution",
     "tool_search_tool_result": "tool_search",
 }
-
-
-@runtime_checkable
-class _ModelDumpable(Protocol):
-    def model_dump(self, *, exclude_none: bool = False) -> dict[str, Any]: ...
-
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -136,7 +130,7 @@ def _extract_base64_blob(source: object, modality: str) -> BlobPart | None:
 
 
 def _convert_dict_block_to_part(
-    block: Mapping[str, Any],
+    block: Mapping[str, object],
 ) -> MessagePart | None:
     """Convert a request-param content block (TypedDict/dict) to a MessagePart."""
     block_type = block.get("type")
@@ -222,14 +216,18 @@ def _convert_content_block_to_part(
         )
         return ReasoningPart(content=content)
 
-    if getattr(
-        block, "type", None
-    ) in _SERVER_TOOL_RESULT_TYPES and isinstance(block, _ModelDumpable):
-        return _convert_dict_block_to_part(block.model_dump(exclude_none=True))
+    if getattr(block, "type", None) in _SERVER_TOOL_RESULT_TYPES:
+        model_dump = getattr(block, "model_dump", None)
+        if callable(model_dump):
+            dumped = model_dump(exclude_none=True)
+            if isinstance(dumped, Mapping):
+                return _convert_dict_block_to_part(
+                    cast(Mapping[str, object], dumped)
+                )
 
     if not hasattr(block, "get"):
         return None
-    return _convert_dict_block_to_part(cast(Mapping[str, Any], block))
+    return _convert_dict_block_to_part(cast(Mapping[str, object], block))
 
 
 def convert_content_to_parts(
