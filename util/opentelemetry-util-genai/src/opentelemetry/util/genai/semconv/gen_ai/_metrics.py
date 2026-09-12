@@ -4,9 +4,11 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections import ChainMap
+from collections.abc import Mapping, MutableMapping, Sequence
 from enum import Enum
 from functools import cached_property
+from typing import cast
 
 from opentelemetry.context import Context
 from opentelemetry.metrics import Histogram, Meter
@@ -27,6 +29,22 @@ from opentelemetry.util.types import AttributeValue
 
 def _value(value: AttributeValue | Enum) -> AttributeValue:
     return value.value if isinstance(value, Enum) else value
+
+
+def _combine_attributes(
+    typed_attributes: dict[str, AttributeValue],
+    additional_attributes: Mapping[str, AttributeValue] | None,
+) -> Mapping[str, AttributeValue]:
+    if not additional_attributes:
+        return typed_attributes
+    if not typed_attributes:
+        return additional_attributes
+    return ChainMap(
+        typed_attributes,
+        cast(
+            "MutableMapping[str, AttributeValue]", additional_attributes
+        ),
+    )
 
 
 class _Metrics:
@@ -82,28 +100,32 @@ class _Metrics:
         context: Context | None = None,
     ) -> None:
         """Record `gen_ai.client.token.usage`."""
-        metric_attributes = dict(additional_attributes or {})
+        typed_attributes: dict[str, AttributeValue] = {}
         if server_address is not None:
-            metric_attributes[ServerAttributes.SERVER_ADDRESS] = _value(
+            typed_attributes[ServerAttributes.SERVER_ADDRESS] = _value(
                 server_address
             )
         if server_port is not None:
-            metric_attributes[ServerAttributes.SERVER_PORT] = _value(
+            typed_attributes[ServerAttributes.SERVER_PORT] = _value(
                 server_port
             )
         if request_model is not None:
-            metric_attributes[Attr.GEN_AI_REQUEST_MODEL] = _value(
+            typed_attributes[Attr.GEN_AI_REQUEST_MODEL] = _value(
                 request_model
             )
-        metric_attributes[Attr.GEN_AI_OPERATION_NAME] = _value(operation_name)
+        typed_attributes[Attr.GEN_AI_OPERATION_NAME] = _value(operation_name)
         if response_model is not None:
-            metric_attributes[Attr.GEN_AI_RESPONSE_MODEL] = _value(
+            typed_attributes[Attr.GEN_AI_RESPONSE_MODEL] = _value(
                 response_model
             )
-        metric_attributes[Attr.GEN_AI_PROVIDER_NAME] = _value(provider_name)
-        metric_attributes[Attr.GEN_AI_TOKEN_TYPE] = _value(token_type)
+        typed_attributes[Attr.GEN_AI_PROVIDER_NAME] = _value(provider_name)
+        typed_attributes[Attr.GEN_AI_TOKEN_TYPE] = _value(token_type)
         self._client_token_usage_instrument.record(
-            value, attributes=metric_attributes, context=context
+            value,
+            attributes=_combine_attributes(
+                typed_attributes, additional_attributes
+            ),
+            context=context,
         )
 
     @cached_property
@@ -132,32 +154,36 @@ class _Metrics:
         context: Context | None = None,
     ) -> None:
         """Record `gen_ai.client.operation.duration`."""
-        metric_attributes = dict(additional_attributes or {})
+        typed_attributes: dict[str, AttributeValue] = {}
         if server_address is not None:
-            metric_attributes[ServerAttributes.SERVER_ADDRESS] = _value(
+            typed_attributes[ServerAttributes.SERVER_ADDRESS] = _value(
                 server_address
             )
         if server_port is not None:
-            metric_attributes[ServerAttributes.SERVER_PORT] = _value(
+            typed_attributes[ServerAttributes.SERVER_PORT] = _value(
                 server_port
             )
         if request_model is not None:
-            metric_attributes[Attr.GEN_AI_REQUEST_MODEL] = _value(
+            typed_attributes[Attr.GEN_AI_REQUEST_MODEL] = _value(
                 request_model
             )
-        metric_attributes[Attr.GEN_AI_OPERATION_NAME] = _value(operation_name)
+        typed_attributes[Attr.GEN_AI_OPERATION_NAME] = _value(operation_name)
         if response_model is not None:
-            metric_attributes[Attr.GEN_AI_RESPONSE_MODEL] = _value(
+            typed_attributes[Attr.GEN_AI_RESPONSE_MODEL] = _value(
                 response_model
             )
         if provider_name is not None:
-            metric_attributes[Attr.GEN_AI_PROVIDER_NAME] = _value(
+            typed_attributes[Attr.GEN_AI_PROVIDER_NAME] = _value(
                 provider_name
             )
         if error_type is not None:
-            metric_attributes[ErrorAttributes.ERROR_TYPE] = _value(error_type)
+            typed_attributes[ErrorAttributes.ERROR_TYPE] = _value(error_type)
         self._client_operation_duration_instrument.record(
-            value, attributes=metric_attributes, context=context
+            value,
+            attributes=_combine_attributes(
+                typed_attributes, additional_attributes
+            ),
+            context=context,
         )
 
     @cached_property
@@ -185,27 +211,31 @@ class _Metrics:
         context: Context | None = None,
     ) -> None:
         """Record `gen_ai.client.operation.time_to_first_chunk`."""
-        metric_attributes = dict(additional_attributes or {})
+        typed_attributes: dict[str, AttributeValue] = {}
         if server_address is not None:
-            metric_attributes[ServerAttributes.SERVER_ADDRESS] = _value(
+            typed_attributes[ServerAttributes.SERVER_ADDRESS] = _value(
                 server_address
             )
         if server_port is not None:
-            metric_attributes[ServerAttributes.SERVER_PORT] = _value(
+            typed_attributes[ServerAttributes.SERVER_PORT] = _value(
                 server_port
             )
         if request_model is not None:
-            metric_attributes[Attr.GEN_AI_REQUEST_MODEL] = _value(
+            typed_attributes[Attr.GEN_AI_REQUEST_MODEL] = _value(
                 request_model
             )
-        metric_attributes[Attr.GEN_AI_OPERATION_NAME] = _value(operation_name)
+        typed_attributes[Attr.GEN_AI_OPERATION_NAME] = _value(operation_name)
         if response_model is not None:
-            metric_attributes[Attr.GEN_AI_RESPONSE_MODEL] = _value(
+            typed_attributes[Attr.GEN_AI_RESPONSE_MODEL] = _value(
                 response_model
             )
-        metric_attributes[Attr.GEN_AI_PROVIDER_NAME] = _value(provider_name)
+        typed_attributes[Attr.GEN_AI_PROVIDER_NAME] = _value(provider_name)
         self._client_operation_time_to_first_chunk_instrument.record(
-            value, attributes=metric_attributes, context=context
+            value,
+            attributes=_combine_attributes(
+                typed_attributes, additional_attributes
+            ),
+            context=context,
         )
 
     @cached_property
@@ -233,27 +263,31 @@ class _Metrics:
         context: Context | None = None,
     ) -> None:
         """Record `gen_ai.client.operation.time_per_output_chunk`."""
-        metric_attributes = dict(additional_attributes or {})
+        typed_attributes: dict[str, AttributeValue] = {}
         if server_address is not None:
-            metric_attributes[ServerAttributes.SERVER_ADDRESS] = _value(
+            typed_attributes[ServerAttributes.SERVER_ADDRESS] = _value(
                 server_address
             )
         if server_port is not None:
-            metric_attributes[ServerAttributes.SERVER_PORT] = _value(
+            typed_attributes[ServerAttributes.SERVER_PORT] = _value(
                 server_port
             )
         if request_model is not None:
-            metric_attributes[Attr.GEN_AI_REQUEST_MODEL] = _value(
+            typed_attributes[Attr.GEN_AI_REQUEST_MODEL] = _value(
                 request_model
             )
-        metric_attributes[Attr.GEN_AI_OPERATION_NAME] = _value(operation_name)
+        typed_attributes[Attr.GEN_AI_OPERATION_NAME] = _value(operation_name)
         if response_model is not None:
-            metric_attributes[Attr.GEN_AI_RESPONSE_MODEL] = _value(
+            typed_attributes[Attr.GEN_AI_RESPONSE_MODEL] = _value(
                 response_model
             )
-        metric_attributes[Attr.GEN_AI_PROVIDER_NAME] = _value(provider_name)
+        typed_attributes[Attr.GEN_AI_PROVIDER_NAME] = _value(provider_name)
         self._client_operation_time_per_output_chunk_instrument.record(
-            value, attributes=metric_attributes, context=context
+            value,
+            attributes=_combine_attributes(
+                typed_attributes, additional_attributes
+            ),
+            context=context,
         )
 
     @cached_property
@@ -282,29 +316,33 @@ class _Metrics:
         context: Context | None = None,
     ) -> None:
         """Record `gen_ai.server.request.duration`."""
-        metric_attributes = dict(additional_attributes or {})
+        typed_attributes: dict[str, AttributeValue] = {}
         if server_address is not None:
-            metric_attributes[ServerAttributes.SERVER_ADDRESS] = _value(
+            typed_attributes[ServerAttributes.SERVER_ADDRESS] = _value(
                 server_address
             )
         if server_port is not None:
-            metric_attributes[ServerAttributes.SERVER_PORT] = _value(
+            typed_attributes[ServerAttributes.SERVER_PORT] = _value(
                 server_port
             )
         if request_model is not None:
-            metric_attributes[Attr.GEN_AI_REQUEST_MODEL] = _value(
+            typed_attributes[Attr.GEN_AI_REQUEST_MODEL] = _value(
                 request_model
             )
-        metric_attributes[Attr.GEN_AI_OPERATION_NAME] = _value(operation_name)
+        typed_attributes[Attr.GEN_AI_OPERATION_NAME] = _value(operation_name)
         if response_model is not None:
-            metric_attributes[Attr.GEN_AI_RESPONSE_MODEL] = _value(
+            typed_attributes[Attr.GEN_AI_RESPONSE_MODEL] = _value(
                 response_model
             )
-        metric_attributes[Attr.GEN_AI_PROVIDER_NAME] = _value(provider_name)
+        typed_attributes[Attr.GEN_AI_PROVIDER_NAME] = _value(provider_name)
         if error_type is not None:
-            metric_attributes[ErrorAttributes.ERROR_TYPE] = _value(error_type)
+            typed_attributes[ErrorAttributes.ERROR_TYPE] = _value(error_type)
         self._server_request_duration_instrument.record(
-            value, attributes=metric_attributes, context=context
+            value,
+            attributes=_combine_attributes(
+                typed_attributes, additional_attributes
+            ),
+            context=context,
         )
 
     @cached_property
@@ -332,27 +370,31 @@ class _Metrics:
         context: Context | None = None,
     ) -> None:
         """Record `gen_ai.server.time_per_output_token`."""
-        metric_attributes = dict(additional_attributes or {})
+        typed_attributes: dict[str, AttributeValue] = {}
         if server_address is not None:
-            metric_attributes[ServerAttributes.SERVER_ADDRESS] = _value(
+            typed_attributes[ServerAttributes.SERVER_ADDRESS] = _value(
                 server_address
             )
         if server_port is not None:
-            metric_attributes[ServerAttributes.SERVER_PORT] = _value(
+            typed_attributes[ServerAttributes.SERVER_PORT] = _value(
                 server_port
             )
         if request_model is not None:
-            metric_attributes[Attr.GEN_AI_REQUEST_MODEL] = _value(
+            typed_attributes[Attr.GEN_AI_REQUEST_MODEL] = _value(
                 request_model
             )
-        metric_attributes[Attr.GEN_AI_OPERATION_NAME] = _value(operation_name)
+        typed_attributes[Attr.GEN_AI_OPERATION_NAME] = _value(operation_name)
         if response_model is not None:
-            metric_attributes[Attr.GEN_AI_RESPONSE_MODEL] = _value(
+            typed_attributes[Attr.GEN_AI_RESPONSE_MODEL] = _value(
                 response_model
             )
-        metric_attributes[Attr.GEN_AI_PROVIDER_NAME] = _value(provider_name)
+        typed_attributes[Attr.GEN_AI_PROVIDER_NAME] = _value(provider_name)
         self._server_time_per_output_token_instrument.record(
-            value, attributes=metric_attributes, context=context
+            value,
+            attributes=_combine_attributes(
+                typed_attributes, additional_attributes
+            ),
+            context=context,
         )
 
     @cached_property
@@ -380,27 +422,31 @@ class _Metrics:
         context: Context | None = None,
     ) -> None:
         """Record `gen_ai.server.time_to_first_token`."""
-        metric_attributes = dict(additional_attributes or {})
+        typed_attributes: dict[str, AttributeValue] = {}
         if server_address is not None:
-            metric_attributes[ServerAttributes.SERVER_ADDRESS] = _value(
+            typed_attributes[ServerAttributes.SERVER_ADDRESS] = _value(
                 server_address
             )
         if server_port is not None:
-            metric_attributes[ServerAttributes.SERVER_PORT] = _value(
+            typed_attributes[ServerAttributes.SERVER_PORT] = _value(
                 server_port
             )
         if request_model is not None:
-            metric_attributes[Attr.GEN_AI_REQUEST_MODEL] = _value(
+            typed_attributes[Attr.GEN_AI_REQUEST_MODEL] = _value(
                 request_model
             )
-        metric_attributes[Attr.GEN_AI_OPERATION_NAME] = _value(operation_name)
+        typed_attributes[Attr.GEN_AI_OPERATION_NAME] = _value(operation_name)
         if response_model is not None:
-            metric_attributes[Attr.GEN_AI_RESPONSE_MODEL] = _value(
+            typed_attributes[Attr.GEN_AI_RESPONSE_MODEL] = _value(
                 response_model
             )
-        metric_attributes[Attr.GEN_AI_PROVIDER_NAME] = _value(provider_name)
+        typed_attributes[Attr.GEN_AI_PROVIDER_NAME] = _value(provider_name)
         self._server_time_to_first_token_instrument.record(
-            value, attributes=metric_attributes, context=context
+            value,
+            attributes=_combine_attributes(
+                typed_attributes, additional_attributes
+            ),
+            context=context,
         )
 
     @cached_property
@@ -424,15 +470,19 @@ class _Metrics:
         context: Context | None = None,
     ) -> None:
         """Record `gen_ai.invoke_workflow.duration`."""
-        metric_attributes = dict(additional_attributes or {})
+        typed_attributes: dict[str, AttributeValue] = {}
         if error_type is not None:
-            metric_attributes[ErrorAttributes.ERROR_TYPE] = _value(error_type)
+            typed_attributes[ErrorAttributes.ERROR_TYPE] = _value(error_type)
         if workflow_name is not None:
-            metric_attributes[Attr.GEN_AI_WORKFLOW_NAME] = _value(
+            typed_attributes[Attr.GEN_AI_WORKFLOW_NAME] = _value(
                 workflow_name
             )
         self._invoke_workflow_duration_instrument.record(
-            value, attributes=metric_attributes, context=context
+            value,
+            attributes=_combine_attributes(
+                typed_attributes, additional_attributes
+            ),
+            context=context,
         )
 
     @cached_property
@@ -457,17 +507,21 @@ class _Metrics:
         context: Context | None = None,
     ) -> None:
         """Record `gen_ai.invoke_agent.duration`."""
-        metric_attributes = dict(additional_attributes or {})
+        typed_attributes: dict[str, AttributeValue] = {}
         if error_type is not None:
-            metric_attributes[ErrorAttributes.ERROR_TYPE] = _value(error_type)
+            typed_attributes[ErrorAttributes.ERROR_TYPE] = _value(error_type)
         if agent_name is not None:
-            metric_attributes[Attr.GEN_AI_AGENT_NAME] = _value(agent_name)
+            typed_attributes[Attr.GEN_AI_AGENT_NAME] = _value(agent_name)
         if request_model is not None:
-            metric_attributes[Attr.GEN_AI_REQUEST_MODEL] = _value(
+            typed_attributes[Attr.GEN_AI_REQUEST_MODEL] = _value(
                 request_model
             )
         self._invoke_agent_duration_instrument.record(
-            value, attributes=metric_attributes, context=context
+            value,
+            attributes=_combine_attributes(
+                typed_attributes, additional_attributes
+            ),
+            context=context,
         )
 
     @cached_property
@@ -490,11 +544,15 @@ class _Metrics:
         context: Context | None = None,
     ) -> None:
         """Record `gen_ai.invoke_agent.inference_calls`."""
-        metric_attributes = dict(additional_attributes or {})
+        typed_attributes: dict[str, AttributeValue] = {}
         if agent_name is not None:
-            metric_attributes[Attr.GEN_AI_AGENT_NAME] = _value(agent_name)
+            typed_attributes[Attr.GEN_AI_AGENT_NAME] = _value(agent_name)
         self._invoke_agent_inference_calls_instrument.record(
-            value, attributes=metric_attributes, context=context
+            value,
+            attributes=_combine_attributes(
+                typed_attributes, additional_attributes
+            ),
+            context=context,
         )
 
     @cached_property
@@ -517,11 +575,15 @@ class _Metrics:
         context: Context | None = None,
     ) -> None:
         """Record `gen_ai.invoke_agent.tool_calls`."""
-        metric_attributes = dict(additional_attributes or {})
+        typed_attributes: dict[str, AttributeValue] = {}
         if agent_name is not None:
-            metric_attributes[Attr.GEN_AI_AGENT_NAME] = _value(agent_name)
+            typed_attributes[Attr.GEN_AI_AGENT_NAME] = _value(agent_name)
         self._invoke_agent_tool_calls_instrument.record(
-            value, attributes=metric_attributes, context=context
+            value,
+            attributes=_combine_attributes(
+                typed_attributes, additional_attributes
+            ),
+            context=context,
         )
 
     @cached_property
@@ -547,16 +609,20 @@ class _Metrics:
         context: Context | None = None,
     ) -> None:
         """Record `gen_ai.execute_tool.duration`."""
-        metric_attributes = dict(additional_attributes or {})
+        typed_attributes: dict[str, AttributeValue] = {}
         if error_type is not None:
-            metric_attributes[ErrorAttributes.ERROR_TYPE] = _value(error_type)
-        metric_attributes[Attr.GEN_AI_TOOL_NAME] = _value(tool_name)
+            typed_attributes[ErrorAttributes.ERROR_TYPE] = _value(error_type)
+        typed_attributes[Attr.GEN_AI_TOOL_NAME] = _value(tool_name)
         if tool_type is not None:
-            metric_attributes[Attr.GEN_AI_TOOL_TYPE] = _value(tool_type)
+            typed_attributes[Attr.GEN_AI_TOOL_TYPE] = _value(tool_type)
         if agent_name is not None:
-            metric_attributes[Attr.GEN_AI_AGENT_NAME] = _value(agent_name)
+            typed_attributes[Attr.GEN_AI_AGENT_NAME] = _value(agent_name)
         self._execute_tool_duration_instrument.record(
-            value, attributes=metric_attributes, context=context
+            value,
+            attributes=_combine_attributes(
+                typed_attributes, additional_attributes
+            ),
+            context=context,
         )
 
     @cached_property

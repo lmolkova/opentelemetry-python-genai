@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+from collections import ChainMap
 from unittest.mock import MagicMock
 
 from opentelemetry.metrics import Histogram, Meter
@@ -149,3 +150,25 @@ class TestMetrics(TestBase):
             description="GenAI operation duration.",
             explicit_bucket_boundaries_advisory=(0.1, 1.0, 10.0),
         )
+
+    def test_additional_attributes_are_overlaid_without_copying(self) -> None:
+        meter = MagicMock(spec=Meter)
+        histogram = MagicMock(spec=Histogram)
+        meter.create_histogram.return_value = histogram
+        metrics = _Metrics(meter)
+        additional_attributes = {
+            "custom.attribute": "value",
+            "gen_ai.operation.name": "ignored",
+        }
+
+        metrics.client_operation_duration(
+            1.25,
+            operation_name="chat",
+            additional_attributes=additional_attributes,
+        )
+
+        attributes = histogram.record.call_args.kwargs["attributes"]
+        assert isinstance(attributes, ChainMap)
+        assert attributes.maps[1] is additional_attributes
+        assert attributes["gen_ai.operation.name"] == "chat"
+        assert attributes["custom.attribute"] == "value"
