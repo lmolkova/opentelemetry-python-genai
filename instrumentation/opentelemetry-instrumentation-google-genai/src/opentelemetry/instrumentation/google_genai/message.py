@@ -125,8 +125,7 @@ def _to_part(part: genai_types.Part, idx: int) -> MessagePart | None:
         )
 
     if call := getattr(part, "tool_call", None):
-        tool_type = getattr(call.tool_type, "value", call.tool_type)
-        name = str(tool_type).lower() if tool_type else "unknown"
+        name = call.tool_type.value.lower() if call.tool_type else "unknown"
         return ServerToolCallPart(
             id=call.id,
             name=name,
@@ -137,8 +136,11 @@ def _to_part(part: genai_types.Part, idx: int) -> MessagePart | None:
         )
 
     if response := getattr(part, "tool_response", None):
-        tool_type = getattr(response.tool_type, "value", response.tool_type)
-        name = str(tool_type).lower() if tool_type else "unknown"
+        name = (
+            response.tool_type.value.lower()
+            if response.tool_type
+            else "unknown"
+        )
         return ServerToolCallResponsePart(
             id=response.id,
             server_tool_call_response={
@@ -147,25 +149,23 @@ def _to_part(part: genai_types.Part, idx: int) -> MessagePart | None:
             },
         )
 
-    if code := getattr(part, "executable_code", None):
-        language = getattr(code.language, "value", code.language)
+    if code := part.executable_code:
         return ServerToolCallPart(
             id=getattr(code, "id", None),
             name="code_execution",
             server_tool_call={
                 "type": "code_execution",
                 "code": code.code,
-                "language": language,
+                "language": code.language.value if code.language else None,
             },
         )
 
-    if result := getattr(part, "code_execution_result", None):
-        outcome = getattr(result.outcome, "value", result.outcome)
+    if result := part.code_execution_result:
         return ServerToolCallResponsePart(
             id=getattr(result, "id", None),
             server_tool_call_response={
                 "type": "code_execution",
-                "outcome": outcome,
+                "outcome": result.outcome.value if result.outcome else None,
                 "output": result.output,
             },
         )

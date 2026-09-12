@@ -8,6 +8,7 @@ import unittest.mock
 
 from opentelemetry.instrumentation.google_genai.interactions import (
     _HAS_INTERACTIONS,
+    Interaction,
     _interactions_input_to_messages,
     _interactions_response_to_messages,
 )
@@ -164,30 +165,36 @@ class TestInteractionsParser(unittest.TestCase):
         self.assertEqual(messages[0].parts[0].content, "Model response text")
 
     def test_response_to_messages_includes_tool_steps(self) -> None:
-        mock_interaction = unittest.mock.MagicMock()
-        mock_interaction.output_text = "Search complete"
-        mock_interaction.steps = [
+        interaction = Interaction.model_validate(
             {
-                "type": "mcp_server_tool_call",
-                "id": "mcp-1",
-                "name": "search",
-                "server_name": "docs",
-                "arguments": {"query": "OpenTelemetry"},
-            },
-            {
-                "type": "mcp_server_tool_result",
-                "call_id": "mcp-1",
-                "name": "search",
-                "server_name": "docs",
-                "result": {"items": []},
-            },
-            {
-                "type": "model_output",
-                "content": [{"type": "text", "text": "Search complete"}],
-            },
-        ]
+                "status": "completed",
+                "output_text": "Search complete",
+                "steps": [
+                    {
+                        "type": "mcp_server_tool_call",
+                        "id": "mcp-1",
+                        "name": "search",
+                        "server_name": "docs",
+                        "arguments": {"query": "OpenTelemetry"},
+                    },
+                    {
+                        "type": "mcp_server_tool_result",
+                        "call_id": "mcp-1",
+                        "name": "search",
+                        "server_name": "docs",
+                        "result": {"items": []},
+                    },
+                    {
+                        "type": "model_output",
+                        "content": [
+                            {"type": "text", "text": "Search complete"}
+                        ],
+                    },
+                ],
+            }
+        )
 
-        parts = _interactions_response_to_messages(mock_interaction)[0].parts
+        parts = _interactions_response_to_messages(interaction)[0].parts
 
         self.assertIsInstance(parts[0], ServerToolCallPart)
         self.assertEqual(parts[0].id, "mcp-1")
