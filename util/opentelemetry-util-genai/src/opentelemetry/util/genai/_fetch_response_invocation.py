@@ -108,6 +108,8 @@ class FetchResponseInvocation(GenAIInvocation):
         self._provider: str = provider
         self._response_id: str = response_id
         self._request_stream = request_stream
+        self._ttfc_seconds: float | None = None
+        self._stream_last_chunk_at: float | None = None
         self._server_address: str | None = server_address
         self._server_port: int | None = server_port
         self.response_model_name: str | None = None
@@ -154,6 +156,40 @@ class FetchResponseInvocation(GenAIInvocation):
             ),
             **{k: v for k, v in optional_attrs if v is not None},
         }
+
+    def _on_stream_chunk(self, chunk_at: float) -> None:
+        last_chunk_at = (
+            self._stream_last_chunk_at
+            if self._stream_last_chunk_at is not None
+            else self._monotonic_start_s
+        )
+        self._stream_last_chunk_at = chunk_at
+        delta = max(chunk_at - last_chunk_at, 0.0)
+
+        if self._ttfc_seconds is None:
+            self._ttfc_seconds = delta
+            self._metrics.client_operation_time_to_first_chunk(
+                delta,
+                operation_name=self._operation_name,
+                provider_name=self._provider,
+                server_address=self._server_address,
+                server_port=self._server_port,
+                response_model=self.response_model_name,
+                additional_attributes=self.metric_attributes,
+                context=self._span_context,
+            )
+            return
+
+        self._metrics.client_operation_time_per_output_chunk(
+            delta,
+            operation_name=self._operation_name,
+            provider_name=self._provider,
+            server_address=self._server_address,
+            server_port=self._server_port,
+            response_model=self.response_model_name,
+            additional_attributes=self.metric_attributes,
+            context=self._span_context,
+        )
 
     def _get_attributes(self) -> dict[str, AttributeValue]:
         optional_attrs: tuple[tuple[str, AttributeValue | None], ...] = (

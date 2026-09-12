@@ -16,12 +16,9 @@ from typing import (
     Protocol,
     TypeVar,
     cast,
-    runtime_checkable,
 )
 
 if TYPE_CHECKING:
-    from opentelemetry.util.genai._invocation import GenAIInvocation
-
     class _ObjectProxy:
         __wrapped__: Any
 
@@ -40,16 +37,21 @@ AsyncStreamWrapperT = TypeVar(
     "AsyncStreamWrapperT", bound="AsyncStreamWrapper[Any]"
 )
 StreamT = TypeVar("StreamT")
-InvocationT = TypeVar("InvocationT", bound="GenAIInvocation")
 _ChunkT_co = TypeVar("_ChunkT_co", covariant=True)
 _logger = logging.getLogger(__name__)
 
 
-@runtime_checkable
 class _StreamTimingInvocation(Protocol):
     _request_stream: bool | None
 
     def _on_stream_chunk(self, chunk_at: float) -> None: ...
+
+
+class _StreamingInvocation(_StreamTimingInvocation, Protocol):
+    def fail(self, error: BaseException) -> None: ...
+
+
+InvocationT = TypeVar("InvocationT", bound="_StreamingInvocation")
 
 
 class _StreamWrapperMeta(ABCMeta, type(_ObjectProxy)):
@@ -123,12 +125,12 @@ class SyncStreamWrapper(
     def __init__(
         self,
         stream: _SyncStream[ChunkT],
-        invocation: GenAIInvocation | None = None,
+        invocation: _StreamTimingInvocation | None = None,
     ):
         super().__init__(stream)
         self._self_finalized = False
         self._self_invocation = invocation
-        if isinstance(invocation, _StreamTimingInvocation):
+        if invocation is not None:
             invocation._request_stream = True
         self._bind_stream(stream)
 
@@ -197,18 +199,11 @@ class SyncStreamWrapper(
             self._finalize_failure(error)
             raise
         invocation = self._self_invocation
-        timing_invocation = (
-            invocation
-            if isinstance(invocation, _StreamTimingInvocation)
-            else None
-        )
-        chunk_at = (
-            timeit.default_timer() if timing_invocation is not None else None
-        )
+        chunk_at = timeit.default_timer() if invocation is not None else None
         self._process_chunk(chunk)
         # Record after _process_chunk so response.model is on the metrics.
-        if timing_invocation is not None and chunk_at is not None:
-            timing_invocation._on_stream_chunk(chunk_at)
+        if invocation is not None and chunk_at is not None:
+            invocation._on_stream_chunk(chunk_at)
         return chunk
 
 
@@ -235,12 +230,12 @@ class AsyncStreamWrapper(
     def __init__(
         self,
         stream: _AsyncStream[ChunkT],
-        invocation: GenAIInvocation | None = None,
+        invocation: _StreamTimingInvocation | None = None,
     ):
         super().__init__(stream)
         self._self_finalized = False
         self._self_invocation = invocation
-        if isinstance(invocation, _StreamTimingInvocation):
+        if invocation is not None:
             invocation._request_stream = True
         self._bind_stream(stream)
 
@@ -362,18 +357,11 @@ class AsyncStreamWrapper(
             raise
 
         invocation = self._self_invocation
-        timing_invocation = (
-            invocation
-            if isinstance(invocation, _StreamTimingInvocation)
-            else None
-        )
-        chunk_at = (
-            timeit.default_timer() if timing_invocation is not None else None
-        )
+        chunk_at = timeit.default_timer() if invocation is not None else None
         self._process_chunk(chunk)
         # Record after _process_chunk so response.model is on the metrics.
-        if timing_invocation is not None and chunk_at is not None:
-            timing_invocation._on_stream_chunk(chunk_at)
+        if invocation is not None and chunk_at is not None:
+            invocation._on_stream_chunk(chunk_at)
         return chunk
 
 

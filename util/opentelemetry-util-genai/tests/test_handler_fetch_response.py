@@ -214,6 +214,34 @@ class TelemetryHandlerFetchResponseTest(_FetchResponseTestBase):
         # High cardinality — must stay off the metric.
         self.assertNotIn(GenAI.GEN_AI_RESPONSE_ID, point.attributes)
 
+    def test_stream_records_chunk_timing_metrics(self) -> None:
+        with patch("timeit.default_timer", return_value=1000.0):
+            invocation = self._fetch_response(request_stream=True)
+        invocation.response_model_name = "gpt-4o-mini"
+
+        invocation._on_stream_chunk(1000.25)
+        invocation._on_stream_chunk(1000.4)
+        invocation.stop()
+
+        metrics = self._get_metrics()
+        ttfc = metrics["gen_ai.client.operation.time_to_first_chunk"]
+        (ttfc_point,) = ttfc.data.data_points
+        self.assertAlmostEqual(ttfc_point.sum, 0.25)
+        self.assertEqual(
+            ttfc_point.attributes[GenAI.GEN_AI_OPERATION_NAME],
+            "fetch_response",
+        )
+        self.assertEqual(
+            ttfc_point.attributes[GenAI.GEN_AI_RESPONSE_MODEL],
+            "gpt-4o-mini",
+        )
+
+        per_chunk = metrics[
+            "gen_ai.client.operation.time_per_output_chunk"
+        ]
+        (per_chunk_point,) = per_chunk.data.data_points
+        self.assertAlmostEqual(per_chunk_point.sum, 0.15)
+
     # ------------------------------------------------------------------
     # fail
     # ------------------------------------------------------------------

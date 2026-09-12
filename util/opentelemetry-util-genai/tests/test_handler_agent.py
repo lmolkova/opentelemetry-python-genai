@@ -703,6 +703,30 @@ class TestAgentInvocationMetrics(TestBase):
             duration_point.attributes[server_attributes.SERVER_PORT], 443
         )
 
+    def test_remote_agent_records_streaming_timing_metrics(self) -> None:
+        handler = TelemetryHandler(
+            tracer_provider=self.tracer_provider,
+            meter_provider=self.meter_provider,
+        )
+        with patch("timeit.default_timer", return_value=1000.0):
+            invocation = handler.invoke_remote_agent(
+                "prov", request_model="model"
+            )
+
+        invocation._on_stream_chunk(1000.25)
+        invocation._on_stream_chunk(1000.4)
+        invocation.stop()
+
+        metrics = self._harvest_metrics()
+        ttfc_point = metrics[
+            "gen_ai.client.operation.time_to_first_chunk"
+        ][0]
+        self.assertAlmostEqual(ttfc_point.sum, 0.25)
+        per_chunk_point = metrics[
+            "gen_ai.client.operation.time_per_output_chunk"
+        ][0]
+        self.assertAlmostEqual(per_chunk_point.sum, 0.15)
+
     def test_fail_agent_records_error_metric(self) -> None:
         handler = TelemetryHandler(
             tracer_provider=self.tracer_provider,

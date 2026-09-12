@@ -277,6 +277,9 @@ class RemoteAgentInvocation(AgentInvocation):
         self._provider: str = provider
         self._server_address: str | None = server_address
         self._server_port: int | None = server_port
+        self._request_stream: bool | None = None
+        self._ttfc_seconds: float | None = None
+        self._stream_last_chunk_at: float | None = None
 
         self.agent_id: str | None = agent_id
         self.agent_version: str | None = agent_version
@@ -358,6 +361,40 @@ class RemoteAgentInvocation(AgentInvocation):
                 self.cache_read_input_tokens
             )
         return attrs
+
+    def _on_stream_chunk(self, chunk_at: float) -> None:
+        last_chunk_at = (
+            self._stream_last_chunk_at
+            if self._stream_last_chunk_at is not None
+            else self._monotonic_start_s
+        )
+        self._stream_last_chunk_at = chunk_at
+        delta = max(chunk_at - last_chunk_at, 0.0)
+
+        if self._ttfc_seconds is None:
+            self._ttfc_seconds = delta
+            self._metrics.client_operation_time_to_first_chunk(
+                delta,
+                operation_name=self._operation_name,
+                provider_name=self._provider,
+                server_address=self._server_address,
+                server_port=self._server_port,
+                request_model=self._request_model,
+                additional_attributes=self.metric_attributes,
+                context=self._span_context,
+            )
+            return
+
+        self._metrics.client_operation_time_per_output_chunk(
+            delta,
+            operation_name=self._operation_name,
+            provider_name=self._provider,
+            server_address=self._server_address,
+            server_port=self._server_port,
+            request_model=self._request_model,
+            additional_attributes=self.metric_attributes,
+            context=self._span_context,
+        )
 
     def _record_metrics(self) -> None:
         duration_seconds = max(
