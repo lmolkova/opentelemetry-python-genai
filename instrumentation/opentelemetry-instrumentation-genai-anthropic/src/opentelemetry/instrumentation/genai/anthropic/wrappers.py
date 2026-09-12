@@ -6,25 +6,6 @@ from __future__ import annotations
 import inspect
 import logging
 from collections.abc import Callable
-
-try:
-    from anthropic.lib.streaming._beta_messages import (  # pylint: disable=no-name-in-module
-        accumulate_event as _sdk_beta_accumulate_event,
-    )
-
-    _beta_accumulate_parameters = inspect.signature(
-        _sdk_beta_accumulate_event
-    ).parameters
-    _beta_accumulate_accepts_headers = (
-        "request_headers" in _beta_accumulate_parameters
-    )
-    _beta_accumulate_takes_json_bufs = (
-        "json_bufs" in _beta_accumulate_parameters
-    )
-except (ImportError, ValueError, TypeError):
-    _sdk_beta_accumulate_event = None
-    _beta_accumulate_accepts_headers = False
-    _beta_accumulate_takes_json_bufs = False
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -58,6 +39,13 @@ try:
     )
 except ImportError:
     _sdk_accumulate_event = None
+
+try:
+    from anthropic.lib.streaming._beta_messages import (  # pylint: disable=no-name-in-module
+        accumulate_event as _sdk_beta_accumulate_event,
+    )
+except ImportError:
+    _sdk_beta_accumulate_event = None
 
 if TYPE_CHECKING:
     from anthropic._streaming import AsyncStream, Stream
@@ -107,6 +95,22 @@ if accumulate_event is not None:
         )
     except (ValueError, TypeError):
         _accumulate_takes_json_bufs = False
+
+_beta_accumulate_accepts_headers = False
+_beta_accumulate_takes_json_bufs = False
+if beta_accumulate_event is not None:
+    try:
+        _beta_accumulate_parameters = inspect.signature(
+            beta_accumulate_event
+        ).parameters
+        _beta_accumulate_accepts_headers = (
+            "request_headers" in _beta_accumulate_parameters
+        )
+        _beta_accumulate_takes_json_bufs = (
+            "json_bufs" in _beta_accumulate_parameters
+        )
+    except (ValueError, TypeError):
+        pass
 
 _accumulation_disabled = False
 
@@ -209,21 +213,21 @@ class _MessagesStreamMixin(Generic[ResponseFormatT]):
             chunk.__class__, "__module__", ""
         ).startswith("anthropic.types.beta")
         if is_beta and beta_accumulate_event is not None:
-            kwargs: dict[str, Any] = {
+            beta_kwargs: dict[str, Any] = {
                 "event": chunk,
                 "current_snapshot": self._self_message,
             }
             if _beta_accumulate_takes_json_bufs:
-                kwargs["json_bufs"] = self._self_json_bufs
+                beta_kwargs["json_bufs"] = self._self_json_bufs
             if _beta_accumulate_accepts_headers:
                 response = getattr(stream, "response", None)
                 request = getattr(response, "request", None)
                 headers = getattr(request, "headers", None)
-                kwargs["request_headers"] = (
+                beta_kwargs["request_headers"] = (
                     headers if headers is not None else _http_lib.Headers()
                 )
             try:
-                self._self_message = beta_accumulate_event(**kwargs)
+                self._self_message = beta_accumulate_event(**beta_kwargs)
             except BaseException as exc:
                 if not isinstance(exc, Exception):
                     raise
@@ -236,7 +240,7 @@ class _MessagesStreamMixin(Generic[ResponseFormatT]):
         if accumulate_event is None or _accumulation_disabled:
             return
 
-        kwargs = {
+        kwargs: dict[str, Any] = {
             "event": cast("RawMessageStreamEvent", chunk),
             "current_snapshot": cast(
                 "ParsedMessage[ResponseFormatT] | None", self._self_message
