@@ -112,7 +112,7 @@ class TestMetrics(TestBase):
             operation_name="custom-operation",
             provider_name="custom-provider",
             request_model="model",
-            attributes={
+            additional_attributes={
                 "custom.attribute": "value",
                 "gen_ai.request.model": "ignored",
             },

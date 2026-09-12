@@ -166,6 +166,9 @@ class ToolInvocation(GenAIInvocation):
         self._metrics.execute_tool_duration(
             duration_seconds,
             tool_name=self._name,
-            attributes=self._get_metric_attributes(),
+            error_type=self._metric_error_type,
+            tool_type=self._tool_type,
+            agent_name=self._agent_name,
+            additional_attributes=self.metric_attributes,
             context=self._span_context,
         )

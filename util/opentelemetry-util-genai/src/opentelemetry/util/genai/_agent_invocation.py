@@ -236,7 +236,10 @@ class LocalAgentInvocation(AgentInvocation):
         )
         self._metrics.invoke_agent_duration(
             duration_seconds,
-            attributes=self._get_metric_attributes(),
+            error_type=self._metric_error_type,
+            agent_name=self._agent_name,
+            request_model=self._request_model,
+            additional_attributes=self.metric_attributes,
             context=self._span_context,
         )
 

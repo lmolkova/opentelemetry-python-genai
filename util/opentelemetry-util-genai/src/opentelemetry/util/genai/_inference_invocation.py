@@ -323,11 +323,6 @@ class InferenceInvocation(GenAIInvocation):
             self._cached_metric_attributes = attrs
         return self._cached_metric_attributes
 
-    def _apply_error_attributes(self, error: Error) -> None:
-        super()._apply_error_attributes(error)
-        # error.type was just added to metric_attributes.
-        self._invalidate_metric_attributes()
-
     def _get_metric_token_counts(self) -> dict[str, int]:
         counts: dict[str, int] = {}
         if self.input_tokens is not None:

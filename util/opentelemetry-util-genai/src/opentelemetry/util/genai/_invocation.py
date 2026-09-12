@@ -19,7 +19,7 @@ from opentelemetry.context import Context, attach, detach
 from opentelemetry.semconv._incubating.attributes import (
     gen_ai_attributes as GenAI,
 )
-from opentelemetry.semconv.attributes import error_attributes
+from opentelemetry.semconv.attributes import error_attributes, server_attributes
 from opentelemetry.trace import INVALID_SPAN as _INVALID_SPAN
 from opentelemetry.trace import Span, SpanKind, Tracer, set_span_in_context
 from opentelemetry.trace.status import Status, StatusCode
@@ -95,6 +95,7 @@ class GenAIInvocation(AbstractContextManager["GenAIInvocation"]):
             {} if metric_attributes is None else metric_attributes
         )
         """Additional attributes to set on metrics. Must be low cardinality. Not set on spans or events."""
+        self._metric_error_type: str | None = None
         self.span: Span = _INVALID_SPAN
         self._span_context: Context
         self._span_name: str = span_name
@@ -146,6 +147,24 @@ class GenAIInvocation(AbstractContextManager["GenAIInvocation"]):
         """Return low-cardinality attributes for metric recording."""
         return self.metric_attributes
 
+    @staticmethod
+    def _get_metric_string(
+        attributes: Mapping[str, AttributeValue], name: str
+    ) -> str | None:
+        value = attributes.get(name)
+        return value if isinstance(value, str) else None
+
+    @staticmethod
+    def _get_metric_int(
+        attributes: Mapping[str, AttributeValue], name: str
+    ) -> int | None:
+        value = attributes.get(name)
+        return (
+            value
+            if isinstance(value, int) and not isinstance(value, bool)
+            else None
+        )
+
     def _get_metric_token_counts(self) -> dict[str, int]:  # pylint: disable=no-self-use
         """Return {token_type: count} for token histogram recording."""
         return {}
@@ -183,7 +202,19 @@ class GenAIInvocation(AbstractContextManager["GenAIInvocation"]):
                 delta,
                 operation_name=self._operation_name,
                 provider_name=provider_name,
-                attributes=attributes,
+                server_address=self._get_metric_string(
+                    attributes, server_attributes.SERVER_ADDRESS
+                ),
+                server_port=self._get_metric_int(
+                    attributes, server_attributes.SERVER_PORT
+                ),
+                request_model=self._get_metric_string(
+                    attributes, GenAI.GEN_AI_REQUEST_MODEL
+                ),
+                response_model=self._get_metric_string(
+                    attributes, GenAI.GEN_AI_RESPONSE_MODEL
+                ),
+                additional_attributes=self.metric_attributes,
                 context=self._span_context,
             )
         else:
@@ -193,7 +224,19 @@ class GenAIInvocation(AbstractContextManager["GenAIInvocation"]):
                 delta,
                 operation_name=self._operation_name,
                 provider_name=provider_name,
-                attributes=attributes,
+                server_address=self._get_metric_string(
+                    attributes, server_attributes.SERVER_ADDRESS
+                ),
+                server_port=self._get_metric_int(
+                    attributes, server_attributes.SERVER_PORT
+                ),
+                request_model=self._get_metric_string(
+                    attributes, GenAI.GEN_AI_REQUEST_MODEL
+                ),
+                response_model=self._get_metric_string(
+                    attributes, GenAI.GEN_AI_RESPONSE_MODEL
+                ),
+                additional_attributes=self.metric_attributes,
                 context=self._span_context,
             )
 
@@ -207,7 +250,23 @@ class GenAIInvocation(AbstractContextManager["GenAIInvocation"]):
         self._metrics.client_operation_duration(
             duration_seconds,
             operation_name=self._operation_name,
-            attributes=attributes,
+            server_address=self._get_metric_string(
+                attributes, server_attributes.SERVER_ADDRESS
+            ),
+            server_port=self._get_metric_int(
+                attributes, server_attributes.SERVER_PORT
+            ),
+            request_model=self._get_metric_string(
+                attributes, GenAI.GEN_AI_REQUEST_MODEL
+            ),
+            response_model=self._get_metric_string(
+                attributes, GenAI.GEN_AI_RESPONSE_MODEL
+            ),
+            provider_name=self._get_metric_string(
+                attributes, GenAI.GEN_AI_PROVIDER_NAME
+            ),
+            error_type=self._metric_error_type,
+            additional_attributes=self.metric_attributes,
             context=self._span_context,
         )
 
@@ -220,7 +279,19 @@ class GenAIInvocation(AbstractContextManager["GenAIInvocation"]):
                     operation_name=self._operation_name,
                     provider_name=provider_name,
                     token_type=token_type,
-                    attributes=attributes,
+                    server_address=self._get_metric_string(
+                        attributes, server_attributes.SERVER_ADDRESS
+                    ),
+                    server_port=self._get_metric_int(
+                        attributes, server_attributes.SERVER_PORT
+                    ),
+                    request_model=self._get_metric_string(
+                        attributes, GenAI.GEN_AI_REQUEST_MODEL
+                    ),
+                    response_model=self._get_metric_string(
+                        attributes, GenAI.GEN_AI_RESPONSE_MODEL
+                    ),
+                    additional_attributes=self.metric_attributes,
                     context=self._span_context,
                 )
 
@@ -228,7 +299,7 @@ class GenAIInvocation(AbstractContextManager["GenAIInvocation"]):
         """Apply error status and error.type attribute to the span, events, and metrics."""
         self.span.set_status(Status(StatusCode.ERROR, error.message))
         self.attributes[error_attributes.ERROR_TYPE] = error.type
-        self.metric_attributes[error_attributes.ERROR_TYPE] = error.type
+        self._metric_error_type = error.type
 
     def _call_completion_hook(
         self,

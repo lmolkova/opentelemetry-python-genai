@@ -78,11 +78,11 @@ class _Metrics:
         server_port: int | None = None,
         request_model: str | None = None,
         response_model: str | None = None,
-        attributes: Mapping[str, AttributeValue] | None = None,
+        additional_attributes: Mapping[str, AttributeValue] | None = None,
         context: Context | None = None,
     ) -> None:
         """Record `gen_ai.client.token.usage`."""
-        metric_attributes = dict(attributes or {})
+        metric_attributes = dict(additional_attributes or {})
         if server_address is not None:
             metric_attributes[ServerAttributes.SERVER_ADDRESS] = _value(
                 server_address
@@ -128,11 +128,11 @@ class _Metrics:
         response_model: str | None = None,
         provider_name: GenAiProviderName | str | None = None,
         error_type: str | None = None,
-        attributes: Mapping[str, AttributeValue] | None = None,
+        additional_attributes: Mapping[str, AttributeValue] | None = None,
         context: Context | None = None,
     ) -> None:
         """Record `gen_ai.client.operation.duration`."""
-        metric_attributes = dict(attributes or {})
+        metric_attributes = dict(additional_attributes or {})
         if server_address is not None:
             metric_attributes[ServerAttributes.SERVER_ADDRESS] = _value(
                 server_address
@@ -181,11 +181,11 @@ class _Metrics:
         server_port: int | None = None,
         request_model: str | None = None,
         response_model: str | None = None,
-        attributes: Mapping[str, AttributeValue] | None = None,
+        additional_attributes: Mapping[str, AttributeValue] | None = None,
         context: Context | None = None,
     ) -> None:
         """Record `gen_ai.client.operation.time_to_first_chunk`."""
-        metric_attributes = dict(attributes or {})
+        metric_attributes = dict(additional_attributes or {})
         if server_address is not None:
             metric_attributes[ServerAttributes.SERVER_ADDRESS] = _value(
                 server_address
@@ -229,11 +229,11 @@ class _Metrics:
         server_port: int | None = None,
         request_model: str | None = None,
         response_model: str | None = None,
-        attributes: Mapping[str, AttributeValue] | None = None,
+        additional_attributes: Mapping[str, AttributeValue] | None = None,
         context: Context | None = None,
     ) -> None:
         """Record `gen_ai.client.operation.time_per_output_chunk`."""
-        metric_attributes = dict(attributes or {})
+        metric_attributes = dict(additional_attributes or {})
         if server_address is not None:
             metric_attributes[ServerAttributes.SERVER_ADDRESS] = _value(
                 server_address
@@ -278,11 +278,11 @@ class _Metrics:
         request_model: str | None = None,
         response_model: str | None = None,
         error_type: str | None = None,
-        attributes: Mapping[str, AttributeValue] | None = None,
+        additional_attributes: Mapping[str, AttributeValue] | None = None,
         context: Context | None = None,
     ) -> None:
         """Record `gen_ai.server.request.duration`."""
-        metric_attributes = dict(attributes or {})
+        metric_attributes = dict(additional_attributes or {})
         if server_address is not None:
             metric_attributes[ServerAttributes.SERVER_ADDRESS] = _value(
                 server_address
@@ -328,11 +328,11 @@ class _Metrics:
         server_port: int | None = None,
         request_model: str | None = None,
         response_model: str | None = None,
-        attributes: Mapping[str, AttributeValue] | None = None,
+        additional_attributes: Mapping[str, AttributeValue] | None = None,
         context: Context | None = None,
     ) -> None:
         """Record `gen_ai.server.time_per_output_token`."""
-        metric_attributes = dict(attributes or {})
+        metric_attributes = dict(additional_attributes or {})
         if server_address is not None:
             metric_attributes[ServerAttributes.SERVER_ADDRESS] = _value(
                 server_address
@@ -376,11 +376,11 @@ class _Metrics:
         server_port: int | None = None,
         request_model: str | None = None,
         response_model: str | None = None,
-        attributes: Mapping[str, AttributeValue] | None = None,
+        additional_attributes: Mapping[str, AttributeValue] | None = None,
         context: Context | None = None,
     ) -> None:
         """Record `gen_ai.server.time_to_first_token`."""
-        metric_attributes = dict(attributes or {})
+        metric_attributes = dict(additional_attributes or {})
         if server_address is not None:
             metric_attributes[ServerAttributes.SERVER_ADDRESS] = _value(
                 server_address
@@ -420,11 +420,11 @@ class _Metrics:
         *,
         error_type: str | None = None,
         workflow_name: str | None = None,
-        attributes: Mapping[str, AttributeValue] | None = None,
+        additional_attributes: Mapping[str, AttributeValue] | None = None,
         context: Context | None = None,
     ) -> None:
         """Record `gen_ai.invoke_workflow.duration`."""
-        metric_attributes = dict(attributes or {})
+        metric_attributes = dict(additional_attributes or {})
         if error_type is not None:
             metric_attributes[ErrorAttributes.ERROR_TYPE] = _value(error_type)
         if workflow_name is not None:
@@ -453,11 +453,11 @@ class _Metrics:
         error_type: str | None = None,
         agent_name: str | None = None,
         request_model: str | None = None,
-        attributes: Mapping[str, AttributeValue] | None = None,
+        additional_attributes: Mapping[str, AttributeValue] | None = None,
         context: Context | None = None,
     ) -> None:
         """Record `gen_ai.invoke_agent.duration`."""
-        metric_attributes = dict(attributes or {})
+        metric_attributes = dict(additional_attributes or {})
         if error_type is not None:
             metric_attributes[ErrorAttributes.ERROR_TYPE] = _value(error_type)
         if agent_name is not None:
@@ -486,11 +486,11 @@ class _Metrics:
         value: int,
         *,
         agent_name: str | None = None,
-        attributes: Mapping[str, AttributeValue] | None = None,
+        additional_attributes: Mapping[str, AttributeValue] | None = None,
         context: Context | None = None,
     ) -> None:
         """Record `gen_ai.invoke_agent.inference_calls`."""
-        metric_attributes = dict(attributes or {})
+        metric_attributes = dict(additional_attributes or {})
         if agent_name is not None:
             metric_attributes[Attr.GEN_AI_AGENT_NAME] = _value(agent_name)
         self._invoke_agent_inference_calls_instrument.record(
@@ -513,11 +513,11 @@ class _Metrics:
         value: int,
         *,
         agent_name: str | None = None,
-        attributes: Mapping[str, AttributeValue] | None = None,
+        additional_attributes: Mapping[str, AttributeValue] | None = None,
         context: Context | None = None,
     ) -> None:
         """Record `gen_ai.invoke_agent.tool_calls`."""
-        metric_attributes = dict(attributes or {})
+        metric_attributes = dict(additional_attributes or {})
         if agent_name is not None:
             metric_attributes[Attr.GEN_AI_AGENT_NAME] = _value(agent_name)
         self._invoke_agent_tool_calls_instrument.record(
@@ -543,11 +543,11 @@ class _Metrics:
         error_type: str | None = None,
         tool_type: str | None = None,
         agent_name: str | None = None,
-        attributes: Mapping[str, AttributeValue] | None = None,
+        additional_attributes: Mapping[str, AttributeValue] | None = None,
         context: Context | None = None,
     ) -> None:
         """Record `gen_ai.execute_tool.duration`."""
-        metric_attributes = dict(attributes or {})
+        metric_attributes = dict(additional_attributes or {})
         if error_type is not None:
             metric_attributes[ErrorAttributes.ERROR_TYPE] = _value(error_type)
         metric_attributes[Attr.GEN_AI_TOOL_NAME] = _value(tool_name)

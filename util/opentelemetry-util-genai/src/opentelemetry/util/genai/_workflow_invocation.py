@@ -123,6 +123,8 @@ class WorkflowInvocation(GenAIInvocation):
         )
         self._metrics.invoke_workflow_duration(
             duration_seconds,
-            attributes=self._get_metric_attributes(),
+            error_type=self._metric_error_type,
+            workflow_name=self._name,
+            additional_attributes=self.metric_attributes,
             context=self._span_context,
         )
