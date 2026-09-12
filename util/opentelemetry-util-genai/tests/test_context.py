@@ -97,34 +97,40 @@ class TestInferenceContext(TestBase):
     def test_inference_invocation_sets_attributes_on_context(self) -> None:
         self.assertIsNone(get_inference_attributes())
 
-        with self.handler.inference(
-            "openai", request_model="gpt-4o-mini"
-        ) as invocation:
-            self.assertFalse(invocation.already_started)
-            attrs = get_inference_attributes()
-            self.assertIsNotNone(attrs)
-            assert attrs is not None
-            # Start attributes are placed in context upon initialization
-            self.assertEqual(attrs.get(GenAI.GEN_AI_PROVIDER_NAME), "openai")
-            self.assertEqual(
-                attrs.get(GenAI.GEN_AI_REQUEST_MODEL), "gpt-4o-mini"
-            )
-            self.assertEqual(attrs.get(GenAI.GEN_AI_OPERATION_NAME), "chat")
+        with self.handler.inference("openai") as root_inv:
+            self.assertFalse(root_inv.already_started)
 
-            # Live updates when setting typed fields
-            invocation.input_tokens = 42
-            invocation.output_tokens = 84
-            invocation.temperature = 0.7
-            invocation.response_model_name = "gpt-4o-mini-2024-07-18"
-            self.assertEqual(attrs.get(GenAI.GEN_AI_USAGE_INPUT_TOKENS), 42)
-            self.assertEqual(attrs.get(GenAI.GEN_AI_USAGE_OUTPUT_TOKENS), 84)
-            self.assertEqual(attrs.get(GenAI.GEN_AI_REQUEST_TEMPERATURE), 0.7)
-            self.assertEqual(
-                attrs.get(GenAI.GEN_AI_RESPONSE_MODEL),
-                "gpt-4o-mini-2024-07-18",
-            )
+            with self.handler.inference(
+                "openai",
+                request_model="gpt-4o-mini",
+                server_address="api.openai.com",
+            ) as inner:
+                self.assertTrue(inner.already_started)
+                inner.input_tokens = 42
+                inner.output_tokens = 84
+                inner.temperature = 0.7
+                inner.response_model_name = "gpt-4o-mini-2024-07-18"
 
-        self.assertIsNone(get_inference_attributes())
+        spans = self.span_exporter.get_finished_spans()
+        self.assertEqual(len(spans), 1)
+        span = spans[0]
+        self.assertEqual(
+            span.attributes.get(server_attributes.SERVER_ADDRESS),
+            "api.openai.com",
+        )
+        self.assertEqual(
+            span.attributes.get(GenAI.GEN_AI_USAGE_INPUT_TOKENS), 42
+        )
+        self.assertEqual(
+            span.attributes.get(GenAI.GEN_AI_USAGE_OUTPUT_TOKENS), 84
+        )
+        self.assertEqual(
+            span.attributes.get(GenAI.GEN_AI_REQUEST_TEMPERATURE), 0.7
+        )
+        self.assertEqual(
+            span.attributes.get(GenAI.GEN_AI_RESPONSE_MODEL),
+            "gpt-4o-mini-2024-07-18",
+        )
 
     def test_inference_invocation_automatic_publish_on_finish(self) -> None:
         with self.handler.inference(
@@ -188,27 +194,13 @@ class TestInferenceContext(TestBase):
                     server_port=443,
                 ) as nested_inv:
                     self.assertTrue(nested_inv.already_started)
+                    self.assertIs(nested_inv.span, root_inv.span)
+                    self.assertTrue(nested_inv.span.is_recording())
+                    self.assertFalse(nested_inv.should_capture_content)
                     nested_inv.input_tokens = 15
                     nested_inv.output_tokens = 25
                     nested_inv.response_model_name = "gpt-4o-2024-08-06"
                     nested_inv.attributes["custom.downstream"] = "enriched"
-
-                # While still in root context, context attributes contain downstream enrichment
-                attrs = get_inference_attributes()
-                self.assertIsNotNone(attrs)
-                assert attrs is not None
-                self.assertEqual(
-                    attrs.get(server_attributes.SERVER_ADDRESS),
-                    "api.openai.com",
-                )
-                self.assertEqual(attrs.get(server_attributes.SERVER_PORT), 443)
-                self.assertEqual(
-                    attrs.get("gen_ai.response.model"),
-                    "gpt-4o-2024-08-06",
-                )
-                self.assertEqual(attrs.get("gen_ai.usage.input_tokens"), 15)
-                self.assertEqual(attrs.get("gen_ai.usage.output_tokens"), 25)
-                self.assertEqual(attrs.get("custom.downstream"), "enriched")
 
                 # After nested exit, span is NOT ended yet (still recording)
                 self.assertTrue(root_inv.span.is_recording())
@@ -357,12 +349,6 @@ class TestInferenceContext(TestBase):
             self.assertTrue(root_inv.span.is_recording())
             self.assertEqual(len(self.span_exporter.get_finished_spans()), 0)
 
-            # Downstream error was caught by caller, so it is NOT recorded on context
-            attrs = get_inference_attributes()
-            self.assertIsNotNone(attrs)
-            assert attrs is not None
-            self.assertNotIn(error_attributes.ERROR_TYPE, attrs)
-
         # After root finishes normally, 1 span is ended without error attributes
         spans = self.span_exporter.get_finished_spans()
         self.assertEqual(len(spans), 1)
@@ -405,7 +391,7 @@ class TestInferenceContext(TestBase):
                 self.assertTrue(nested_inv.already_started)
                 nested_inv.record_stream_chunk()
                 nested_inv.record_stream_chunk()
-                self.assertIsNotNone(nested_inv._ttfc_seconds)
+                self.assertIsNone(nested_inv._ttfc_seconds)
 
         spans = self.span_exporter.get_finished_spans()
         self.assertEqual(len(spans), 1)
@@ -422,13 +408,17 @@ class TestInferenceContext(TestBase):
             nested_inv = LLMInvocation(request_model="nested")
             self.handler.start_llm(nested_inv)
             self.assertTrue(nested_inv.already_started)
-            attrs = get_inference_attributes()
-            self.assertIsNotNone(attrs)
-            assert attrs is not None
-            self.assertEqual(attrs.get(GenAI.GEN_AI_REQUEST_MODEL), "nested")
+            self.assertTrue(nested_inv.span.is_recording())
+            self.assertFalse(nested_inv.should_capture_content)
             nested_inv.attributes["custom.llm"] = "val"
             self.handler.stop_llm(nested_inv)
-            self.assertEqual(attrs.get("custom.llm"), "val")
+
+        spans = self.span_exporter.get_finished_spans()
+        self.assertEqual(len(spans), 1)
+        self.assertEqual(
+            spans[0].attributes.get(GenAI.GEN_AI_REQUEST_MODEL), "nested"
+        )
+        self.assertEqual(spans[0].attributes.get("custom.llm"), "val")
 
     def test_metric_enrichment_precedence_and_error(self) -> None:
         with self.assertRaises(ValueError):
@@ -532,12 +522,6 @@ class TestInferenceContext(TestBase):
                 inner.attributes["custom.shared"] = "downstream-value"
                 inner.attributes["custom.downstream_only"] = "downstream-only"
 
-            # While still in root context, context reflects downstream writes
-            attrs = get_inference_attributes()
-            assert attrs is not None
-            self.assertEqual(attrs.get(GenAI.GEN_AI_REQUEST_TEMPERATURE), 0.9)
-            self.assertEqual(attrs.get(GenAI.GEN_AI_USAGE_INPUT_TOKENS), 100)
-
         # After root finish: Option 1 root precedence applies
         spans = self.span_exporter.get_finished_spans()
         self.assertEqual(len(spans), 1)
@@ -590,3 +574,38 @@ class TestInferenceContext(TestBase):
             root_span.attributes.get("custom.downstream_only"),
             "downstream-only",
         )
+
+    def test_multiple_nested_inferences_override_each_other(self) -> None:
+        with self.handler.inference(
+            "proxy-provider", request_model="proxy-model"
+        ):
+            # First inner runs and finishes
+            with self.handler.inference(
+                "first-provider", request_model="first-model"
+            ) as inner1:
+                self.assertTrue(inner1.already_started)
+                inner1.output_tokens = 10
+                inner1.response_model_name = "first-model-v1"
+                inner1.attributes["custom.step"] = "step-1"
+
+            # Second inner runs and finishes (e.g. retry / next attempt)
+            with self.handler.inference(
+                "second-provider", request_model="second-model"
+            ) as inner2:
+                self.assertTrue(inner2.already_started)
+                inner2.output_tokens = 25
+                inner2.response_model_name = "second-model-v2"
+                inner2.attributes["custom.step"] = "step-2"
+
+        # Root span finishes with the reconciled attributes from the second inner
+        spans = self.span_exporter.get_finished_spans()
+        self.assertEqual(len(spans), 1)
+        root_span = spans[0]
+        self.assertEqual(
+            root_span.attributes.get(GenAI.GEN_AI_USAGE_OUTPUT_TOKENS), 25
+        )
+        self.assertEqual(
+            root_span.attributes.get(GenAI.GEN_AI_RESPONSE_MODEL),
+            "second-model-v2",
+        )
+        self.assertEqual(root_span.attributes.get("custom.step"), "step-2")

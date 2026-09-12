@@ -20,8 +20,15 @@ from opentelemetry.semconv._incubating.attributes import (
     gen_ai_attributes as GenAI,
 )
 from opentelemetry.semconv.attributes import error_attributes
-from opentelemetry.trace import INVALID_SPAN as _INVALID_SPAN
-from opentelemetry.trace import Span, SpanKind, Tracer, set_span_in_context
+from opentelemetry.trace import (
+    INVALID_SPAN as _INVALID_SPAN,
+)
+from opentelemetry.trace import (
+    Span,
+    SpanKind,
+    Tracer,
+    set_span_in_context,
+)
 from opentelemetry.trace.status import Status, StatusCode
 from opentelemetry.util.genai._instruments import _Instruments
 from opentelemetry.util.genai.completion_hook import (
@@ -101,7 +108,6 @@ class GenAIInvocation(AbstractContextManager["GenAIInvocation"]):
         self._span_kind: SpanKind = span_kind
         self._context_token: ContextToken | None = None
         self._monotonic_start_s: float = timeit.default_timer()
-        self.already_started: bool = False
         # Streaming state, set when the invocation is handed to a stream
         # wrapper. ``_request_stream`` marks the request as streamed
         # (gen_ai.request.stream); the timing fields are populated by
@@ -109,6 +115,10 @@ class GenAIInvocation(AbstractContextManager["GenAIInvocation"]):
         self._request_stream: bool | None = None
         self._ttfc_seconds: float | None = None
         self._stream_last_chunk_at: float | None = None
+
+    @property
+    def already_started(self) -> bool:
+        return False
 
     @property
     def should_capture_content(self) -> bool:
@@ -134,9 +144,6 @@ class GenAIInvocation(AbstractContextManager["GenAIInvocation"]):
         Args:
             attributes: Initial span attributes available for sampling decisions.
         """
-        if self.already_started:
-            return
-
         self.span = self._tracer.start_span(
             name=self._span_name,
             kind=self._span_kind,
@@ -184,8 +191,6 @@ class GenAIInvocation(AbstractContextManager["GenAIInvocation"]):
         is_first_chunk = self._ttfc_seconds is None
         if is_first_chunk:
             self._ttfc_seconds = delta
-        if self.already_started:
-            return
 
         attributes = self._get_metric_attributes()
         if is_first_chunk:
@@ -257,19 +262,12 @@ class GenAIInvocation(AbstractContextManager["GenAIInvocation"]):
             log_record=log_record,
         )
 
-    def _finish_already_started(self, error: Error | None = None) -> None:
-        """Handle finish when the invocation was already started upstream."""
-
     @abstractmethod
     def _apply_finish(self, error: Error | None = None) -> None:
         """Apply finish telemetry (attributes, metrics, events)."""
 
     def _finish(self, error: Error | None = None) -> None:
         """Apply finish telemetry and end the span. Finishes at most once."""
-        if self.already_started:
-            self._finish_already_started(error)
-            return
-
         if self._context_token is None:
             return
         # Clear up front so a nested or repeated finish is a no-op even if

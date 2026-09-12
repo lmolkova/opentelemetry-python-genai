@@ -3,9 +3,10 @@
 
 from __future__ import annotations
 
+import timeit
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Final
+from typing import Any, Final
 
 from opentelemetry._logs import Logger, LogRecord
 from opentelemetry.context import Context
@@ -16,7 +17,13 @@ from opentelemetry.semconv.attributes import (
     error_attributes,
     server_attributes,
 )
-from opentelemetry.trace import INVALID_SPAN, Span, SpanKind, Tracer
+from opentelemetry.trace import (
+    INVALID_SPAN,
+    Span,
+    SpanKind,
+    Tracer,
+    get_current_span,
+)
 from opentelemetry.util.genai._context import (
     get_inference_attributes,
     set_inference_attributes,
@@ -78,6 +85,8 @@ _GEN_AI_CONVERSATION_COMPACTED: Final = "gen_ai.conversation.compacted"
 _GEN_AI_PROMPT_VERSION: Final = "gen_ai.prompt.version"
 
 _FIELD_TO_SEMCONV: Final[dict[str, str]] = {
+    "server_address": server_attributes.SERVER_ADDRESS,
+    "server_port": server_attributes.SERVER_PORT,
     "conversation_id": GenAI.GEN_AI_CONVERSATION_ID,
     "temperature": GenAI.GEN_AI_REQUEST_TEMPERATURE,
     "top_p": GenAI.GEN_AI_REQUEST_TOP_P,
@@ -113,20 +122,7 @@ _FIELD_TO_SEMCONV: Final[dict[str, str]] = {
     "prompt_version": _GEN_AI_PROMPT_VERSION,
     "request_choice_count": GenAI.GEN_AI_REQUEST_CHOICE_COUNT,
     "output_type": GenAI.GEN_AI_OUTPUT_TYPE,
-    "_request_stream": GenAI.GEN_AI_REQUEST_STREAM,
-    "_ttfc_seconds": GenAI.GEN_AI_RESPONSE_TIME_TO_FIRST_CHUNK,
 }
-# Content attributes are omitted from context because capture rules, representations,
-# and presence in attributes may differ between spans and events.
-_OPT_IN_MESSAGE_ATTRIBUTES: Final[frozenset[str]] = frozenset(
-    {
-        "input_messages",
-        "output_messages",
-        "system_instruction",
-        "tool_definitions",
-        "prompt_variables",
-    }
-)
 
 
 def _filter_context_attributes(
@@ -157,6 +153,18 @@ class InferenceInvocation(GenAIInvocation):
 
     Use handler.inference(provider) rather than constructing this directly.
     """
+
+    def __new__(
+        cls,
+        *args: Any,
+        **kwargs: Any,
+    ) -> InferenceInvocation:
+        if (
+            cls is InferenceInvocation
+            and get_inference_attributes() is not None
+        ):
+            return object.__new__(SuppressedInferenceInvocation)
+        return super().__new__(cls)
 
     def __init__(
         self,
@@ -240,40 +248,8 @@ class InferenceInvocation(GenAIInvocation):
         # _invalidate_metric_attributes whenever an input changes.
         self._cached_metric_attributes: dict[str, AttributeValue] | None = None
 
-        existing_attrs = get_inference_attributes()
-        if existing_attrs is not None:
-            self.already_started = True
-            self._context_attributes: dict[str, AttributeValue] = (
-                existing_attrs
-            )
-            self._context_attributes.update(self._get_start_attributes())
-        else:
-            self.already_started = False
-            self._context_attributes = dict(self._get_start_attributes())
-
+        self._context_attributes: dict[str, AttributeValue] = {}
         self._start(self._get_start_attributes())
-
-    def __setattr__(self, name: str, value: object) -> None:
-        super().__setattr__(name, value)
-        if name in _OPT_IN_MESSAGE_ATTRIBUTES:
-            return
-        # Custom attributes set on self.attributes are currently missing from
-        # context, which can be addressed by adding an explicit set_attribute method.
-        if (
-            hasattr(self, "_context_attributes")
-            and name in _FIELD_TO_SEMCONV
-            and value is not None
-        ):
-            if isinstance(value, (str, bool, int, float)):
-                self._context_attributes[_FIELD_TO_SEMCONV[name]] = value
-            elif name == "stop_sequences" and self.stop_sequences is not None:
-                self._context_attributes[_FIELD_TO_SEMCONV[name]] = (
-                    self.stop_sequences
-                )
-            elif name == "finish_reasons" and self.finish_reasons is not None:
-                self._context_attributes[_FIELD_TO_SEMCONV[name]] = (
-                    self.finish_reasons
-                )
 
     @property
     def cache_creation_input_tokens(self) -> int | None:
@@ -442,10 +418,9 @@ class InferenceInvocation(GenAIInvocation):
         # content differently and evaluate capture rules independently.
         return attrs
 
-    def _finish_already_started(self, error: Error | None = None) -> None:
-        # Error attributes are not recorded on inner finish to isolate errors;
-        # the outer invocation records them only if the error escapes unhandled.
-        self._context_attributes.update(self._get_context_attributes())
+    @property
+    def already_started(self) -> bool:
+        return False
 
     def _invalidate_metric_attributes(self) -> None:
         """Drop the cached metric attributes so the next read rebuilds them.
@@ -541,6 +516,145 @@ class InferenceInvocation(GenAIInvocation):
             attributes=attributes,
             context=self._span_context,
         )
+
+
+class SuppressedInferenceInvocation(InferenceInvocation):
+    """Represents an inference invocation running inside an active inference context.
+
+    Suppresses span creation, metrics, and events. On stop or fail, publishes its
+    attributes to the active inference context.
+    """
+
+    def __init__(
+        self,
+        tracer: Tracer,
+        instruments: _Instruments,
+        logger: Logger,
+        completion_hook: CompletionHook,
+        provider: str,
+        *,
+        request_model: str | None = None,
+        server_address: str | None = None,
+        server_port: int | None = None,
+        operation_name: str | None = None,
+        error_type_resolver: ErrorTypeResolver | None = None,
+        content_capturing_mode: ContentCapturingMode | None = None,
+    ) -> None:
+        self._tracer = tracer
+        self._instruments = instruments
+        self._logger = logger
+        self._completion_hook = completion_hook
+        self._error_type_resolver = error_type_resolver
+        self._operation_name = (
+            operation_name or GenAI.GenAiOperationNameValues.CHAT.value
+        )
+        self._content_capturing_mode = ContentCapturingMode.NO_CONTENT
+        self.metric_attributes: dict[str, AttributeValue] = {}
+        self.span: Span = get_current_span()
+        self._monotonic_start_s = timeit.default_timer()
+        self._request_stream: bool | None = None
+        self._ttfc_seconds: float | None = None
+        self._stream_last_chunk_at: float | None = None
+
+        self._provider: str = provider
+        self._request_model: str | None = request_model
+        self._server_address: str | None = server_address
+        self._server_port: int | None = server_port
+        self.conversation_id: str | None = None
+
+        self.input_messages: list[InputMessage] = []
+        self.output_messages: list[OutputMessage] = []
+        self.system_instruction: (
+            list[SystemInstructionPart] | list[MessagePart]
+        ) = []
+        self._response_model_name: str | None = None
+        self.response_id: str | None = None
+        self.finish_reasons: list[str] | None = None
+        self.input_tokens: int | None = None
+        self.output_tokens: int | None = None
+        self.thinking_tokens: int | None = None
+        self.temperature: float | None = None
+        self.top_p: float | None = None
+        self.frequency_penalty: float | None = None
+        self.presence_penalty: float | None = None
+        self.max_tokens: int | None = None
+        self.stop_sequences: list[str] | None = None
+        self.seed: int | None = None
+        self.cache_write_input_tokens: int | None = None
+        self.cache_read_input_tokens: int | None = None
+        self.text_input_tokens: int | None = None
+        self.image_input_tokens: int | None = None
+        self.audio_input_tokens: int | None = None
+        self.text_output_tokens: int | None = None
+        self.image_output_tokens: int | None = None
+        self.audio_output_tokens: int | None = None
+        self.text_cache_read_input_tokens: int | None = None
+        self.image_cache_read_input_tokens: int | None = None
+        self.audio_cache_read_input_tokens: int | None = None
+        self.reasoning_level: str | None = None
+        self.previous_response_id: str | None = None
+        self.conversation_compacted: bool | None = None
+        self.prompt_name: str | None = None
+        self.prompt_version: str | None = None
+        self.prompt_variables: Mapping[str, object] | None = None
+        self.tool_definitions: list[ToolDefinition] | None = None
+        self.top_k: float | None = None
+        self.request_choice_count: int | None = None
+        self.output_type: str | None = None
+
+        existing_attrs = get_inference_attributes()
+        self._context_attributes: dict[str, AttributeValue] = (
+            existing_attrs if existing_attrs is not None else {}
+        )
+        self.attributes: dict[str, AttributeValue] = self._context_attributes
+        self.metric_attributes: dict[str, AttributeValue] = {}
+
+        # Add start attributes to context attributes immediately
+        self._context_attributes.update(self._get_start_attributes())
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        super().__setattr__(name, value)
+        if (
+            hasattr(self, "_context_attributes")
+            and name in _FIELD_TO_SEMCONV
+            and value is not None
+        ):
+            self._context_attributes[_FIELD_TO_SEMCONV[name]] = value
+
+    @property
+    def already_started(self) -> bool:
+        return True
+
+    @property
+    def should_capture_content(self) -> bool:
+        return False
+
+    @property
+    def _should_capture_content_on_span(self) -> bool:
+        return False
+
+    def _start(
+        self, attributes: dict[str, AttributeValue] | None = None
+    ) -> None:
+        pass
+
+    def record_stream_chunk(self) -> None:
+        pass
+
+    def _on_stream_chunk(self, chunk_at: float) -> None:
+        pass
+
+    def _finish(self, error: Error | None = None) -> None:
+        self._context_attributes.update(self._get_context_attributes())
+
+    def _apply_finish(self, error: Error | None = None) -> None:
+        pass
+
+    def stop(self) -> None:
+        self._finish()
+
+    def fail(self, error: Error | BaseException) -> None:
+        self._finish()
 
 
 @dataclass
@@ -661,6 +775,14 @@ class LLMInvocation:
     def already_started(self) -> bool:
         return (
             self._inference_invocation.already_started
+            if self._inference_invocation is not None
+            else False
+        )
+
+    @property
+    def should_capture_content(self) -> bool:
+        return (
+            self._inference_invocation.should_capture_content
             if self._inference_invocation is not None
             else False
         )
