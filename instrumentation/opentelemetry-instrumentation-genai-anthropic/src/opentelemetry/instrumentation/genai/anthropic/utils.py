@@ -199,6 +199,9 @@ def _convert_content_block_to_part(
     block: ContentBlock | ContentBlockParam,
 ) -> MessagePart | None:
     """Convert an Anthropic content block to a MessagePart."""
+    if isinstance(block, Mapping):
+        return _convert_dict_block_to_part(cast(Mapping[str, object], block))
+
     if isinstance(block, TextBlock):
         return TextPart(content=block.text)
 
@@ -216,18 +219,12 @@ def _convert_content_block_to_part(
         )
         return ReasoningPart(content=content)
 
-    if getattr(block, "type", None) in _SERVER_TOOL_RESULT_TYPES:
-        model_dump = getattr(block, "model_dump", None)
-        if callable(model_dump):
-            dumped = model_dump(exclude_none=True)
-            if isinstance(dumped, Mapping):
-                return _convert_dict_block_to_part(
-                    cast(Mapping[str, object], dumped)
-                )
+    if block.type in _SERVER_TOOL_RESULT_TYPES:
+        return _convert_dict_block_to_part(
+            cast(Mapping[str, object], block.model_dump(exclude_none=True))
+        )
 
-    if not hasattr(block, "get"):
-        return None
-    return _convert_dict_block_to_part(cast(Mapping[str, object], block))
+    return None
 
 
 def convert_content_to_parts(
