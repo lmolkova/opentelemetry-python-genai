@@ -407,15 +407,57 @@ def test_extract_output_messages_maps_parts_and_finish_reasons(loaded_module):
                 "output": "rain",
             },
         ),
+        (
+            {
+                "id": "ig_1",
+                "type": "image_generation_call",
+                "status": "completed",
+                "result": "image-data",
+            },
+            "image_generation",
+            {
+                "type": "image_generation",
+                "status": "completed",
+                "result": "image-data",
+            },
+        ),
+        (
+            {
+                "id": "mcp_list_1",
+                "type": "mcp_list_tools",
+                "server_label": "weather",
+                "tools": [],
+            },
+            "mcp_list_tools",
+            {
+                "type": "mcp_list_tools",
+                "server_label": "weather",
+                "tools": [],
+            },
+        ),
+        (
+            {
+                "id": "ts_item_1",
+                "type": "tool_search_call",
+                "call_id": "ts_call_1",
+                "execution": "server",
+                "status": "completed",
+                "arguments": {"query": "weather"},
+            },
+            "tool_search",
+            {
+                "type": "tool_search",
+                "execution": "server",
+                "status": "completed",
+                "arguments": {"query": "weather"},
+            },
+        ),
     ],
 )
 def test_extract_output_messages_maps_server_tools(
     loaded_module, item, expected_name, expected_payload
 ):
-    try:
-        response = _make_response(output=[item])
-    except ValueError:
-        pytest.skip("server tool output type is unavailable in this SDK")
+    response = _make_response(output=[item])
 
     messages = loaded_module.get_output_messages_from_response(response)
 
@@ -424,7 +466,7 @@ def test_extract_output_messages_maps_server_tools(
     assert len(messages[0].parts) == 1
     part = messages[0].parts[0]
     assert isinstance(part, ServerToolCallPart)
-    assert part.id == item["id"]
+    assert part.id == item.get("call_id", item["id"])
     assert part.name == expected_name
     assert part.server_tool_call == expected_payload
 
@@ -438,10 +480,7 @@ def test_extract_output_messages_maps_server_tool_search_result(loaded_module):
         "status": "completed",
         "tools": [],
     }
-    try:
-        response = _make_response(output=[item])
-    except ValueError:
-        pytest.skip("server tool search output is unavailable in this SDK")
+    response = _make_response(output=[item])
 
     messages = loaded_module.get_output_messages_from_response(response)
 
@@ -467,12 +506,58 @@ def test_extract_output_messages_does_not_classify_client_tool_search(
         "status": "completed",
         "arguments": {},
     }
-    try:
-        response = _make_response(output=[item])
-    except ValueError:
-        pytest.skip("tool search output is unavailable in this SDK")
+    response = _make_response(output=[item])
 
     assert loaded_module.get_output_messages_from_response(response) == []
+
+
+@pytest.mark.parametrize(
+    ("status", "expected_finish_reason"),
+    [
+        ("in_progress", None),
+        ("failed", "error"),
+        ("incomplete", "incomplete"),
+    ],
+)
+def test_extract_output_messages_uses_server_tool_status(
+    loaded_module, status, expected_finish_reason
+):
+    response = _make_response(
+        output=[
+            {
+                "id": "fs_1",
+                "type": "file_search_call",
+                "status": status,
+                "queries": ["OpenTelemetry"],
+                "results": [],
+            }
+        ]
+    )
+
+    messages = loaded_module.get_output_messages_from_response(response)
+
+    if expected_finish_reason is None:
+        assert messages == []
+    else:
+        assert messages[0].finish_reason == expected_finish_reason
+
+
+def test_extract_output_messages_maps_failed_mcp_list_tools(loaded_module):
+    response = _make_response(
+        output=[
+            {
+                "id": "mcp_list_1",
+                "type": "mcp_list_tools",
+                "server_label": "weather",
+                "tools": [],
+                "error": "unavailable",
+            }
+        ]
+    )
+
+    messages = loaded_module.get_output_messages_from_response(response)
+
+    assert messages[0].finish_reason == "error"
 
 
 def test_extract_finish_reasons_maps_terminal_message_and_tool_items(

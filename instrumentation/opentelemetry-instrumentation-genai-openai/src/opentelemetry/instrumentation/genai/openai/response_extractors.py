@@ -26,6 +26,7 @@ from .utils import (
 
 if TYPE_CHECKING:
     from openai.types.responses.response import Response
+    from openai.types.responses.response_output_item import ResponseOutputItem
     from openai.types.responses.response_usage import ResponseUsage
     from openai.types.responses.tool_param import ToolParam
 
@@ -318,33 +319,35 @@ _SERVER_TOOL_RESPONSE_NAMES = {
 
 
 def _extract_server_tool_part(
-    item: object,
-) -> ServerToolCallPart | ServerToolCallResponsePart | None:
+    item: ResponseOutputItem,
+) -> tuple[ServerToolCallPart | ServerToolCallResponsePart, str] | None:
     if ServerToolCallPart is None or ServerToolCallResponsePart is None:
         return None
 
-    item_type = _get_field(item, "type")
-    if not isinstance(item_type, str):
-        return None
+    item_type = item.type
     tool_name = _SERVER_TOOL_NAMES.get(item_type)
     response_name = _SERVER_TOOL_RESPONSE_NAMES.get(item_type)
     if tool_name is None and response_name is None:
         return None
     if (
-        item_type.startswith("tool_search_")
-        and _get_field(item, "execution") != "server"
+        item_type
+        in (
+            "tool_search_call",
+            "tool_search_output",
+        )
+        and item.execution != "server"
     ):
         return None
 
-    if isinstance(item, Mapping):
-        payload = dict(item)
-    else:
-        model_dump = getattr(item, "model_dump", None)
-        if not callable(model_dump):
-            return None
-        payload = model_dump(exclude_none=True, mode="json")
+    finish_reason = _server_tool_finish_reason(item)
+    if finish_reason is None:
+        return None
+
+    payload = item.model_dump(exclude_none=True, mode="json")
 
     item_id = payload.pop("id", None)
+    call_id = payload.pop("call_id", None)
+    part_id = call_id if isinstance(call_id, str) else item_id
     payload.pop("type", None)
     name = payload.pop("name", None)
     canonical_name = tool_name or response_name
@@ -352,16 +355,43 @@ def _extract_server_tool_part(
         return None
     payload["type"] = canonical_name
     if response_name is not None:
-        call_id = payload.pop("call_id", None)
-        return ServerToolCallResponsePart(
-            server_tool_call_response=payload,
-            id=call_id if isinstance(call_id, str) else None,
+        return (
+            ServerToolCallResponsePart(
+                server_tool_call_response=payload,
+                id=call_id if isinstance(call_id, str) else None,
+            ),
+            finish_reason,
         )
-    return ServerToolCallPart(
-        name=name if isinstance(name, str) else canonical_name,
-        server_tool_call=payload,
-        id=item_id if isinstance(item_id, str) else None,
+    return (
+        ServerToolCallPart(
+            name=name if isinstance(name, str) else canonical_name,
+            server_tool_call=payload,
+            id=part_id if isinstance(part_id, str) else None,
+        ),
+        finish_reason,
     )
+
+
+def _server_tool_finish_reason(item: ResponseOutputItem) -> str | None:
+    match item.type:
+        case "mcp_list_tools":
+            return "error" if item.error else "stop"
+        case (
+            "code_interpreter_call"
+            | "file_search_call"
+            | "image_generation_call"
+            | "mcp_call"
+            | "tool_search_call"
+            | "tool_search_output"
+            | "web_search_call"
+        ):
+            return (
+                _finish_reason_from_status(item.status)
+                if item.status is not None
+                else None
+            )
+        case _:
+            return None
 
 
 # `incomplete_details.reason` values that map onto a cross-provider finish
@@ -516,12 +546,13 @@ def get_output_messages_from_response(
                 )
             continue
 
-        if server_tool_part := _extract_server_tool_part(item):
+        if server_tool := _extract_server_tool_part(item):
+            server_tool_part, finish_reason = server_tool
             messages.append(
                 OutputMessage(
                     role=Role.ASSISTANT.value,
                     parts=[server_tool_part],
-                    finish_reason="stop",
+                    finish_reason=finish_reason,
                 )
             )
 
