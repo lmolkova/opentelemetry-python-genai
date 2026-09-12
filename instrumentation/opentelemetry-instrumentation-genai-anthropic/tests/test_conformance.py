@@ -23,6 +23,9 @@ from .conformance.inference_beta import (
     InferenceBetaScenario,
     InferenceBetaStreamingScenario,
 )
+from .conformance.inference_beta_server_tool_calling import (
+    InferenceBetaServerToolCallingScenario,
+)
 from .conformance.inference_raw_response import (
     InferenceRawResponseScenario,
     InferenceRawResponseStreamingScenario,
@@ -41,6 +44,7 @@ from .conformance.tool_calling import ToolCallingScenario
         ToolCallingScenario(),
         InferenceBetaScenario(),
         InferenceBetaStreamingScenario(),
+        InferenceBetaServerToolCallingScenario(),
     ],
     ids=lambda s: type(s).__name__,
 )
