@@ -50,7 +50,7 @@ class InferenceBetaScenario(Scenario):
             ):
                 with vcr.use_cassette("inference_beta_conformance.yaml"):
                     Anthropic().beta.messages.create(
-                        model="claude-sonnet-4-20250514",
+                        model="claude-sonnet-4-6",
                         max_tokens=100,
                         messages=[
                             {
@@ -109,7 +109,7 @@ class InferenceBetaStreamingScenario(Scenario):
                     "inference_beta_streaming_conformance.yaml"
                 ):
                     with Anthropic().beta.messages.create(
-                        model="claude-sonnet-4-20250514",
+                        model="claude-sonnet-4-6",
                         max_tokens=100,
                         messages=[
                             {

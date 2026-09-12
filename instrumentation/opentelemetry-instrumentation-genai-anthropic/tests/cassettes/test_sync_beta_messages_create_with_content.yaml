@@ -10,7 +10,7 @@ interactions:
             "content": "Say hello in one word."
           }
         ],
-        "model": "claude-sonnet-4-20250514"
+        "model": "claude-sonnet-4-6"
       }
     headers: {}
     method: POST
@@ -19,7 +19,7 @@ interactions:
     body:
       string: |-
         {
-          "model": "claude-sonnet-4-20250514",
+          "model": "claude-sonnet-4-6",
           "id": "msg_0176GK1qFwwpVM59jDYiKPjN",
           "type": "message",
           "role": "assistant",

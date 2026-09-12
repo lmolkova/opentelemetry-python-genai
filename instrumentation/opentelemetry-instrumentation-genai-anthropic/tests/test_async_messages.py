@@ -2115,7 +2115,7 @@ async def test_async_beta_messages_create_basic(
     span_exporter, async_anthropic_client, instrument_no_content
 ):
     """Test basic async beta message creation produces correct span."""
-    model = "claude-sonnet-4-20250514"
+    model = "claude-sonnet-4-6"
     messages = [{"role": "user", "content": "Say hello in one word."}]
 
     response = await async_anthropic_client.beta.messages.create(
@@ -2162,7 +2162,7 @@ async def test_async_beta_messages_create_with_content(
     span_exporter, async_anthropic_client, instrument_with_content
 ):
     """Test async beta message creation captures input and output content."""
-    model = "claude-sonnet-4-20250514"
+    model = "claude-sonnet-4-6"
     prompt = "Say hello in one word."
     messages = [{"role": "user", "content": prompt}]
 
@@ -2255,7 +2255,7 @@ async def test_async_beta_messages_create_streaming(
     span_exporter, async_anthropic_client, instrument_no_content
 ):
     """Test streaming async beta message creation produces correct span."""
-    model = "claude-sonnet-4-20250514"
+    model = "claude-sonnet-4-6"
     messages = [{"role": "user", "content": "Say hello in one word."}]
 
     stream = await async_anthropic_client.beta.messages.create(
@@ -2305,7 +2305,7 @@ async def test_async_beta_messages_stream(
     span_exporter, async_anthropic_client, instrument_no_content
 ):
     """Test streaming async beta message stream produces correct span."""
-    model = "claude-sonnet-4-20250514"
+    model = "claude-sonnet-4-6"
     messages = [{"role": "user", "content": "Say hello in one word."}]
 
     async with async_anthropic_client.beta.messages.stream(
@@ -2349,7 +2349,7 @@ async def test_async_beta_messages_with_raw_response(
     span_exporter, async_anthropic_client, instrument_no_content
 ):
     """Test that with_raw_response.create on async beta messages produces correct span."""
-    model = "claude-sonnet-4-20250514"
+    model = "claude-sonnet-4-6"
     messages = [{"role": "user", "content": "Say hello in one word."}]
 
     raw_response = (
@@ -2400,7 +2400,7 @@ async def test_async_beta_messages_with_streaming_response(
     span_exporter, async_anthropic_client, instrument_no_content
 ):
     """Test async beta message creation with streaming response produces correct span."""
-    model = "claude-sonnet-4-20250514"
+    model = "claude-sonnet-4-6"
     messages = [{"role": "user", "content": "Say hello in one word."}]
 
     async with (
@@ -2448,7 +2448,7 @@ async def test_async_beta_messages_stream_interrupted_mid_iteration(
     monkeypatch, span_exporter, async_anthropic_client, instrument_no_content
 ):
     """Test that mid-stream network failures in async beta stream propagate and record error.type."""
-    model = "claude-sonnet-4-20250514"
+    model = "claude-sonnet-4-6"
     messages = [{"role": "user", "content": "Say hello in one word."}]
 
     class ErrorInjectingStreamDelegate:
@@ -2503,7 +2503,7 @@ async def test_async_beta_messages_stream_user_exception(
     span_exporter, async_anthropic_client, instrument_no_content
 ):
     """Test that user raised exceptions from async beta.messages.stream are propagated."""
-    model = "claude-sonnet-4-20250514"
+    model = "claude-sonnet-4-6"
     messages = [{"role": "user", "content": "Say hello in one word."}]
 
     with pytest.raises(ValueError, match="User raised exception"):
@@ -2533,7 +2533,7 @@ async def test_async_beta_messages_create_streaming_with_content(
     span_exporter, async_anthropic_client, instrument_with_content
 ):
     """Test content capture on async beta create(stream=True)."""
-    model = "claude-sonnet-4-20250514"
+    model = "claude-sonnet-4-6"
     messages = [{"role": "user", "content": "Say hello in one word."}]
 
     stream = await async_anthropic_client.beta.messages.create(
@@ -2575,7 +2575,7 @@ async def test_async_beta_messages_stream_with_content(
     span_exporter, async_anthropic_client, instrument_with_content
 ):
     """Test content capture on async beta.messages.stream()."""
-    model = "claude-sonnet-4-20250514"
+    model = "claude-sonnet-4-6"
     messages = [{"role": "user", "content": "Say hello in one word."}]
 
     async with async_anthropic_client.beta.messages.stream(
@@ -2614,7 +2614,7 @@ async def test_async_beta_messages_create_streaming_interrupted_mid_iteration(
     monkeypatch, span_exporter, async_anthropic_client, instrument_no_content
 ):
     """Test that mid-stream network failures in async beta create(stream=True) propagate and record error.type."""
-    model = "claude-sonnet-4-20250514"
+    model = "claude-sonnet-4-6"
     messages = [{"role": "user", "content": "Say hello in one word."}]
 
     class ErrorInjectingStreamDelegate:
@@ -2672,7 +2672,7 @@ async def test_async_beta_messages_create_streaming_user_exception(
     span_exporter, async_anthropic_client, instrument_no_content
 ):
     """Test that user raised exceptions in async beta create(stream=True) are propagated."""
-    model = "claude-sonnet-4-20250514"
+    model = "claude-sonnet-4-6"
     messages = [{"role": "user", "content": "Say hello in one word."}]
 
     stream = await async_anthropic_client.beta.messages.create(
@@ -2705,7 +2705,7 @@ async def test_async_beta_messages_stream_closed_early_by_caller(
     span_exporter, async_anthropic_client, instrument_no_content
 ):
     """Caller-closing AsyncBetaMessages.stream early finalizes without error."""
-    model = "claude-sonnet-4-20250514"
+    model = "claude-sonnet-4-6"
     messages = [{"role": "user", "content": "Say hello in one word."}]
 
     async with async_anthropic_client.beta.messages.stream(
