@@ -166,6 +166,7 @@ class _MessagesStreamMixin(Generic[ResponseFormatT]):
     _self_message_telemetry_finalized: bool
     _self_json_bufs: dict[int, bytes]
     _self_is_beta: bool
+    _self_beta_accumulation_disabled: bool
 
     def _stop(self) -> None:
         if self._self_message_telemetry_finalized:
@@ -212,7 +213,11 @@ class _MessagesStreamMixin(Generic[ResponseFormatT]):
         is_beta = self._self_is_beta or getattr(
             chunk.__class__, "__module__", ""
         ).startswith("anthropic.types.beta")
-        if is_beta and beta_accumulate_event is not None:
+        if (
+            is_beta
+            and beta_accumulate_event is not None
+            and not self._self_beta_accumulation_disabled
+        ):
             beta_kwargs: dict[str, Any] = {
                 "event": chunk,
                 "current_snapshot": self._self_message,
@@ -231,6 +236,7 @@ class _MessagesStreamMixin(Generic[ResponseFormatT]):
             except BaseException as exc:
                 if not isinstance(exc, Exception):
                     raise
+                self._self_beta_accumulation_disabled = True
                 _logger.debug(
                     "Failed to accumulate beta stream event", exc_info=True
                 )
@@ -292,6 +298,7 @@ class MessagesStreamWrapper(
         self._self_message_telemetry_finalized = False
         self._self_json_bufs = {}
         self._self_is_beta = is_beta
+        self._self_beta_accumulation_disabled = False
 
     @property
     def response(self) -> _http_lib.Response:
@@ -349,6 +356,7 @@ class AsyncMessagesStreamWrapper(
         self._self_message_telemetry_finalized = False
         self._self_json_bufs = {}
         self._self_is_beta = is_beta
+        self._self_beta_accumulation_disabled = False
 
     @property
     def response(self) -> _http_lib.Response:

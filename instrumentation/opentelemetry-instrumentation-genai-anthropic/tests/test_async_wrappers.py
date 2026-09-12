@@ -575,7 +575,9 @@ def test_stream_wrapper_does_not_pass_json_bufs_when_unsupported(monkeypatch):
     assert "json_bufs" not in captured_kwargs[0]
 
 
-def test_beta_accumulate_failure_falls_back_to_standard(monkeypatch):
+def test_beta_accumulate_failure_disables_beta_and_falls_back_to_standard(
+    monkeypatch,
+):
     from opentelemetry.instrumentation.genai.anthropic import wrappers
 
     monkeypatch.setattr(wrappers, "_accumulation_disabled", False)
@@ -605,7 +607,7 @@ def test_beta_accumulate_failure_falls_back_to_standard(monkeypatch):
     monkeypatch.setattr(wrappers, "accumulate_event", mock_accumulate)
 
     wrapper = _make_stream_wrapper(
-        _FakeSyncStream(events=["chunk1"]), is_beta=True
+        _FakeSyncStream(events=["chunk1", "chunk2"]), is_beta=True
     )
 
     list(wrapper)
@@ -613,7 +615,8 @@ def test_beta_accumulate_failure_falls_back_to_standard(monkeypatch):
     assert len(beta_calls) == 1
     assert beta_calls[0]["json_bufs"] is wrapper._self_json_bufs
     assert "request_headers" in beta_calls[0]
-    assert len(standard_calls) == 1
+    assert len(standard_calls) == 2
+    assert wrapper._self_beta_accumulation_disabled
 
 
 @pytest.mark.asyncio
