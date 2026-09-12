@@ -491,7 +491,10 @@ def _message_from_read_body(
                     AnthropicBetaMessage
                     if (
                         is_beta
-                        and hasattr(AnthropicBetaMessage, "model_fields")
+                        and (
+                            hasattr(AnthropicBetaMessage, "model_fields")
+                            or hasattr(AnthropicBetaMessage, "__fields__")
+                        )
                     )
                     else AnthropicMessage
                 )

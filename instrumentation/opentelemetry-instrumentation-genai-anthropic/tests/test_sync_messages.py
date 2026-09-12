@@ -2272,6 +2272,33 @@ def test_raw_response_deserializes_beta_message_body():
         assert isinstance(message, BetaMessage)
 
 
+def test_raw_response_uses_beta_message_with_pydantic_v1(monkeypatch):
+    class _PydanticV1BetaMessage:
+        __fields__ = {}
+
+    class _Body:
+        @staticmethod
+        def json():
+            return {"type": "message"}
+
+    target_types = []
+    result = object()
+
+    def construct_type(*, type_, value):
+        target_types.append(type_)
+        return result
+
+    monkeypatch.setattr(
+        _raw_response, "AnthropicBetaMessage", _PydanticV1BetaMessage
+    )
+    monkeypatch.setattr(_raw_response, "construct_type", construct_type)
+
+    assert (
+        _raw_response._message_from_read_body(_Body(), is_beta=True) is result
+    )
+    assert target_types == [_PydanticV1BetaMessage]
+
+
 @pytest.mark.vcr()
 @pytest.mark.cassette("test_sync_messages_create_with_raw_response")
 def test_sync_messages_raw_response_only_parse_to_records_telemetry(

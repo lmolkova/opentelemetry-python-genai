@@ -3,6 +3,7 @@
 
 """Tests for Anthropic message parameter extraction."""
 
+from dataclasses import asdict
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -10,10 +11,18 @@ import pytest
 
 from opentelemetry.instrumentation.genai.anthropic.messages_extractors import (
     extract_params,
+    get_output_messages_from_message,
     set_invocation_response_attributes,
 )
 from opentelemetry.instrumentation.genai.anthropic.utils import (
     _convert_content_block_to_part,
+)
+from opentelemetry.util.genai.types import (
+    CompactionPart,
+    FilePart,
+    GenericPart,
+    ServerToolCallPart,
+    ServerToolCallResponsePart,
 )
 
 
@@ -84,7 +93,9 @@ def test_convert_beta_mcp_tool_result_block_serializable():
     try:
         from anthropic.types.beta import BetaMCPToolResultBlock, BetaTextBlock
 
-        has_beta_mcp = hasattr(BetaMCPToolResultBlock, "model_fields")
+        has_beta_mcp = hasattr(
+            BetaMCPToolResultBlock, "model_fields"
+        ) or hasattr(BetaMCPToolResultBlock, "__fields__")
     except (ImportError, AttributeError):
         has_beta_mcp = False
 
@@ -98,11 +109,15 @@ def test_convert_beta_mcp_tool_result_block_serializable():
         type="mcp_tool_result",
     )
     part = _convert_content_block_to_part(block)
-    assert part is not None
+    assert isinstance(part, ServerToolCallResponsePart)
     assert part.id == "tool_123"
-    assert part.response == [
-        {"citations": None, "text": "tool output", "type": "text"}
-    ]
+    assert part.server_tool_call_response == {
+        "content": [
+            {"citations": None, "text": "tool output", "type": "text"}
+        ],
+        "is_error": False,
+        "type": "mcp_tool_result",
+    }
 
 
 def test_convert_dict_mcp_tool_use_and_result():
@@ -114,10 +129,13 @@ def test_convert_dict_mcp_tool_use_and_result():
             "input": {"path": "a.txt"},
         }
     )
-    assert part_use is not None
+    assert isinstance(part_use, ServerToolCallPart)
     assert part_use.id == "call_1"
     assert part_use.name == "read"
-    assert part_use.arguments == {"path": "a.txt"}
+    assert part_use.server_tool_call == {
+        "type": "mcp_tool_use",
+        "arguments": {"path": "a.txt"},
+    }
 
     server_use = _convert_content_block_to_part(
         {
@@ -127,10 +145,13 @@ def test_convert_dict_mcp_tool_use_and_result():
             "input": {"query": "otel"},
         }
     )
-    assert server_use is not None
+    assert isinstance(server_use, ServerToolCallPart)
     assert server_use.id == "call_srv"
     assert server_use.name == "web_search"
-    assert server_use.arguments == {"query": "otel"}
+    assert server_use.server_tool_call == {
+        "type": "server_tool_use",
+        "arguments": {"query": "otel"},
+    }
 
     part_res = _convert_content_block_to_part(
         {
@@ -139,9 +160,12 @@ def test_convert_dict_mcp_tool_use_and_result():
             "content": "file contents",
         }
     )
-    assert part_res is not None
+    assert isinstance(part_res, ServerToolCallResponsePart)
     assert part_res.id == "call_1"
-    assert part_res.response == "file contents"
+    assert part_res.server_tool_call_response == {
+        "type": "mcp_tool_result",
+        "content": "file contents",
+    }
 
     search_res = _convert_content_block_to_part(
         {
@@ -150,9 +174,12 @@ def test_convert_dict_mcp_tool_use_and_result():
             "content": "search results",
         }
     )
-    assert search_res is not None
+    assert isinstance(search_res, ServerToolCallResponsePart)
     assert search_res.id == "call_srv"
-    assert search_res.response == "search results"
+    assert search_res.server_tool_call_response == {
+        "type": "web_search_tool_result",
+        "content": "search results",
+    }
 
 
 def test_convert_beta_blocks_when_available():
@@ -194,9 +221,13 @@ def test_convert_beta_blocks_when_available():
             type="server_tool_use",
         )
     )
-    assert server_tool_part is not None
+    assert isinstance(server_tool_part, ServerToolCallPart)
     assert server_tool_part.id == "st_1"
     assert server_tool_part.name == "web_search"
+    assert server_tool_part.server_tool_call == {
+        "type": "server_tool_use",
+        "arguments": {"q": "otel"},
+    }
 
     # Thinking block
     thinking_part = _convert_content_block_to_part(
@@ -232,10 +263,14 @@ def test_convert_beta_blocks_when_available():
                 type="mcp_tool_use",
             )
         )
-        assert mcp_use is not None
+        assert isinstance(mcp_use, ServerToolCallPart)
         assert mcp_use.id == "mcp_1"
         assert mcp_use.name == "read_file"
-        assert mcp_use.arguments == {"path": "x.py"}
+        assert mcp_use.server_tool_call == {
+            "type": "mcp_tool_use",
+            "arguments": {"path": "x.py"},
+            "server_name": "fs",
+        }
 
         search_block = _convert_content_block_to_part(
             BetaWebSearchToolResultBlock(
@@ -251,8 +286,95 @@ def test_convert_beta_blocks_when_available():
                 type="web_search_tool_result",
             )
         )
-        assert search_block is not None
+        assert isinstance(search_block, ServerToolCallResponsePart)
         assert search_block.id == "ws_1"
-        assert isinstance(search_block.response, list)
+        assert isinstance(
+            search_block.server_tool_call_response["content"], list
+        )
     except (ImportError, AttributeError):
         pass
+
+
+@pytest.mark.parametrize(
+    ("block", "part_type"),
+    [
+        (
+            {"type": "container_upload", "file_id": "file_123"},
+            FilePart,
+        ),
+        (
+            {
+                "type": "compaction",
+                "content": "Summary of earlier turns.",
+                "encrypted_content": "opaque",
+            },
+            CompactionPart,
+        ),
+        (
+            {
+                "type": "code_execution_tool_result",
+                "tool_use_id": "server_123",
+                "content": {"stdout": "1"},
+            },
+            ServerToolCallResponsePart,
+        ),
+        (
+            {
+                "type": "fallback",
+                "from": {"model": "model-a"},
+                "to": {"model": "model-b"},
+            },
+            GenericPart,
+        ),
+    ],
+)
+def test_convert_additional_beta_blocks(block, part_type):
+    class _BetaBlock:
+        def model_dump(self):
+            return block
+
+    assert isinstance(_convert_content_block_to_part(_BetaBlock()), part_type)
+
+
+def test_beta_server_tool_parts_have_semconv_serialized_shape():
+    message = SimpleNamespace(
+        role="assistant",
+        stop_reason="tool_use",
+        content=[
+            {
+                "type": "mcp_tool_use",
+                "id": "call_1",
+                "name": "read",
+                "server_name": "files",
+                "input": {"path": "a.txt"},
+            },
+            {
+                "type": "mcp_tool_result",
+                "tool_use_id": "call_1",
+                "content": "file contents",
+            },
+        ],
+    )
+
+    output = get_output_messages_from_message(message)
+
+    assert [asdict(part) for part in output[0].parts] == [
+        {
+            "name": "read",
+            "server_tool_call": {
+                "type": "mcp_tool_use",
+                "arguments": {"path": "a.txt"},
+                "server_name": "files",
+            },
+            "id": "call_1",
+            "type": "server_tool_call",
+        },
+        {
+            "server_tool_call_response": {
+                "type": "mcp_tool_result",
+                "content": "file contents",
+            },
+            "id": "call_1",
+            "type": "server_tool_call_response",
+        },
+    ]
