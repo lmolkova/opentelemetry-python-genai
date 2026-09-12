@@ -561,12 +561,7 @@ class TestTelemetryHandler(unittest.TestCase):
         assert captured_attributes[server_attributes.SERVER_PORT] == 8080
 
     def test_inference_conversation_id_on_span_but_not_metrics(self):
-        """conversation id is high cardinality, so it must stay off metrics.
-
-        `_get_metric_attributes()` builds on `_get_start_attributes()`, so
-        setting it at span creation would make it a dimension on the duration
-        and token histograms.
-        """
+        """conversation id is high cardinality, so it must stay off metrics."""
         invocation = self.telemetry_handler.inference(
             "test-provider", request_model="test-model"
         )
@@ -575,10 +570,7 @@ class TestTelemetryHandler(unittest.TestCase):
 
         attrs = self.span_exporter.get_finished_spans()[0].attributes
         assert attrs[GenAI.GEN_AI_CONVERSATION_ID] == "conv-1"
-        assert (
-            GenAI.GEN_AI_CONVERSATION_ID
-            not in invocation._get_metric_attributes()
-        )
+        assert GenAI.GEN_AI_CONVERSATION_ID not in invocation.metric_attributes
 
     def test_inference_omits_conversation_id_when_not_set(self):
         invocation = self.telemetry_handler.inference(
@@ -1045,7 +1037,7 @@ class TestTelemetryHandler(unittest.TestCase):
     def test_inference_finish_does_not_duplicate_start_attributes(self):
         mock_span = MagicMock()
         with patch.object(
-            self.telemetry_handler._tracer,
+            self.telemetry_handler._spans._tracer,
             "start_span",
             return_value=mock_span,
         ):

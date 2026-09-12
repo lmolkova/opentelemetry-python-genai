@@ -10,13 +10,13 @@ from opentelemetry._logs import Logger
 from opentelemetry.semconv._incubating.attributes import (
     gen_ai_attributes as GenAI,
 )
-from opentelemetry.trace import SpanKind, Tracer
 from opentelemetry.util.genai._invocation import (
     Error,
     GenAIInvocation,
 )
 from opentelemetry.util.genai.completion_hook import CompletionHook
 from opentelemetry.util.genai.semconv.gen_ai._metrics import _Metrics
+from opentelemetry.util.genai.semconv.gen_ai._spans import _Spans
 from opentelemetry.util.genai.types import (
     InputMessage,
     OutputMessage,
@@ -39,7 +39,7 @@ class WorkflowInvocation(GenAIInvocation):
 
     def __init__(
         self,
-        tracer: Tracer,
+        spans: _Spans,
         metrics: _Metrics,
         logger: Logger,
         completion_hook: CompletionHook,
@@ -50,20 +50,25 @@ class WorkflowInvocation(GenAIInvocation):
         """Use handler.workflow(name) rather than calling this directly."""
         _operation_name = GenAI.GenAiOperationNameValues.INVOKE_WORKFLOW.value
         super().__init__(
-            tracer,
+            spans,
             metrics,
             logger,
             completion_hook,
             operation_name=_operation_name,
             span_name=f"{_operation_name} {name}" if name else _operation_name,
-            span_kind=SpanKind.INTERNAL,
             content_capturing_mode=content_capturing_mode,
         )
         self._name: str | None = name
         self.conversation_id: str | None = None
         self.input_messages: list[InputMessage] = []
         self.output_messages: list[OutputMessage] = []
-        self._start(self._get_start_attributes())
+        self._start(
+            self._spans.invoke_workflow(
+                self._span_name,
+                operation_name=self._operation_name,
+                workflow_name=self._name,
+            )
+        )
 
     def _get_start_attributes(self) -> dict[str, AttributeValue]:
         """Return sampling-relevant attributes available at span creation time."""
@@ -94,13 +99,6 @@ class WorkflowInvocation(GenAIInvocation):
         return {
             key: value for key, value in optional_attrs if value is not None
         }
-
-    def _get_metric_attributes(self) -> dict[str, AttributeValue]:
-        attrs: dict[str, AttributeValue] = {}
-        if self._name is not None:
-            attrs[GenAI.GEN_AI_WORKFLOW_NAME] = self._name
-        attrs.update(self.metric_attributes)
-        return attrs
 
     def _apply_finish(self, error: Error | None = None) -> None:
         attributes: dict[str, AttributeValue] = self._get_messages_for_span()

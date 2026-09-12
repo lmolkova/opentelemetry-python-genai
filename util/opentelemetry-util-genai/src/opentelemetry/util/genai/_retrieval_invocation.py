@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import timeit
 from collections.abc import Mapping, Sequence
 from typing import Any, Final
 
@@ -11,10 +12,10 @@ from opentelemetry.semconv._incubating.attributes import (
     gen_ai_attributes as GenAI,
 )
 from opentelemetry.semconv.attributes import server_attributes
-from opentelemetry.trace import SpanKind, Tracer
 from opentelemetry.util.genai._invocation import Error, GenAIInvocation
 from opentelemetry.util.genai.completion_hook import CompletionHook
 from opentelemetry.util.genai.semconv.gen_ai._metrics import _Metrics
+from opentelemetry.util.genai.semconv.gen_ai._spans import _Spans
 from opentelemetry.util.genai.utils import (
     ContentCapturingMode,
     gen_ai_json_dumps,
@@ -46,7 +47,7 @@ class RetrievalInvocation(GenAIInvocation):
 
     def __init__(
         self,
-        tracer: Tracer,
+        spans: _Spans,
         metrics: _Metrics,
         logger: Logger,
         completion_hook: CompletionHook,
@@ -61,7 +62,7 @@ class RetrievalInvocation(GenAIInvocation):
         """Use handler.retrieval() instead of calling this directly."""
         _operation_name = GenAI.GenAiOperationNameValues.RETRIEVAL.value
         super().__init__(
-            tracer,
+            spans,
             metrics,
             logger,
             completion_hook,
@@ -69,7 +70,6 @@ class RetrievalInvocation(GenAIInvocation):
             span_name=f"{_operation_name} {data_source_id}"
             if data_source_id
             else _operation_name,
-            span_kind=SpanKind.CLIENT,
             content_capturing_mode=content_capturing_mode,
         )
         self._data_source_id: str | None = data_source_id
@@ -80,7 +80,17 @@ class RetrievalInvocation(GenAIInvocation):
         self.top_k: int | None = None
         self.query_text: str | None = None
         self.documents: Sequence[Mapping[str, Any]] | None = None
-        self._start(self._get_start_attributes())
+        self._start(
+            self._spans.retrieval(
+                self._span_name,
+                operation_name=self._operation_name,
+                data_source_id=self._data_source_id,
+                provider_name=self._provider,
+                request_model=self._request_model,
+                server_address=self._server_address,
+                server_port=self._server_port,
+            )
+        )
 
     def _get_start_attributes(self) -> dict[str, AttributeValue]:
         """Return sampling-relevant attributes available at span creation time."""
@@ -95,21 +105,6 @@ class RetrievalInvocation(GenAIInvocation):
             GenAI.GEN_AI_OPERATION_NAME: self._operation_name,
             **{k: v for k, v in optional_attrs if v is not None},
         }
-
-    def _get_metric_attributes(self) -> dict[str, AttributeValue]:
-        # data_source_id intentionally excluded — high cardinality
-        optional_attrs: tuple[tuple[str, AttributeValue | None], ...] = (
-            (GenAI.GEN_AI_PROVIDER_NAME, self._provider),
-            (GenAI.GEN_AI_REQUEST_MODEL, self._request_model),
-            (server_attributes.SERVER_ADDRESS, self._server_address),
-            (server_attributes.SERVER_PORT, self._server_port),
-        )
-        attrs: dict[str, AttributeValue] = {
-            GenAI.GEN_AI_OPERATION_NAME: self._operation_name,
-            **{k: v for k, v in optional_attrs if v is not None},
-        }
-        attrs.update(self.metric_attributes)
-        return attrs
 
     def _get_content_attributes_for_span(self) -> dict[str, AttributeValue]:
         if (
@@ -137,4 +132,18 @@ class RetrievalInvocation(GenAIInvocation):
         attributes.update(self._get_content_attributes_for_span())
         attributes.update(self.attributes)
         self.span.set_attributes(attributes)
-        self._record_client_metrics()
+        duration_seconds = max(
+            timeit.default_timer() - self._monotonic_start_s,
+            0.0,
+        )
+        self._metrics.client_operation_duration(
+            duration_seconds,
+            operation_name=self._operation_name,
+            server_address=self._server_address,
+            server_port=self._server_port,
+            request_model=self._request_model,
+            provider_name=self._provider,
+            error_type=self._metric_error_type,
+            additional_attributes=self.metric_attributes,
+            context=self._span_context,
+        )

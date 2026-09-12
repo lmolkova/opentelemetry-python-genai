@@ -26,6 +26,7 @@ from opentelemetry.util.genai.environment_variables import (
 from opentelemetry.util.genai.handler import TelemetryHandler
 from opentelemetry.util.genai.invocation import GenAIInvocation, ToolInvocation
 from opentelemetry.util.genai.semconv.gen_ai._metrics import _Metrics
+from opentelemetry.util.genai.semconv.gen_ai._spans import _Spans
 from opentelemetry.util.genai.types import (
     CompactionPart,
     InputMessage,
@@ -483,7 +484,7 @@ def test_direct_invocation_instantiation_falls_back_to_env():
     mock_hook = MagicMock(spec=CompletionHook)
 
     invocation = ToolInvocation(
-        tracer=tracer,
+        spans=_Spans(tracer),
         metrics=_Metrics(meter),
         logger=mock_logger,
         completion_hook=mock_hook,

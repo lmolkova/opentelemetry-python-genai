@@ -19,15 +19,17 @@ from opentelemetry.context import Context, attach, detach
 from opentelemetry.semconv._incubating.attributes import (
     gen_ai_attributes as GenAI,
 )
-from opentelemetry.semconv.attributes import error_attributes, server_attributes
+from opentelemetry.semconv.attributes import error_attributes
 from opentelemetry.trace import INVALID_SPAN as _INVALID_SPAN
-from opentelemetry.trace import Span, SpanKind, Tracer, set_span_in_context
+from opentelemetry.trace import Span, set_span_in_context
 from opentelemetry.trace.status import Status, StatusCode
 from opentelemetry.util.genai.completion_hook import (
     CompletionHook,
     _NoOpCompletionHook,
 )
 from opentelemetry.util.genai.semconv.gen_ai._metrics import _Metrics
+from opentelemetry.util.genai.semconv.gen_ai._span import GenAISpan
+from opentelemetry.util.genai.semconv.gen_ai._spans import _Spans
 from opentelemetry.util.genai.types import (
     Error,
     ErrorTypeResolver,
@@ -63,20 +65,19 @@ class GenAIInvocation(AbstractContextManager["GenAIInvocation"]):
         self,
         # Individual components instead of TelemetryHandler to avoid a circular
         # import between handler.py and the invocation modules.
-        tracer: Tracer,
+        spans: _Spans,
         metrics: _Metrics,
         logger: Logger,
         completion_hook: CompletionHook,
         operation_name: str,
         span_name: str,
-        span_kind: SpanKind = SpanKind.CLIENT,
         attributes: dict[str, AttributeValue] | None = None,
         metric_attributes: dict[str, AttributeValue] | None = None,
         error_type_resolver: ErrorTypeResolver | None = None,
         *,
         content_capturing_mode: ContentCapturingMode | None = None,
     ) -> None:
-        self._tracer = tracer
+        self._spans = spans
         self._metrics: _Metrics = metrics
         self._logger = logger
         self._completion_hook = completion_hook
@@ -99,16 +100,8 @@ class GenAIInvocation(AbstractContextManager["GenAIInvocation"]):
         self.span: Span = _INVALID_SPAN
         self._span_context: Context
         self._span_name: str = span_name
-        self._span_kind: SpanKind = span_kind
         self._context_token: ContextToken | None = None
         self._monotonic_start_s: float
-        # Streaming state, set when the invocation is handed to a stream
-        # wrapper. ``_request_stream`` marks the request as streamed
-        # (gen_ai.request.stream); the timing fields are populated by
-        # ``_on_stream_chunk`` as each chunk arrives.
-        self._request_stream: bool | None = None
-        self._ttfc_seconds: float | None = None
-        self._stream_last_chunk_at: float | None = None
 
     @property
     def should_capture_content(self) -> bool:
@@ -126,174 +119,11 @@ class GenAIInvocation(AbstractContextManager["GenAIInvocation"]):
             ContentCapturingMode.SPAN_AND_EVENT,
         )
 
-    def _start(
-        self, attributes: dict[str, AttributeValue] | None = None
-    ) -> None:
-        """Start the invocation span and attach it to the current context.
-
-        Args:
-            attributes: Initial span attributes available for sampling decisions.
-        """
-        self.span = self._tracer.start_span(
-            name=self._span_name,
-            kind=self._span_kind,
-            attributes=attributes,
-        )
+    def _start(self, span: GenAISpan) -> None:
+        self.span = span.span
         self._span_context = set_span_in_context(self.span)
         self._monotonic_start_s = timeit.default_timer()
         self._context_token = attach(self._span_context)
-
-    def _get_metric_attributes(self) -> dict[str, AttributeValue]:
-        """Return low-cardinality attributes for metric recording."""
-        return self.metric_attributes
-
-    @staticmethod
-    def _get_metric_string(
-        attributes: Mapping[str, AttributeValue], name: str
-    ) -> str | None:
-        value = attributes.get(name)
-        return value if isinstance(value, str) else None
-
-    @staticmethod
-    def _get_metric_int(
-        attributes: Mapping[str, AttributeValue], name: str
-    ) -> int | None:
-        value = attributes.get(name)
-        return (
-            value
-            if isinstance(value, int) and not isinstance(value, bool)
-            else None
-        )
-
-    def _get_metric_token_counts(self) -> dict[str, int]:  # pylint: disable=no-self-use
-        """Return {token_type: count} for token histogram recording."""
-        return {}
-
-    def record_stream_chunk(self) -> None:
-        """Mark the request as streamed and record one output chunk arriving."""
-        if self._context_token is None:
-            return
-        self._request_stream = True
-        self._on_stream_chunk(timeit.default_timer())
-
-    def _on_stream_chunk(self, chunk_at: float) -> None:
-        """Record streaming timing for one output chunk as it arrives.
-
-        The first chunk's delta from the invocation start is the
-        time-to-first-chunk; each later chunk's delta from the previous one is
-        the inter-chunk gap. Called by the stream wrapper for any invocation
-        type handed to it.
-        """
-        last_chunk_at = (
-            self._stream_last_chunk_at
-            if self._stream_last_chunk_at is not None
-            else self._monotonic_start_s
-        )
-
-        self._stream_last_chunk_at = chunk_at
-        delta = max(chunk_at - last_chunk_at, 0.0)
-        attributes = self._get_metric_attributes()
-        provider_name = attributes.get(GenAI.GEN_AI_PROVIDER_NAME)
-        if self._ttfc_seconds is None:
-            self._ttfc_seconds = delta
-            if not isinstance(provider_name, str):
-                return
-            self._metrics.client_operation_time_to_first_chunk(
-                delta,
-                operation_name=self._operation_name,
-                provider_name=provider_name,
-                server_address=self._get_metric_string(
-                    attributes, server_attributes.SERVER_ADDRESS
-                ),
-                server_port=self._get_metric_int(
-                    attributes, server_attributes.SERVER_PORT
-                ),
-                request_model=self._get_metric_string(
-                    attributes, GenAI.GEN_AI_REQUEST_MODEL
-                ),
-                response_model=self._get_metric_string(
-                    attributes, GenAI.GEN_AI_RESPONSE_MODEL
-                ),
-                additional_attributes=self.metric_attributes,
-                context=self._span_context,
-            )
-        else:
-            if not isinstance(provider_name, str):
-                return
-            self._metrics.client_operation_time_per_output_chunk(
-                delta,
-                operation_name=self._operation_name,
-                provider_name=provider_name,
-                server_address=self._get_metric_string(
-                    attributes, server_attributes.SERVER_ADDRESS
-                ),
-                server_port=self._get_metric_int(
-                    attributes, server_attributes.SERVER_PORT
-                ),
-                request_model=self._get_metric_string(
-                    attributes, GenAI.GEN_AI_REQUEST_MODEL
-                ),
-                response_model=self._get_metric_string(
-                    attributes, GenAI.GEN_AI_RESPONSE_MODEL
-                ),
-                additional_attributes=self.metric_attributes,
-                context=self._span_context,
-            )
-
-    def _record_client_metrics(self) -> None:
-        """Record gen_ai.client.operation.duration and gen_ai.client.token.usage."""
-        attributes = self._get_metric_attributes()
-        duration_seconds = max(
-            timeit.default_timer() - self._monotonic_start_s,
-            0.0,
-        )
-        self._metrics.client_operation_duration(
-            duration_seconds,
-            operation_name=self._operation_name,
-            server_address=self._get_metric_string(
-                attributes, server_attributes.SERVER_ADDRESS
-            ),
-            server_port=self._get_metric_int(
-                attributes, server_attributes.SERVER_PORT
-            ),
-            request_model=self._get_metric_string(
-                attributes, GenAI.GEN_AI_REQUEST_MODEL
-            ),
-            response_model=self._get_metric_string(
-                attributes, GenAI.GEN_AI_RESPONSE_MODEL
-            ),
-            provider_name=self._get_metric_string(
-                attributes, GenAI.GEN_AI_PROVIDER_NAME
-            ),
-            error_type=self._metric_error_type,
-            additional_attributes=self.metric_attributes,
-            context=self._span_context,
-        )
-
-        token_counts = self._get_metric_token_counts()
-        provider_name = attributes.get(GenAI.GEN_AI_PROVIDER_NAME)
-        if token_counts and isinstance(provider_name, str):
-            for token_type, token_count in token_counts.items():
-                self._metrics.client_token_usage(
-                    token_count,
-                    operation_name=self._operation_name,
-                    provider_name=provider_name,
-                    token_type=token_type,
-                    server_address=self._get_metric_string(
-                        attributes, server_attributes.SERVER_ADDRESS
-                    ),
-                    server_port=self._get_metric_int(
-                        attributes, server_attributes.SERVER_PORT
-                    ),
-                    request_model=self._get_metric_string(
-                        attributes, GenAI.GEN_AI_REQUEST_MODEL
-                    ),
-                    response_model=self._get_metric_string(
-                        attributes, GenAI.GEN_AI_RESPONSE_MODEL
-                    ),
-                    additional_attributes=self.metric_attributes,
-                    context=self._span_context,
-                )
 
     def _apply_error_attributes(self, error: Error) -> None:
         """Apply error status and error.type attribute to the span, events, and metrics."""

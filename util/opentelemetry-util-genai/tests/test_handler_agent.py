@@ -87,10 +87,7 @@ class TestLocalAgentInvocation(unittest.TestCase):  # pylint: disable=too-many-p
 
         attrs = self.span_exporter.get_finished_spans()[0].attributes
         assert attrs[GenAI.GEN_AI_CONVERSATION_ID] == "conv-456"
-        assert (
-            GenAI.GEN_AI_CONVERSATION_ID
-            not in invocation._get_metric_attributes()
-        )
+        assert GenAI.GEN_AI_CONVERSATION_ID not in invocation.metric_attributes
 
     def test_no_conversation_id(self):
         invocation = self.handler.invoke_local_agent()

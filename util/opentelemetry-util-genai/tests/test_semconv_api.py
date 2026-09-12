@@ -57,7 +57,7 @@ class TestSpans(TestBase):
         error = ValueError("bad request")
 
         with self.assertRaises(ValueError) as raised:
-            with self.spans.retrieval("retrieval"):
+            with self.spans.retrieval("retrieval", operation_name="retrieval"):
                 raise error
 
         assert raised.exception is error
@@ -72,7 +72,7 @@ class TestSpans(TestBase):
     def test_context_manager_makes_span_current(self) -> None:
         tracer = self.tracer_provider.get_tracer(__name__)
 
-        with self.spans.retrieval("retrieval"):
+        with self.spans.retrieval("retrieval", operation_name="retrieval"):
             with tracer.start_as_current_span("child"):
                 pass
 
@@ -82,7 +82,7 @@ class TestSpans(TestBase):
         assert child.parent.span_id == retrieval.context.span_id
 
     def test_explicit_error_type_does_not_end_span(self) -> None:
-        span = self.spans.retrieval("retrieval")
+        span = self.spans.retrieval("retrieval", operation_name="retrieval")
 
         span.set_error_details("429", "rate limited")
         assert self.get_finished_spans() == []

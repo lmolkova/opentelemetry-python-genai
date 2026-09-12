@@ -23,6 +23,10 @@ class GenAISpan:
         self._scope: AbstractContextManager[Span] | None = None
         self._ended = False
 
+    @property
+    def span(self) -> Span:
+        return self._span
+
     def __enter__(self) -> Self:
         self._scope = use_span(
             self._span,

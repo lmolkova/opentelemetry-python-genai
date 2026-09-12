@@ -16,6 +16,7 @@ from typing import (
     Protocol,
     TypeVar,
     cast,
+    runtime_checkable,
 )
 
 if TYPE_CHECKING:
@@ -42,6 +43,13 @@ StreamT = TypeVar("StreamT")
 InvocationT = TypeVar("InvocationT", bound="GenAIInvocation")
 _ChunkT_co = TypeVar("_ChunkT_co", covariant=True)
 _logger = logging.getLogger(__name__)
+
+
+@runtime_checkable
+class _StreamTimingInvocation(Protocol):
+    _request_stream: bool | None
+
+    def _on_stream_chunk(self, chunk_at: float) -> None: ...
 
 
 class _StreamWrapperMeta(ABCMeta, type(_ObjectProxy)):
@@ -119,10 +127,8 @@ class SyncStreamWrapper(
     ):
         super().__init__(stream)
         self._self_finalized = False
-        # Marks the request as streamed (gen_ai.request.stream) and receives
-        # per-chunk timing via _on_stream_chunk.
         self._self_invocation = invocation
-        if invocation is not None:
+        if isinstance(invocation, _StreamTimingInvocation):
             invocation._request_stream = True
         self._bind_stream(stream)
 
@@ -191,11 +197,18 @@ class SyncStreamWrapper(
             self._finalize_failure(error)
             raise
         invocation = self._self_invocation
-        chunk_at = timeit.default_timer() if invocation is not None else None
+        timing_invocation = (
+            invocation
+            if isinstance(invocation, _StreamTimingInvocation)
+            else None
+        )
+        chunk_at = (
+            timeit.default_timer() if timing_invocation is not None else None
+        )
         self._process_chunk(chunk)
         # Record after _process_chunk so response.model is on the metrics.
-        if invocation is not None and chunk_at is not None:
-            invocation._on_stream_chunk(chunk_at)
+        if timing_invocation is not None and chunk_at is not None:
+            timing_invocation._on_stream_chunk(chunk_at)
         return chunk
 
 
@@ -226,10 +239,8 @@ class AsyncStreamWrapper(
     ):
         super().__init__(stream)
         self._self_finalized = False
-        # Marks the request as streamed (gen_ai.request.stream) and receives
-        # per-chunk timing via _on_stream_chunk.
         self._self_invocation = invocation
-        if invocation is not None:
+        if isinstance(invocation, _StreamTimingInvocation):
             invocation._request_stream = True
         self._bind_stream(stream)
 
@@ -351,11 +362,18 @@ class AsyncStreamWrapper(
             raise
 
         invocation = self._self_invocation
-        chunk_at = timeit.default_timer() if invocation is not None else None
+        timing_invocation = (
+            invocation
+            if isinstance(invocation, _StreamTimingInvocation)
+            else None
+        )
+        chunk_at = (
+            timeit.default_timer() if timing_invocation is not None else None
+        )
         self._process_chunk(chunk)
         # Record after _process_chunk so response.model is on the metrics.
-        if invocation is not None and chunk_at is not None:
-            invocation._on_stream_chunk(chunk_at)
+        if timing_invocation is not None and chunk_at is not None:
+            timing_invocation._on_stream_chunk(chunk_at)
         return chunk
 
 

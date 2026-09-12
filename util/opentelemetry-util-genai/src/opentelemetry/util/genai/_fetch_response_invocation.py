@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import timeit
 from typing import Final
 
 from opentelemetry._logs import Logger
@@ -10,7 +11,6 @@ from opentelemetry.semconv._incubating.attributes import (
     gen_ai_attributes as GenAI,
 )
 from opentelemetry.semconv.attributes import server_attributes
-from opentelemetry.trace import SpanKind, Tracer
 from opentelemetry.util.genai._invocation import (
     Error,
     GenAIInvocation,
@@ -18,6 +18,7 @@ from opentelemetry.util.genai._invocation import (
 )
 from opentelemetry.util.genai.completion_hook import CompletionHook
 from opentelemetry.util.genai.semconv.gen_ai._metrics import _Metrics
+from opentelemetry.util.genai.semconv.gen_ai._spans import _Spans
 from opentelemetry.util.genai.types import (
     ErrorTypeResolver,
     MessagePart,
@@ -78,7 +79,7 @@ class FetchResponseInvocation(GenAIInvocation):
 
     def __init__(
         self,
-        tracer: Tracer,
+        spans: _Spans,
         metrics: _Metrics,
         logger: Logger,
         completion_hook: CompletionHook,
@@ -93,7 +94,7 @@ class FetchResponseInvocation(GenAIInvocation):
     ) -> None:
         """Use handler.fetch_response() rather than calling this directly."""
         super().__init__(
-            tracer,
+            spans,
             metrics,
             logger,
             completion_hook,
@@ -101,7 +102,6 @@ class FetchResponseInvocation(GenAIInvocation):
             # The response identifier is high cardinality, so semconv keeps it
             # out of the span name.
             span_name=_FETCH_RESPONSE_OPERATION_NAME,
-            span_kind=SpanKind.CLIENT,
             error_type_resolver=error_type_resolver,
             content_capturing_mode=content_capturing_mode,
         )
@@ -120,7 +120,17 @@ class FetchResponseInvocation(GenAIInvocation):
         ) = []
         """System instructions for the model. Passing ``MessagePart`` is deprecated; use ``SystemInstructionPart``."""
         self.tool_definitions: list[ToolDefinition] | None = None
-        self._start(self._get_start_attributes())
+        self._start(
+            self._spans.fetch_response(
+                self._span_name,
+                operation_name=self._operation_name,
+                provider_name=self._provider,
+                response_id=self._response_id,
+                request_stream=self._request_stream,
+                server_address=self._server_address,
+                server_port=self._server_port,
+            )
+        )
 
     @property
     def response_id(self) -> str:
@@ -144,21 +154,6 @@ class FetchResponseInvocation(GenAIInvocation):
             ),
             **{k: v for k, v in optional_attrs if v is not None},
         }
-
-    def _get_metric_attributes(self) -> dict[str, AttributeValue]:
-        # response_id intentionally excluded — high cardinality.
-        optional_attrs: tuple[tuple[str, AttributeValue | None], ...] = (
-            (GenAI.GEN_AI_RESPONSE_MODEL, self.response_model_name),
-            (server_attributes.SERVER_ADDRESS, self._server_address),
-            (server_attributes.SERVER_PORT, self._server_port),
-        )
-        attrs: dict[str, AttributeValue] = {
-            GenAI.GEN_AI_OPERATION_NAME: self._operation_name,
-            GenAI.GEN_AI_PROVIDER_NAME: self._provider,
-            **{k: v for k, v in optional_attrs if v is not None},
-        }
-        attrs.update(self.metric_attributes)
-        return attrs
 
     def _get_attributes(self) -> dict[str, AttributeValue]:
         optional_attrs: tuple[tuple[str, AttributeValue | None], ...] = (
@@ -190,7 +185,21 @@ class FetchResponseInvocation(GenAIInvocation):
         )
         attributes.update(self.attributes)
         self.span.set_attributes(attributes)
-        self._record_client_metrics()
+        duration_seconds = max(
+            timeit.default_timer() - self._monotonic_start_s,
+            0.0,
+        )
+        self._metrics.client_operation_duration(
+            duration_seconds,
+            operation_name=self._operation_name,
+            server_address=self._server_address,
+            server_port=self._server_port,
+            response_model=self.response_model_name,
+            provider_name=self._provider,
+            error_type=self._metric_error_type,
+            additional_attributes=self.metric_attributes,
+            context=self._span_context,
+        )
         self._call_completion_hook(
             outputs=self.output_messages,
             system_instruction=self.system_instruction,

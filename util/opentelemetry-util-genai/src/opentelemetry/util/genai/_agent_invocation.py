@@ -12,14 +12,15 @@ from opentelemetry.semconv._incubating.attributes import (
     gen_ai_attributes as GenAI,
 )
 from opentelemetry.semconv.attributes import server_attributes
-from opentelemetry.trace import SpanKind, Tracer
 from opentelemetry.util.genai._invocation import (
     Error,
     GenAIInvocation,
     get_content_attributes,
 )
 from opentelemetry.util.genai.completion_hook import CompletionHook
+from opentelemetry.util.genai.semconv.gen_ai import GenAiTokenType
 from opentelemetry.util.genai.semconv.gen_ai._metrics import _Metrics
+from opentelemetry.util.genai.semconv.gen_ai._spans import _Spans
 from opentelemetry.util.genai.types import (
     InputMessage,
     MessagePart,
@@ -51,19 +52,18 @@ class AgentInvocation(GenAIInvocation, ABC):
 
     def __init__(
         self,
-        tracer: Tracer,
+        spans: _Spans,
         metrics: _Metrics,
         logger: Logger,
         completion_hook: CompletionHook,
         *,
-        span_kind: SpanKind,
         request_model: str | None = None,
         agent_name: str | None = None,
         content_capturing_mode: ContentCapturingMode | None = None,
     ) -> None:
         _operation_name = GenAI.GenAiOperationNameValues.INVOKE_AGENT.value
         super().__init__(
-            tracer,
+            spans,
             metrics,
             logger,
             completion_hook,
@@ -71,7 +71,6 @@ class AgentInvocation(GenAIInvocation, ABC):
             span_name=f"{_operation_name} {agent_name}"
             if agent_name
             else _operation_name,
-            span_kind=span_kind,
             content_capturing_mode=content_capturing_mode,
         )
         self._request_model: str | None = request_model
@@ -189,7 +188,7 @@ class LocalAgentInvocation(AgentInvocation):
 
     def __init__(
         self,
-        tracer: Tracer,
+        spans: _Spans,
         metrics: _Metrics,
         logger: Logger,
         completion_hook: CompletionHook,
@@ -199,16 +198,22 @@ class LocalAgentInvocation(AgentInvocation):
         content_capturing_mode: ContentCapturingMode | None = None,
     ) -> None:
         super().__init__(
-            tracer,
+            spans,
             metrics,
             logger,
             completion_hook,
-            span_kind=SpanKind.INTERNAL,
             request_model=request_model,
             agent_name=agent_name,
             content_capturing_mode=content_capturing_mode,
         )
-        self._start(self._get_start_attributes())
+        self._start(
+            self._spans.invoke_agent(
+                self._span_name,
+                operation_name=self._operation_name,
+                agent_name=self._agent_name,
+                request_model=self._request_model,
+            )
+        )
 
     def _get_start_attributes(self) -> dict[str, AttributeValue]:
         optional_attrs = (
@@ -219,15 +224,6 @@ class LocalAgentInvocation(AgentInvocation):
             GenAI.GEN_AI_OPERATION_NAME: self._operation_name,
             **{k: v for k, v in optional_attrs if v is not None},
         }
-
-    def _get_metric_attributes(self) -> dict[str, AttributeValue]:
-        attrs: dict[str, AttributeValue] = {}
-        if self._agent_name is not None:
-            attrs[GenAI.GEN_AI_AGENT_NAME] = self._agent_name
-        if self._request_model is not None:
-            attrs[GenAI.GEN_AI_REQUEST_MODEL] = self._request_model
-        attrs.update(self.metric_attributes)
-        return attrs
 
     def _record_metrics(self) -> None:
         duration_seconds = max(
@@ -255,7 +251,7 @@ class RemoteAgentInvocation(AgentInvocation):
 
     def __init__(
         self,
-        tracer: Tracer,
+        spans: _Spans,
         metrics: _Metrics,
         logger: Logger,
         completion_hook: CompletionHook,
@@ -270,11 +266,10 @@ class RemoteAgentInvocation(AgentInvocation):
         content_capturing_mode: ContentCapturingMode | None = None,
     ) -> None:
         super().__init__(
-            tracer,
+            spans,
             metrics,
             logger,
             completion_hook,
-            span_kind=SpanKind.CLIENT,
             request_model=request_model,
             agent_name=agent_name,
             content_capturing_mode=content_capturing_mode,
@@ -289,7 +284,17 @@ class RemoteAgentInvocation(AgentInvocation):
         self._cache_write_input_tokens: int | None = None
         self.cache_read_input_tokens: int | None = None
 
-        self._start(self._get_start_attributes())
+        self._start(
+            self._spans.invoke_agent_client(
+                self._span_name,
+                operation_name=self._operation_name,
+                provider_name=self._provider,
+                agent_name=self._agent_name,
+                request_model=self._request_model,
+                server_address=self._server_address,
+                server_port=self._server_port,
+            )
+        )
 
     @property
     def cache_write_input_tokens(self) -> int | None:
@@ -354,29 +359,43 @@ class RemoteAgentInvocation(AgentInvocation):
             )
         return attrs
 
-    def _get_metric_attributes(self) -> dict[str, AttributeValue]:
-        optional_attrs = (
-            (GenAI.GEN_AI_PROVIDER_NAME, self._provider),
-            (GenAI.GEN_AI_REQUEST_MODEL, self._request_model),
-            (server_attributes.SERVER_ADDRESS, self._server_address),
-            (server_attributes.SERVER_PORT, self._server_port),
-        )
-        attrs: dict[str, AttributeValue] = {
-            GenAI.GEN_AI_OPERATION_NAME: self._operation_name,
-            **{k: v for k, v in optional_attrs if v is not None},
-        }
-        attrs.update(self.metric_attributes)
-        return attrs
-
-    def _get_metric_token_counts(self) -> dict[str, int]:
-        counts: dict[str, int] = {}
-        if self.input_tokens is not None:
-            counts[GenAI.GenAiTokenTypeValues.INPUT.value] = self.input_tokens
-        if self.output_tokens is not None:
-            counts[GenAI.GenAiTokenTypeValues.OUTPUT.value] = (
-                self.output_tokens
-            )
-        return counts
-
     def _record_metrics(self) -> None:
-        self._record_client_metrics()
+        duration_seconds = max(
+            timeit.default_timer() - self._monotonic_start_s,
+            0.0,
+        )
+        self._metrics.client_operation_duration(
+            duration_seconds,
+            operation_name=self._operation_name,
+            server_address=self._server_address,
+            server_port=self._server_port,
+            request_model=self._request_model,
+            provider_name=self._provider,
+            error_type=self._metric_error_type,
+            additional_attributes=self.metric_attributes,
+            context=self._span_context,
+        )
+        if self.input_tokens is not None:
+            self._metrics.client_token_usage(
+                self.input_tokens,
+                operation_name=self._operation_name,
+                provider_name=self._provider,
+                token_type=GenAiTokenType.INPUT,
+                server_address=self._server_address,
+                server_port=self._server_port,
+                request_model=self._request_model,
+                additional_attributes=self.metric_attributes,
+                context=self._span_context,
+            )
+        if self.output_tokens is not None:
+            self._metrics.client_token_usage(
+                self.output_tokens,
+                operation_name=self._operation_name,
+                provider_name=self._provider,
+                token_type=GenAiTokenType.OUTPUT,
+                server_address=self._server_address,
+                server_port=self._server_port,
+                request_model=self._request_model,
+                additional_attributes=self.metric_attributes,
+                context=self._span_context,
+            )

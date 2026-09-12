@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import timeit
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Final
@@ -12,14 +13,16 @@ from opentelemetry.semconv._incubating.attributes import (
     gen_ai_attributes as GenAI,
 )
 from opentelemetry.semconv.attributes import server_attributes
-from opentelemetry.trace import INVALID_SPAN, Span, SpanKind, Tracer
+from opentelemetry.trace import INVALID_SPAN, Span, Tracer
 from opentelemetry.util.genai._invocation import (
     Error,
     GenAIInvocation,
     get_content_attributes,
 )
 from opentelemetry.util.genai.completion_hook import CompletionHook
+from opentelemetry.util.genai.semconv.gen_ai import GenAiTokenType
 from opentelemetry.util.genai.semconv.gen_ai._metrics import _Metrics
+from opentelemetry.util.genai.semconv.gen_ai._spans import _Spans
 from opentelemetry.util.genai.types import (
     ErrorTypeResolver,
     InputMessage,
@@ -68,7 +71,7 @@ class InferenceInvocation(GenAIInvocation):
 
     def __init__(
         self,
-        tracer: Tracer,
+        spans: _Spans,
         metrics: _Metrics,
         logger: Logger,
         completion_hook: CompletionHook,
@@ -86,7 +89,7 @@ class InferenceInvocation(GenAIInvocation):
         )
         """Use handler.inference(provider) rather than calling this directly."""
         super().__init__(
-            tracer,
+            spans,
             metrics,
             logger,
             completion_hook,
@@ -94,7 +97,6 @@ class InferenceInvocation(GenAIInvocation):
             span_name=f"{operation_name} {request_model}"
             if request_model
             else operation_name,
-            span_kind=SpanKind.CLIENT,
             error_type_resolver=error_type_resolver,
             content_capturing_mode=content_capturing_mode,
         )
@@ -102,6 +104,9 @@ class InferenceInvocation(GenAIInvocation):
         self._request_model: str | None = request_model
         self._server_address: str | None = server_address
         self._server_port: int | None = server_port
+        self._request_stream: bool | None = None
+        self._ttfc_seconds: float | None = None
+        self._stream_last_chunk_at: float | None = None
         self.conversation_id: str | None = None
 
         self.input_messages: list[InputMessage] = []
@@ -141,13 +146,19 @@ class InferenceInvocation(GenAIInvocation):
         self.prompt_version: str | None = None
         self.prompt_variables: Mapping[str, object] | None = None
         self.tool_definitions: list[ToolDefinition] | None = None
-        self.top_k: float | None = None
+        self.top_k: int | None = None
         self.request_choice_count: int | None = None
         self.output_type: str | None = None
-        # Rebuilt once per streaming chunk, so cache it and invalidate via
-        # _invalidate_metric_attributes whenever an input changes.
-        self._cached_metric_attributes: dict[str, AttributeValue] | None = None
-        self._start(self._get_start_attributes())
+        self._start(
+            self._spans.inference(
+                self._span_name,
+                operation_name=self._operation_name,
+                provider_name=self._provider,
+                request_model=self._request_model,
+                server_address=self._server_address,
+                server_port=self._server_port,
+            )
+        )
 
     @property
     def cache_creation_input_tokens(self) -> int | None:
@@ -167,9 +178,50 @@ class InferenceInvocation(GenAIInvocation):
 
     @response_model_name.setter
     def response_model_name(self, value: str | None) -> None:
-        if value != self._response_model_name:
-            self._response_model_name = value
-            self._invalidate_metric_attributes()
+        self._response_model_name = value
+
+    def record_stream_chunk(self) -> None:
+        """Mark the request as streamed and record one output chunk arriving."""
+        if self._context_token is None:
+            return
+        self._request_stream = True
+        self._on_stream_chunk(timeit.default_timer())
+
+    def _on_stream_chunk(self, chunk_at: float) -> None:
+        last_chunk_at = (
+            self._stream_last_chunk_at
+            if self._stream_last_chunk_at is not None
+            else self._monotonic_start_s
+        )
+        self._stream_last_chunk_at = chunk_at
+        delta = max(chunk_at - last_chunk_at, 0.0)
+
+        if self._ttfc_seconds is None:
+            self._ttfc_seconds = delta
+            self._metrics.client_operation_time_to_first_chunk(
+                delta,
+                operation_name=self._operation_name,
+                provider_name=self._provider,
+                server_address=self._server_address,
+                server_port=self._server_port,
+                request_model=self._request_model,
+                response_model=self._response_model_name,
+                additional_attributes=self.metric_attributes,
+                context=self._span_context,
+            )
+            return
+
+        self._metrics.client_operation_time_per_output_chunk(
+            delta,
+            operation_name=self._operation_name,
+            provider_name=self._provider,
+            server_address=self._server_address,
+            server_port=self._server_port,
+            request_model=self._request_model,
+            response_model=self._response_model_name,
+            additional_attributes=self.metric_attributes,
+            context=self._span_context,
+        )
 
     def _get_message_attributes(
         self, *, for_span: bool
@@ -304,35 +356,6 @@ class InferenceInvocation(GenAIInvocation):
         attrs.update({k: v for k, v in optional_attrs if v is not None})
         return attrs
 
-    def _invalidate_metric_attributes(self) -> None:
-        """Drop the cached metric attributes so the next read rebuilds them.
-
-        Call this from anywhere that changes an input to
-        ``_get_metric_attributes`` (response model, error type, ...).
-        """
-        self._cached_metric_attributes = None
-
-    def _get_metric_attributes(self) -> dict[str, AttributeValue]:
-        # Cached because this is rebuilt once per streaming chunk. Any mutation
-        # of its inputs must call _invalidate_metric_attributes.
-        if self._cached_metric_attributes is None:
-            attrs = self._get_start_attributes()
-            if self._response_model_name is not None:
-                attrs[GenAI.GEN_AI_RESPONSE_MODEL] = self._response_model_name
-            attrs.update(self.metric_attributes)
-            self._cached_metric_attributes = attrs
-        return self._cached_metric_attributes
-
-    def _get_metric_token_counts(self) -> dict[str, int]:
-        counts: dict[str, int] = {}
-        if self.input_tokens is not None:
-            counts[GenAI.GenAiTokenTypeValues.INPUT.value] = self.input_tokens
-        if self.output_tokens is not None:
-            counts[GenAI.GenAiTokenTypeValues.OUTPUT.value] = (
-                self.output_tokens
-            )
-        return counts
-
     def _apply_finish(self, error: Error | None = None) -> None:
         if error is not None:
             self._apply_error_attributes(error)
@@ -340,7 +363,48 @@ class InferenceInvocation(GenAIInvocation):
         attributes.update(self._get_message_attributes(for_span=True))
         attributes.update(self.attributes)
         self.span.set_attributes(attributes)
-        self._record_client_metrics()
+        duration_seconds = max(
+            timeit.default_timer() - self._monotonic_start_s,
+            0.0,
+        )
+        self._metrics.client_operation_duration(
+            duration_seconds,
+            operation_name=self._operation_name,
+            server_address=self._server_address,
+            server_port=self._server_port,
+            request_model=self._request_model,
+            response_model=self._response_model_name,
+            provider_name=self._provider,
+            error_type=self._metric_error_type,
+            additional_attributes=self.metric_attributes,
+            context=self._span_context,
+        )
+        if self.input_tokens is not None:
+            self._metrics.client_token_usage(
+                self.input_tokens,
+                operation_name=self._operation_name,
+                provider_name=self._provider,
+                token_type=GenAiTokenType.INPUT,
+                server_address=self._server_address,
+                server_port=self._server_port,
+                request_model=self._request_model,
+                response_model=self._response_model_name,
+                additional_attributes=self.metric_attributes,
+                context=self._span_context,
+            )
+        if self.output_tokens is not None:
+            self._metrics.client_token_usage(
+                self.output_tokens,
+                operation_name=self._operation_name,
+                provider_name=self._provider,
+                token_type=GenAiTokenType.OUTPUT,
+                server_address=self._server_address,
+                server_port=self._server_port,
+                request_model=self._request_model,
+                response_model=self._response_model_name,
+                additional_attributes=self.metric_attributes,
+                context=self._span_context,
+            )
         log_record = self._maybe_create_event()
         self._call_completion_hook(
             inputs=self.input_messages,
@@ -422,7 +486,7 @@ class LLMInvocation:
     ) -> None:
         """Create and start an InferenceInvocation from this data container. Called by handler.start_llm()."""
         inv = InferenceInvocation(
-            tracer,
+            _Spans(tracer),
             metrics,
             logger,
             completion_hook,

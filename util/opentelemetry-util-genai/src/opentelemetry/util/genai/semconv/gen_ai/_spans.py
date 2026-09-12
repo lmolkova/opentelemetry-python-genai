@@ -604,10 +604,30 @@ class _Spans:
         self,
         name: str,
         *,
+        operation_name: GenAiOperationName | str,
+        data_source_id: str | None = None,
+        provider_name: GenAiProviderName | str | None = None,
+        request_model: str | None = None,
+        server_address: str | None = None,
+        server_port: int | None = None,
         context: Context | None = None,
     ) -> RetrievalSpan:
         """Start a `gen_ai.retrieval.client` span."""
-        attributes: dict[str, AttributeValue] = {}
+        attributes: dict[str, AttributeValue] = {
+            Attr.GEN_AI_OPERATION_NAME: _value(operation_name)
+        }
+        if data_source_id is not None:
+            attributes[Attr.GEN_AI_DATA_SOURCE_ID] = _value(data_source_id)
+        if provider_name is not None:
+            attributes[Attr.GEN_AI_PROVIDER_NAME] = _value(provider_name)
+        if request_model is not None:
+            attributes[Attr.GEN_AI_REQUEST_MODEL] = _value(request_model)
+        if server_address is not None:
+            attributes[ServerAttributes.SERVER_ADDRESS] = _value(
+                server_address
+            )
+        if server_port is not None:
+            attributes[ServerAttributes.SERVER_PORT] = _value(server_port)
         span = self._tracer.start_span(
             name,
             context=context,
@@ -622,6 +642,8 @@ class _Spans:
         *,
         operation_name: GenAiOperationName | str,
         provider_name: GenAiProviderName | str,
+        response_id: str,
+        request_stream: bool | None = None,
         server_address: str | None = None,
         server_port: int | None = None,
         context: Context | None = None,
@@ -636,6 +658,9 @@ class _Spans:
             attributes[ServerAttributes.SERVER_PORT] = _value(server_port)
         attributes[Attr.GEN_AI_PROVIDER_NAME] = _value(provider_name)
         attributes[Attr.GEN_AI_OPERATION_NAME] = _value(operation_name)
+        attributes[Attr.GEN_AI_RESPONSE_ID] = _value(response_id)
+        if request_stream is not None:
+            attributes[Attr.GEN_AI_REQUEST_STREAM] = _value(request_stream)
         span = self._tracer.start_span(
             name,
             context=context,
@@ -783,11 +808,14 @@ class _Spans:
         name: str,
         *,
         operation_name: GenAiOperationName | str,
+        workflow_name: str | None = None,
         context: Context | None = None,
     ) -> InvokeWorkflowSpan:
         """Start a `gen_ai.invoke_workflow.internal` span."""
         attributes: dict[str, AttributeValue] = {}
         attributes[Attr.GEN_AI_OPERATION_NAME] = _value(operation_name)
+        if workflow_name is not None:
+            attributes[Attr.GEN_AI_WORKFLOW_NAME] = _value(workflow_name)
         span = self._tracer.start_span(
             name,
             context=context,

@@ -73,6 +73,7 @@ from opentelemetry.util.genai.invocation import (
     WorkflowInvocation,
 )
 from opentelemetry.util.genai.semconv.gen_ai._metrics import _Metrics
+from opentelemetry.util.genai.semconv.gen_ai._spans import _Spans
 from opentelemetry.util.genai.types import (
     ContentCapturingMode,
     ErrorTypeResolver,
@@ -115,12 +116,13 @@ class TelemetryHandler:
             instrumentation_scope_name = __name__
             instrumentation_scope_version = __version__
         version = instrumentation_scope_version or ""
-        self._tracer = get_tracer(
+        tracer = get_tracer(
             instrumentation_scope_name,
             version,
             tracer_provider,
             schema_url=schema_url,
         )
+        self._spans = _Spans(tracer)
         meter: Meter = get_meter(
             instrumentation_scope_name,
             version,
@@ -191,7 +193,7 @@ class TelemetryHandler:
         returned invocation, then call invocation.stop() or invocation.fail().
         """
         return InferenceInvocation(
-            self._tracer,
+            self._spans,
             self._metrics,
             self._logger,
             self._completion_hook,
@@ -210,7 +212,7 @@ class TelemetryHandler:
             Use ``handler.inference()`` instead.
         """
         invocation._start_with_handler(
-            self._tracer,
+            self._spans._tracer,
             self._metrics,
             self._logger,
             self._completion_hook,
@@ -235,7 +237,7 @@ class TelemetryHandler:
         invocation, then call invocation.stop() or invocation.fail().
         """
         return EmbeddingInvocation(
-            self._tracer,
+            self._spans,
             self._metrics,
             self._logger,
             self._completion_hook,
@@ -264,7 +266,7 @@ class TelemetryHandler:
         Only set data attributes on the invocation object, do not modify the span or context.
         """
         return RetrievalInvocation(
-            self._tracer,
+            self._spans,
             self._metrics,
             self._logger,
             self._completion_hook,
@@ -293,7 +295,7 @@ class TelemetryHandler:
         invocation.stop() or invocation.fail().
         """
         return ToolInvocation(
-            self._tracer,
+            self._spans,
             self._metrics,
             self._logger,
             self._completion_hook,
@@ -318,7 +320,7 @@ class TelemetryHandler:
         invocation.stop() or invocation.fail().
         """
         return WorkflowInvocation(
-            self._tracer,
+            self._spans,
             self._metrics,
             self._logger,
             self._completion_hook,
@@ -373,7 +375,7 @@ class TelemetryHandler:
         Only set data attributes on the invocation object, do not modify the span or context.
         """
         return InferenceInvocation(
-            self._tracer,
+            self._spans,
             self._metrics,
             self._logger,
             self._completion_hook,
@@ -403,7 +405,7 @@ class TelemetryHandler:
         Only set data attributes on the invocation object, do not modify the span or context.
         """
         return EmbeddingInvocation(
-            self._tracer,
+            self._spans,
             self._metrics,
             self._logger,
             self._completion_hook,
@@ -437,7 +439,7 @@ class TelemetryHandler:
         Only set data attributes on the invocation object, do not modify the span or context.
         """
         return FetchResponseInvocation(
-            self._tracer,
+            self._spans,
             self._metrics,
             self._logger,
             self._completion_hook,
@@ -475,7 +477,7 @@ class TelemetryHandler:
         invocation object but only if `invocation.should_capture_content` is True.
         """
         return ToolInvocation(
-            self._tracer,
+            self._spans,
             self._metrics,
             self._logger,
             self._completion_hook,
@@ -504,7 +506,7 @@ class TelemetryHandler:
         then call invocation.stop() or invocation.fail().
         """
         return LocalAgentInvocation(
-            self._tracer,
+            self._spans,
             self._metrics,
             self._logger,
             self._completion_hook,
@@ -533,7 +535,7 @@ class TelemetryHandler:
         then call invocation.stop() or invocation.fail().
         """
         return RemoteAgentInvocation(
-            self._tracer,
+            self._spans,
             self._metrics,
             self._logger,
             self._completion_hook,
@@ -562,7 +564,7 @@ class TelemetryHandler:
         Only set data attributes on the invocation object, do not modify the span or context.
         """
         return LocalAgentInvocation(
-            self._tracer,
+            self._spans,
             self._metrics,
             self._logger,
             self._completion_hook,
@@ -593,7 +595,7 @@ class TelemetryHandler:
         Only set data attributes on the invocation object, do not modify the span or context.
         """
         return RemoteAgentInvocation(
-            self._tracer,
+            self._spans,
             self._metrics,
             self._logger,
             self._completion_hook,
@@ -620,7 +622,7 @@ class TelemetryHandler:
         Only set data attributes on the invocation object, do not modify the span or context.
         """
         return WorkflowInvocation(
-            self._tracer,
+            self._spans,
             self._metrics,
             self._logger,
             self._completion_hook,
