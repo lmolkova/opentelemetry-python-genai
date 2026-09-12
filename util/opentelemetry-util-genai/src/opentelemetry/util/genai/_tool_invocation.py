@@ -10,9 +10,9 @@ from opentelemetry.semconv._incubating.attributes import (
     gen_ai_attributes as GenAI,
 )
 from opentelemetry.trace import SpanKind, Tracer
-from opentelemetry.util.genai._instruments import _Instruments
 from opentelemetry.util.genai._invocation import Error, GenAIInvocation
 from opentelemetry.util.genai.completion_hook import CompletionHook
+from opentelemetry.util.genai.semconv.gen_ai._metrics import _Metrics
 from opentelemetry.util.genai.utils import (
     ContentCapturingMode,
     gen_ai_json_dumps,
@@ -57,7 +57,7 @@ class ToolInvocation(GenAIInvocation):
     def __init__(
         self,
         tracer: Tracer,
-        instruments: _Instruments,
+        metrics: _Metrics,
         logger: Logger,
         completion_hook: CompletionHook,
         name: str,
@@ -78,7 +78,7 @@ class ToolInvocation(GenAIInvocation):
         _operation_name = GenAI.GenAiOperationNameValues.EXECUTE_TOOL.value
         super().__init__(
             tracer,
-            instruments,
+            metrics,
             logger,
             completion_hook,
             operation_name=_operation_name,
@@ -163,8 +163,9 @@ class ToolInvocation(GenAIInvocation):
             timeit.default_timer() - self._monotonic_start_s,
             0.0,
         )
-        self._instruments.execute_tool_duration.record(
+        self._metrics.execute_tool_duration(
             duration_seconds,
+            tool_name=self._name,
             attributes=self._get_metric_attributes(),
             context=self._span_context,
         )

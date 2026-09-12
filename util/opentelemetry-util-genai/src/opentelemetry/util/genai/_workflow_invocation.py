@@ -11,12 +11,12 @@ from opentelemetry.semconv._incubating.attributes import (
     gen_ai_attributes as GenAI,
 )
 from opentelemetry.trace import SpanKind, Tracer
-from opentelemetry.util.genai._instruments import _Instruments
 from opentelemetry.util.genai._invocation import (
     Error,
     GenAIInvocation,
 )
 from opentelemetry.util.genai.completion_hook import CompletionHook
+from opentelemetry.util.genai.semconv.gen_ai._metrics import _Metrics
 from opentelemetry.util.genai.types import (
     InputMessage,
     OutputMessage,
@@ -40,7 +40,7 @@ class WorkflowInvocation(GenAIInvocation):
     def __init__(
         self,
         tracer: Tracer,
-        instruments: _Instruments,
+        metrics: _Metrics,
         logger: Logger,
         completion_hook: CompletionHook,
         name: str | None,
@@ -51,7 +51,7 @@ class WorkflowInvocation(GenAIInvocation):
         _operation_name = GenAI.GenAiOperationNameValues.INVOKE_WORKFLOW.value
         super().__init__(
             tracer,
-            instruments,
+            metrics,
             logger,
             completion_hook,
             operation_name=_operation_name,
@@ -121,7 +121,7 @@ class WorkflowInvocation(GenAIInvocation):
             timeit.default_timer() - self._monotonic_start_s,
             0.0,
         )
-        self._instruments.invoke_workflow_duration.record(
+        self._metrics.invoke_workflow_duration(
             duration_seconds,
             attributes=self._get_metric_attributes(),
             context=self._span_context,

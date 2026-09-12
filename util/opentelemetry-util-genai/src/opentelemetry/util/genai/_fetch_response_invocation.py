@@ -11,13 +11,13 @@ from opentelemetry.semconv._incubating.attributes import (
 )
 from opentelemetry.semconv.attributes import server_attributes
 from opentelemetry.trace import SpanKind, Tracer
-from opentelemetry.util.genai._instruments import _Instruments
 from opentelemetry.util.genai._invocation import (
     Error,
     GenAIInvocation,
     get_content_attributes,
 )
 from opentelemetry.util.genai.completion_hook import CompletionHook
+from opentelemetry.util.genai.semconv.gen_ai._metrics import _Metrics
 from opentelemetry.util.genai.types import (
     ErrorTypeResolver,
     MessagePart,
@@ -79,7 +79,7 @@ class FetchResponseInvocation(GenAIInvocation):
     def __init__(
         self,
         tracer: Tracer,
-        instruments: _Instruments,
+        metrics: _Metrics,
         logger: Logger,
         completion_hook: CompletionHook,
         provider: str,
@@ -94,7 +94,7 @@ class FetchResponseInvocation(GenAIInvocation):
         """Use handler.fetch_response() rather than calling this directly."""
         super().__init__(
             tracer,
-            instruments,
+            metrics,
             logger,
             completion_hook,
             operation_name=_FETCH_RESPONSE_OPERATION_NAME,

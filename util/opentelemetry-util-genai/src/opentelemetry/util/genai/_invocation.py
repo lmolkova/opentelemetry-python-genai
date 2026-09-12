@@ -23,11 +23,11 @@ from opentelemetry.semconv.attributes import error_attributes
 from opentelemetry.trace import INVALID_SPAN as _INVALID_SPAN
 from opentelemetry.trace import Span, SpanKind, Tracer, set_span_in_context
 from opentelemetry.trace.status import Status, StatusCode
-from opentelemetry.util.genai._instruments import _Instruments
 from opentelemetry.util.genai.completion_hook import (
     CompletionHook,
     _NoOpCompletionHook,
 )
+from opentelemetry.util.genai.semconv.gen_ai._metrics import _Metrics
 from opentelemetry.util.genai.types import (
     Error,
     ErrorTypeResolver,
@@ -64,7 +64,7 @@ class GenAIInvocation(AbstractContextManager["GenAIInvocation"]):
         # Individual components instead of TelemetryHandler to avoid a circular
         # import between handler.py and the invocation modules.
         tracer: Tracer,
-        instruments: _Instruments,
+        metrics: _Metrics,
         logger: Logger,
         completion_hook: CompletionHook,
         operation_name: str,
@@ -77,7 +77,7 @@ class GenAIInvocation(AbstractContextManager["GenAIInvocation"]):
         content_capturing_mode: ContentCapturingMode | None = None,
     ) -> None:
         self._tracer = tracer
-        self._instruments: _Instruments = instruments
+        self._metrics: _Metrics = metrics
         self._logger = logger
         self._completion_hook = completion_hook
         self._error_type_resolver = error_type_resolver
@@ -174,16 +174,25 @@ class GenAIInvocation(AbstractContextManager["GenAIInvocation"]):
         self._stream_last_chunk_at = chunk_at
         delta = max(chunk_at - last_chunk_at, 0.0)
         attributes = self._get_metric_attributes()
+        provider_name = attributes.get(GenAI.GEN_AI_PROVIDER_NAME)
         if self._ttfc_seconds is None:
             self._ttfc_seconds = delta
-            self._instruments.time_to_first_chunk.record(
+            if not isinstance(provider_name, str):
+                return
+            self._metrics.client_operation_time_to_first_chunk(
                 delta,
+                operation_name=self._operation_name,
+                provider_name=provider_name,
                 attributes=attributes,
                 context=self._span_context,
             )
         else:
-            self._instruments.time_per_output_chunk.record(
+            if not isinstance(provider_name, str):
+                return
+            self._metrics.client_operation_time_per_output_chunk(
                 delta,
+                operation_name=self._operation_name,
+                provider_name=provider_name,
                 attributes=attributes,
                 context=self._span_context,
             )
@@ -195,19 +204,23 @@ class GenAIInvocation(AbstractContextManager["GenAIInvocation"]):
             timeit.default_timer() - self._monotonic_start_s,
             0.0,
         )
-        self._instruments.operation_duration.record(
+        self._metrics.client_operation_duration(
             duration_seconds,
+            operation_name=self._operation_name,
             attributes=attributes,
             context=self._span_context,
         )
 
         token_counts = self._get_metric_token_counts()
-        if token_counts:
+        provider_name = attributes.get(GenAI.GEN_AI_PROVIDER_NAME)
+        if token_counts and isinstance(provider_name, str):
             for token_type, token_count in token_counts.items():
-                self._instruments.token_usage.record(
+                self._metrics.client_token_usage(
                     token_count,
-                    attributes=attributes
-                    | {GenAI.GEN_AI_TOKEN_TYPE: token_type},
+                    operation_name=self._operation_name,
+                    provider_name=provider_name,
+                    token_type=token_type,
+                    attributes=attributes,
                     context=self._span_context,
                 )
 

@@ -12,9 +12,9 @@ from opentelemetry.semconv._incubating.attributes import (
 )
 from opentelemetry.semconv.attributes import server_attributes
 from opentelemetry.trace import SpanKind, Tracer
-from opentelemetry.util.genai._instruments import _Instruments
 from opentelemetry.util.genai._invocation import Error, GenAIInvocation
 from opentelemetry.util.genai.completion_hook import CompletionHook
+from opentelemetry.util.genai.semconv.gen_ai._metrics import _Metrics
 from opentelemetry.util.genai.utils import (
     ContentCapturingMode,
     gen_ai_json_dumps,
@@ -47,7 +47,7 @@ class RetrievalInvocation(GenAIInvocation):
     def __init__(
         self,
         tracer: Tracer,
-        instruments: _Instruments,
+        metrics: _Metrics,
         logger: Logger,
         completion_hook: CompletionHook,
         *,
@@ -62,7 +62,7 @@ class RetrievalInvocation(GenAIInvocation):
         _operation_name = GenAI.GenAiOperationNameValues.RETRIEVAL.value
         super().__init__(
             tracer,
-            instruments,
+            metrics,
             logger,
             completion_hook,
             operation_name=_operation_name,

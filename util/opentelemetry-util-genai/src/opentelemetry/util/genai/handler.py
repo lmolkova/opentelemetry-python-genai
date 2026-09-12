@@ -50,8 +50,13 @@ from opentelemetry.trace import (
     get_tracer,
 )
 from opentelemetry.util.genai._inference_invocation import LLMInvocation
-from opentelemetry.util.genai._instruments import _Instruments
 from opentelemetry.util.genai._invocation import Error
+from opentelemetry.util.genai._metric_boundaries import (
+    CLIENT_OPERATION_DURATION,
+    CLIENT_TOKEN_USAGE,
+    INVOKE_AGENT_DURATION,
+    INVOKE_WORKFLOW_DURATION,
+)
 from opentelemetry.util.genai.completion_hook import (
     CompletionHook,
     _NoOpCompletionHook,
@@ -67,6 +72,7 @@ from opentelemetry.util.genai.invocation import (
     ToolInvocation,
     WorkflowInvocation,
 )
+from opentelemetry.util.genai.semconv.gen_ai._metrics import _Metrics
 from opentelemetry.util.genai.types import (
     ContentCapturingMode,
     ErrorTypeResolver,
@@ -121,7 +127,16 @@ class TelemetryHandler:
             meter_provider=meter_provider,
             schema_url=schema_url,
         )
-        self._instruments = _Instruments(meter)
+        self._metrics = _Metrics(
+            meter,
+            client_token_usage_boundaries=CLIENT_TOKEN_USAGE,
+            client_operation_duration_boundaries=CLIENT_OPERATION_DURATION,
+            client_operation_time_to_first_chunk_boundaries=CLIENT_OPERATION_DURATION,
+            client_operation_time_per_output_chunk_boundaries=CLIENT_OPERATION_DURATION,
+            invoke_workflow_duration_boundaries=INVOKE_WORKFLOW_DURATION,
+            invoke_agent_duration_boundaries=INVOKE_AGENT_DURATION,
+            execute_tool_duration_boundaries=CLIENT_OPERATION_DURATION,
+        )
         self._logger = get_logger(
             instrumentation_scope_name,
             version,
@@ -177,7 +192,7 @@ class TelemetryHandler:
         """
         return InferenceInvocation(
             self._tracer,
-            self._instruments,
+            self._metrics,
             self._logger,
             self._completion_hook,
             provider,
@@ -196,7 +211,7 @@ class TelemetryHandler:
         """
         invocation._start_with_handler(
             self._tracer,
-            self._instruments,
+            self._metrics,
             self._logger,
             self._completion_hook,
             content_capturing_mode=self._content_capturing_mode,
@@ -221,7 +236,7 @@ class TelemetryHandler:
         """
         return EmbeddingInvocation(
             self._tracer,
-            self._instruments,
+            self._metrics,
             self._logger,
             self._completion_hook,
             provider,
@@ -250,7 +265,7 @@ class TelemetryHandler:
         """
         return RetrievalInvocation(
             self._tracer,
-            self._instruments,
+            self._metrics,
             self._logger,
             self._completion_hook,
             data_source_id=data_source_id,
@@ -279,7 +294,7 @@ class TelemetryHandler:
         """
         return ToolInvocation(
             self._tracer,
-            self._instruments,
+            self._metrics,
             self._logger,
             self._completion_hook,
             name,
@@ -304,7 +319,7 @@ class TelemetryHandler:
         """
         return WorkflowInvocation(
             self._tracer,
-            self._instruments,
+            self._metrics,
             self._logger,
             self._completion_hook,
             name,
@@ -359,7 +374,7 @@ class TelemetryHandler:
         """
         return InferenceInvocation(
             self._tracer,
-            self._instruments,
+            self._metrics,
             self._logger,
             self._completion_hook,
             provider=provider,
@@ -389,7 +404,7 @@ class TelemetryHandler:
         """
         return EmbeddingInvocation(
             self._tracer,
-            self._instruments,
+            self._metrics,
             self._logger,
             self._completion_hook,
             provider=provider,
@@ -423,7 +438,7 @@ class TelemetryHandler:
         """
         return FetchResponseInvocation(
             self._tracer,
-            self._instruments,
+            self._metrics,
             self._logger,
             self._completion_hook,
             provider=provider,
@@ -461,7 +476,7 @@ class TelemetryHandler:
         """
         return ToolInvocation(
             self._tracer,
-            self._instruments,
+            self._metrics,
             self._logger,
             self._completion_hook,
             name,
@@ -490,7 +505,7 @@ class TelemetryHandler:
         """
         return LocalAgentInvocation(
             self._tracer,
-            self._instruments,
+            self._metrics,
             self._logger,
             self._completion_hook,
             request_model=request_model,
@@ -519,7 +534,7 @@ class TelemetryHandler:
         """
         return RemoteAgentInvocation(
             self._tracer,
-            self._instruments,
+            self._metrics,
             self._logger,
             self._completion_hook,
             provider=provider,
@@ -548,7 +563,7 @@ class TelemetryHandler:
         """
         return LocalAgentInvocation(
             self._tracer,
-            self._instruments,
+            self._metrics,
             self._logger,
             self._completion_hook,
             request_model=request_model,
@@ -579,7 +594,7 @@ class TelemetryHandler:
         """
         return RemoteAgentInvocation(
             self._tracer,
-            self._instruments,
+            self._metrics,
             self._logger,
             self._completion_hook,
             provider=provider,
@@ -606,7 +621,7 @@ class TelemetryHandler:
         """
         return WorkflowInvocation(
             self._tracer,
-            self._instruments,
+            self._metrics,
             self._logger,
             self._completion_hook,
             name,

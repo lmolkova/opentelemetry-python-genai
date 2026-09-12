@@ -19,13 +19,13 @@ from opentelemetry.semconv._incubating.attributes import (
     gen_ai_attributes as GenAI,
 )
 from opentelemetry.trace import SpanKind
-from opentelemetry.util.genai._instruments import _Instruments
 from opentelemetry.util.genai.completion_hook import CompletionHook
 from opentelemetry.util.genai.environment_variables import (
     OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT,
 )
 from opentelemetry.util.genai.handler import TelemetryHandler
 from opentelemetry.util.genai.invocation import GenAIInvocation, ToolInvocation
+from opentelemetry.util.genai.semconv.gen_ai._metrics import _Metrics
 from opentelemetry.util.genai.types import (
     CompactionPart,
     InputMessage,
@@ -484,7 +484,7 @@ def test_direct_invocation_instantiation_falls_back_to_env():
 
     invocation = ToolInvocation(
         tracer=tracer,
-        instruments=_Instruments(meter),
+        metrics=_Metrics(meter),
         logger=mock_logger,
         completion_hook=mock_hook,
         name="direct_tool",

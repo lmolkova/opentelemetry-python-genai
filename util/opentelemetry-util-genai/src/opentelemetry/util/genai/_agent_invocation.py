@@ -13,13 +13,13 @@ from opentelemetry.semconv._incubating.attributes import (
 )
 from opentelemetry.semconv.attributes import server_attributes
 from opentelemetry.trace import SpanKind, Tracer
-from opentelemetry.util.genai._instruments import _Instruments
 from opentelemetry.util.genai._invocation import (
     Error,
     GenAIInvocation,
     get_content_attributes,
 )
 from opentelemetry.util.genai.completion_hook import CompletionHook
+from opentelemetry.util.genai.semconv.gen_ai._metrics import _Metrics
 from opentelemetry.util.genai.types import (
     InputMessage,
     MessagePart,
@@ -52,7 +52,7 @@ class AgentInvocation(GenAIInvocation, ABC):
     def __init__(
         self,
         tracer: Tracer,
-        instruments: _Instruments,
+        metrics: _Metrics,
         logger: Logger,
         completion_hook: CompletionHook,
         *,
@@ -64,7 +64,7 @@ class AgentInvocation(GenAIInvocation, ABC):
         _operation_name = GenAI.GenAiOperationNameValues.INVOKE_AGENT.value
         super().__init__(
             tracer,
-            instruments,
+            metrics,
             logger,
             completion_hook,
             operation_name=_operation_name,
@@ -190,7 +190,7 @@ class LocalAgentInvocation(AgentInvocation):
     def __init__(
         self,
         tracer: Tracer,
-        instruments: _Instruments,
+        metrics: _Metrics,
         logger: Logger,
         completion_hook: CompletionHook,
         *,
@@ -200,7 +200,7 @@ class LocalAgentInvocation(AgentInvocation):
     ) -> None:
         super().__init__(
             tracer,
-            instruments,
+            metrics,
             logger,
             completion_hook,
             span_kind=SpanKind.INTERNAL,
@@ -234,7 +234,7 @@ class LocalAgentInvocation(AgentInvocation):
             timeit.default_timer() - self._monotonic_start_s,
             0.0,
         )
-        self._instruments.invoke_agent_duration.record(
+        self._metrics.invoke_agent_duration(
             duration_seconds,
             attributes=self._get_metric_attributes(),
             context=self._span_context,
@@ -253,7 +253,7 @@ class RemoteAgentInvocation(AgentInvocation):
     def __init__(
         self,
         tracer: Tracer,
-        instruments: _Instruments,
+        metrics: _Metrics,
         logger: Logger,
         completion_hook: CompletionHook,
         provider: str,
@@ -268,7 +268,7 @@ class RemoteAgentInvocation(AgentInvocation):
     ) -> None:
         super().__init__(
             tracer,
-            instruments,
+            metrics,
             logger,
             completion_hook,
             span_kind=SpanKind.CLIENT,
