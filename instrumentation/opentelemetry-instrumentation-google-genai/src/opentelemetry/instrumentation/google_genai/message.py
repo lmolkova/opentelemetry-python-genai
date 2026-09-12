@@ -15,6 +15,8 @@ from opentelemetry.util.genai.types import (
     MessagePart,
     OutputMessage,
     Role,
+    ServerToolCallPart,
+    ServerToolCallResponsePart,
     SystemInstructionPart,
     TextPart,
     ToolCallRequestPart,
@@ -120,6 +122,52 @@ def _to_part(part: genai_types.Part, idx: int) -> MessagePart | None:
         return ToolCallResponsePart(
             id=response.id or tool_call_id(response.name),
             response=response.response,
+        )
+
+    if call := getattr(part, "tool_call", None):
+        tool_type = getattr(call.tool_type, "value", call.tool_type)
+        name = str(tool_type).lower() if tool_type else "unknown"
+        return ServerToolCallPart(
+            id=call.id,
+            name=name,
+            server_tool_call={
+                "type": name,
+                "arguments": call.args,
+            },
+        )
+
+    if response := getattr(part, "tool_response", None):
+        tool_type = getattr(response.tool_type, "value", response.tool_type)
+        name = str(tool_type).lower() if tool_type else "unknown"
+        return ServerToolCallResponsePart(
+            id=response.id,
+            server_tool_call_response={
+                "type": name,
+                "response": response.response,
+            },
+        )
+
+    if code := getattr(part, "executable_code", None):
+        language = getattr(code.language, "value", code.language)
+        return ServerToolCallPart(
+            id=getattr(code, "id", None),
+            name="code_execution",
+            server_tool_call={
+                "type": "code_execution",
+                "code": code.code,
+                "language": language,
+            },
+        )
+
+    if result := getattr(part, "code_execution_result", None):
+        outcome = getattr(result.outcome, "value", result.outcome)
+        return ServerToolCallResponsePart(
+            id=getattr(result, "id", None),
+            server_tool_call_response={
+                "type": "code_execution",
+                "outcome": outcome,
+                "output": result.output,
+            },
         )
 
     _logger.info("Unknown part dropped from telemetry %s", part)
