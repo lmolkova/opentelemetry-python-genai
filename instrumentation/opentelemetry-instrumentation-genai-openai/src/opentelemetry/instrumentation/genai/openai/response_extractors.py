@@ -71,6 +71,8 @@ try:
         OutputMessage,
         ReasoningPart,
         Role,
+        ServerToolCallPart,
+        ServerToolCallResponsePart,
         TextPart,
     )
     from opentelemetry.util.genai.types import (
@@ -84,6 +86,8 @@ except ImportError:
     OutputMessage = None
     ReasoningPart = None
     Role = None
+    ServerToolCallPart = None
+    ServerToolCallResponsePart = None
     TextPart = None
     ToolCall = None
 
@@ -298,6 +302,68 @@ def _extract_reasoning_parts(
     return parts
 
 
+_SERVER_TOOL_NAMES = {
+    "code_interpreter_call": "code_interpreter",
+    "file_search_call": "file_search",
+    "image_generation_call": "image_generation",
+    "mcp_call": "mcp",
+    "mcp_list_tools": "mcp_list_tools",
+    "tool_search_call": "tool_search",
+    "web_search_call": "web_search",
+}
+
+_SERVER_TOOL_RESPONSE_NAMES = {
+    "tool_search_output": "tool_search",
+}
+
+
+def _extract_server_tool_part(
+    item: object,
+) -> ServerToolCallPart | ServerToolCallResponsePart | None:
+    if ServerToolCallPart is None or ServerToolCallResponsePart is None:
+        return None
+
+    item_type = _get_field(item, "type")
+    if not isinstance(item_type, str):
+        return None
+    tool_name = _SERVER_TOOL_NAMES.get(item_type)
+    response_name = _SERVER_TOOL_RESPONSE_NAMES.get(item_type)
+    if tool_name is None and response_name is None:
+        return None
+    if (
+        item_type.startswith("tool_search_")
+        and _get_field(item, "execution") != "server"
+    ):
+        return None
+
+    if isinstance(item, Mapping):
+        payload = dict(item)
+    else:
+        model_dump = getattr(item, "model_dump", None)
+        if not callable(model_dump):
+            return None
+        payload = model_dump(exclude_none=True, mode="json")
+
+    item_id = payload.pop("id", None)
+    payload.pop("type", None)
+    name = payload.pop("name", None)
+    canonical_name = tool_name or response_name
+    if canonical_name is None:
+        return None
+    payload["type"] = canonical_name
+    if response_name is not None:
+        call_id = payload.pop("call_id", None)
+        return ServerToolCallResponsePart(
+            server_tool_call_response=payload,
+            id=call_id if isinstance(call_id, str) else None,
+        )
+    return ServerToolCallPart(
+        name=name if isinstance(name, str) else canonical_name,
+        server_tool_call=payload,
+        id=item_id if isinstance(item_id, str) else None,
+    )
+
+
 # `incomplete_details.reason` values that map onto a cross-provider finish
 # reason; an unrecognized reason is reported as-is.
 _INCOMPLETE_REASON_TO_FINISH_REASON = {
@@ -448,6 +514,16 @@ def get_output_messages_from_response(
                         finish_reason=finish_reason,
                     )
                 )
+            continue
+
+        if server_tool_part := _extract_server_tool_part(item):
+            messages.append(
+                OutputMessage(
+                    role=Role.ASSISTANT.value,
+                    parts=[server_tool_part],
+                    finish_reason="stop",
+                )
+            )
 
     return messages
 

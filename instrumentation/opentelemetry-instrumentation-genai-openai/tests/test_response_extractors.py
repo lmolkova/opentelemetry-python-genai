@@ -19,6 +19,8 @@ from opentelemetry.util.genai.types import (
     FunctionToolDefinition,
     GenericToolDefinition,
     LLMInvocation,
+    ServerToolCallPart,
+    ServerToolCallResponsePart,
     TextPart,
     UriPart,
 )
@@ -333,6 +335,144 @@ def test_extract_output_messages_maps_parts_and_finish_reasons(loaded_module):
     assert messages[2].parts[0].arguments == {"city": "SF"}
     assert messages[3].parts[0].type == "reasoning"
     assert messages[3].parts[0].content == "Thought step"
+
+
+@pytest.mark.parametrize(
+    ("item", "expected_name", "expected_payload"),
+    [
+        (
+            {
+                "id": "fs_1",
+                "type": "file_search_call",
+                "status": "completed",
+                "queries": ["OpenTelemetry"],
+                "results": [],
+            },
+            "file_search",
+            {
+                "type": "file_search",
+                "status": "completed",
+                "queries": ["OpenTelemetry"],
+                "results": [],
+            },
+        ),
+        (
+            {
+                "id": "ws_1",
+                "type": "web_search_call",
+                "status": "completed",
+                "action": {"type": "search", "query": "OpenTelemetry"},
+            },
+            "web_search",
+            {
+                "type": "web_search",
+                "status": "completed",
+                "action": {"type": "search", "query": "OpenTelemetry"},
+            },
+        ),
+        (
+            {
+                "id": "ci_1",
+                "type": "code_interpreter_call",
+                "status": "completed",
+                "code": "print(1)",
+                "container_id": "container_1",
+                "outputs": [{"type": "logs", "logs": "1"}],
+            },
+            "code_interpreter",
+            {
+                "type": "code_interpreter",
+                "status": "completed",
+                "code": "print(1)",
+                "container_id": "container_1",
+                "outputs": [{"type": "logs", "logs": "1"}],
+            },
+        ),
+        (
+            {
+                "id": "mcp_1",
+                "type": "mcp_call",
+                "status": "completed",
+                "name": "get_weather",
+                "server_label": "weather",
+                "arguments": '{"city":"Seattle"}',
+                "output": "rain",
+            },
+            "get_weather",
+            {
+                "type": "mcp",
+                "status": "completed",
+                "server_label": "weather",
+                "arguments": '{"city":"Seattle"}',
+                "output": "rain",
+            },
+        ),
+    ],
+)
+def test_extract_output_messages_maps_server_tools(
+    loaded_module, item, expected_name, expected_payload
+):
+    try:
+        response = _make_response(output=[item])
+    except ValueError:
+        pytest.skip("server tool output type is unavailable in this SDK")
+
+    messages = loaded_module.get_output_messages_from_response(response)
+
+    assert len(messages) == 1
+    assert messages[0].finish_reason == "stop"
+    assert len(messages[0].parts) == 1
+    part = messages[0].parts[0]
+    assert isinstance(part, ServerToolCallPart)
+    assert part.id == item["id"]
+    assert part.name == expected_name
+    assert part.server_tool_call == expected_payload
+
+
+def test_extract_output_messages_maps_server_tool_search_result(loaded_module):
+    item = {
+        "id": "ts_2",
+        "type": "tool_search_output",
+        "call_id": "ts_1",
+        "execution": "server",
+        "status": "completed",
+        "tools": [],
+    }
+    try:
+        response = _make_response(output=[item])
+    except ValueError:
+        pytest.skip("server tool search output is unavailable in this SDK")
+
+    messages = loaded_module.get_output_messages_from_response(response)
+
+    part = messages[0].parts[0]
+    assert isinstance(part, ServerToolCallResponsePart)
+    assert part.id == "ts_1"
+    assert part.server_tool_call_response == {
+        "execution": "server",
+        "status": "completed",
+        "tools": [],
+        "type": "tool_search",
+    }
+
+
+def test_extract_output_messages_does_not_classify_client_tool_search(
+    loaded_module,
+):
+    item = {
+        "id": "ts_1",
+        "type": "tool_search_call",
+        "call_id": "call_1",
+        "execution": "client",
+        "status": "completed",
+        "arguments": {},
+    }
+    try:
+        response = _make_response(output=[item])
+    except ValueError:
+        pytest.skip("tool search output is unavailable in this SDK")
+
+    assert loaded_module.get_output_messages_from_response(response) == []
 
 
 def test_extract_finish_reasons_maps_terminal_message_and_tool_items(
