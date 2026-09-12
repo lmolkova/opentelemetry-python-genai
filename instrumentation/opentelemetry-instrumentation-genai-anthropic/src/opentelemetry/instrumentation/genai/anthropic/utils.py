@@ -276,9 +276,7 @@ def _convert_content_block_to_part(
     if callable(model_dump):
         dumped = model_dump()
         if isinstance(dumped, Mapping):
-            return _convert_dict_block_to_part(
-                cast(Mapping[str, Any], dumped)
-            )
+            return _convert_dict_block_to_part(cast(Mapping[str, Any], dumped))
 
     if not hasattr(block, "get"):
         return None
