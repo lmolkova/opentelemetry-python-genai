@@ -20,9 +20,9 @@ from opentelemetry.util.genai.completion_hook import (
     CompletionHook,
     _NoOpCompletionHook,
 )
+from opentelemetry.util.genai.semconv._span import _Span
 from opentelemetry.util.genai.semconv.gen_ai._events import _Events
 from opentelemetry.util.genai.semconv.gen_ai._metrics import _Metrics
-from opentelemetry.util.genai.semconv.gen_ai._span import GenAISpan
 from opentelemetry.util.genai.semconv.gen_ai._spans import _Spans
 from opentelemetry.util.genai.types import (
     Error,
@@ -113,7 +113,7 @@ class GenAIInvocation(AbstractContextManager["GenAIInvocation"]):
             ContentCapturingMode.SPAN_AND_EVENT,
         )
 
-    def _start(self, span: GenAISpan) -> None:
+    def _start(self, span: _Span) -> None:
         self.span = span.span
         self._span_context = set_span_in_context(self.span)
         self._monotonic_start_s = timeit.default_timer()

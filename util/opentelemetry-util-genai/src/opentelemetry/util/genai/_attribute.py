@@ -3,14 +3,21 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Generic, TypeVar, cast, overload
 
 AttributeT = TypeVar("AttributeT")
 
 
 class _Attribute(Generic[AttributeT]):
-    def __init__(self, name: str | None = None) -> None:
+    def __init__(
+        self,
+        name: str | None = None,
+        *,
+        default_factory: Callable[[], AttributeT] | None = None,
+    ) -> None:
         self._name = name
+        self._default_factory = default_factory
 
     def __set_name__(self, owner: type[object], name: str) -> None:
         if self._name is None:
@@ -30,7 +37,12 @@ class _Attribute(Generic[AttributeT]):
         if instance is None:
             return self
         attributes = getattr(instance, "_semconv_attributes")
-        return cast("AttributeT", getattr(attributes, cast("str", self._name)))
+        name = cast("str", self._name)
+        value = getattr(attributes, name)
+        if value is None and self._default_factory is not None:
+            value = self._default_factory()
+            setattr(attributes, name, value)
+        return cast("AttributeT", value)
 
     def __set__(self, instance: object, value: AttributeT) -> None:
         attributes = getattr(instance, "_semconv_attributes")

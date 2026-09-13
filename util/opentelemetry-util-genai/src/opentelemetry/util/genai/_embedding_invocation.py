@@ -10,7 +10,7 @@ from opentelemetry.util.genai._attribute import _Attribute
 from opentelemetry.util.genai._invocation import Error, GenAIInvocation
 from opentelemetry.util.genai.completion_hook import CompletionHook
 from opentelemetry.util.genai.semconv.gen_ai import (
-    EmbeddingAttributes,
+    EmbeddingsAttributes,
     GenAiOperationName,
     GenAiTokenType,
 )
@@ -52,7 +52,7 @@ class EmbeddingInvocation(GenAIInvocation):
     ) -> None:
         """Use handler.embedding(provider) rather than calling this directly."""
         _operation_name = GenAiOperationName.EMBEDDINGS.value
-        self._semconv_attributes = EmbeddingAttributes(
+        self._semconv_attributes = EmbeddingsAttributes(
             operation_name=_operation_name,
             provider_name=provider,
             request_model=request_model,

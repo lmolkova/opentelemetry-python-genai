@@ -18,8 +18,8 @@ from opentelemetry.util.genai.completion_hook import CompletionHook
 from opentelemetry.util.genai.semconv.gen_ai import (
     GenAiOperationName,
     GenAiTokenType,
-    LocalAgentAttributes,
-    RemoteAgentAttributes,
+    InvokeAgentAttributes,
+    InvokeAgentClientAttributes,
 )
 from opentelemetry.util.genai.semconv.gen_ai._metrics import _Metrics
 from opentelemetry.util.genai.semconv.gen_ai._spans import (
@@ -65,11 +65,11 @@ class AgentInvocation(GenAIInvocation, ABC):
     finish_reasons = _Attribute[list[str] | None]("response_finish_reasons")
     input_tokens = _Attribute[int | None]("usage_input_tokens")
     output_tokens = _Attribute[int | None]("usage_output_tokens")
-    input_messages = _Attribute[list[InputMessage]]()
-    output_messages = _Attribute[list[OutputMessage]]()
+    input_messages = _Attribute[list[InputMessage]](default_factory=list)
+    output_messages = _Attribute[list[OutputMessage]](default_factory=list)
     system_instruction = _Attribute[
         list[SystemInstructionPart] | Sequence[MessagePart]
-    ]("system_instructions")
+    ]("system_instructions", default_factory=list)
     tool_definitions = _Attribute[list[ToolDefinition] | None]()
 
     def __init__(
@@ -79,7 +79,8 @@ class AgentInvocation(GenAIInvocation, ABC):
         logger: Logger,
         completion_hook: CompletionHook,
         *,
-        semconv_attributes: LocalAgentAttributes | RemoteAgentAttributes,
+        semconv_attributes: InvokeAgentAttributes
+        | InvokeAgentClientAttributes,
         content_capturing_mode: ContentCapturingMode | None = None,
     ) -> None:
         self._semconv_attributes = semconv_attributes
@@ -159,7 +160,7 @@ class LocalAgentInvocation(AgentInvocation):
         content_capturing_mode: ContentCapturingMode | None = None,
     ) -> None:
         operation_name = GenAiOperationName.INVOKE_AGENT.value
-        attributes = LocalAgentAttributes(
+        attributes = InvokeAgentAttributes(
             operation_name=operation_name,
             request_model=request_model,
             agent_name=agent_name,
@@ -182,7 +183,7 @@ class LocalAgentInvocation(AgentInvocation):
 
     def _apply_span_attributes(self) -> None:
         span = cast("InvokeAgentSpan", self._agent_span)
-        attributes = cast("LocalAgentAttributes", self._semconv_attributes)
+        attributes = cast("InvokeAgentAttributes", self._semconv_attributes)
         span.apply(attributes)
 
     def _record_metrics(self) -> None:
@@ -192,7 +193,7 @@ class LocalAgentInvocation(AgentInvocation):
         )
         self._metrics.invoke_agent_duration(
             duration_seconds,
-            cast("LocalAgentAttributes", self._semconv_attributes),
+            cast("InvokeAgentAttributes", self._semconv_attributes),
             additional_attributes=self.metric_attributes,
             context=self._span_context,
         )
@@ -221,13 +222,11 @@ class RemoteAgentInvocation(AgentInvocation):
 
     @property
     def _request_stream(self) -> bool | None:
-        attributes = cast("RemoteAgentAttributes", self._semconv_attributes)
-        return attributes.request_stream
+        return self._request_stream_value
 
     @_request_stream.setter
     def _request_stream(self, value: bool | None) -> None:
-        attributes = cast("RemoteAgentAttributes", self._semconv_attributes)
-        attributes.request_stream = value
+        self._request_stream_value = value
 
     def __init__(
         self,
@@ -246,7 +245,7 @@ class RemoteAgentInvocation(AgentInvocation):
         content_capturing_mode: ContentCapturingMode | None = None,
     ) -> None:
         operation_name = GenAiOperationName.INVOKE_AGENT.value
-        attributes = RemoteAgentAttributes(
+        attributes = InvokeAgentClientAttributes(
             operation_name=operation_name,
             provider_name=provider,
             request_model=request_model,
@@ -265,6 +264,7 @@ class RemoteAgentInvocation(AgentInvocation):
             content_capturing_mode=content_capturing_mode,
         )
         self._stream_last_chunk_at: float | None = None
+        self._request_stream_value: bool | None = None
 
         self._agent_span = self._spans.invoke_agent_client(
             self._span_name,
@@ -279,18 +279,24 @@ class RemoteAgentInvocation(AgentInvocation):
 
     def _apply_span_attributes(self) -> None:
         span = cast("InvokeAgentClientSpan", self._agent_span)
-        attributes = cast("RemoteAgentAttributes", self._semconv_attributes)
+        attributes = cast(
+            "InvokeAgentClientAttributes", self._semconv_attributes
+        )
         span.apply(attributes)
 
     @property
     def cache_write_input_tokens(self) -> int | None:
         """The number of cache write input tokens."""
-        attributes = cast("RemoteAgentAttributes", self._semconv_attributes)
+        attributes = cast(
+            "InvokeAgentClientAttributes", self._semconv_attributes
+        )
         return attributes.usage_cache_write_input_tokens
 
     @cache_write_input_tokens.setter
     def cache_write_input_tokens(self, value: int | None) -> None:
-        attributes = cast("RemoteAgentAttributes", self._semconv_attributes)
+        attributes = cast(
+            "InvokeAgentClientAttributes", self._semconv_attributes
+        )
         attributes.usage_cache_write_input_tokens = value
 
     @property
@@ -300,16 +306,23 @@ class RemoteAgentInvocation(AgentInvocation):
         .. deprecated:: 1.3b0
             Use :attr:`cache_write_input_tokens` instead.
         """
-        attributes = cast("RemoteAgentAttributes", self._semconv_attributes)
+        attributes = cast(
+            "InvokeAgentClientAttributes", self._semconv_attributes
+        )
         return attributes.usage_cache_write_input_tokens
 
     @cache_creation_input_tokens.setter
     def cache_creation_input_tokens(self, value: int | None) -> None:
-        attributes = cast("RemoteAgentAttributes", self._semconv_attributes)
+        attributes = cast(
+            "InvokeAgentClientAttributes", self._semconv_attributes
+        )
         attributes.usage_cache_write_input_tokens = value
 
     def _on_stream_chunk(self, chunk_at: float) -> None:
-        attributes = cast("RemoteAgentAttributes", self._semconv_attributes)
+        attributes = cast(
+            "InvokeAgentClientAttributes", self._semconv_attributes
+        )
+        is_first_chunk = self._stream_last_chunk_at is None
         last_chunk_at = (
             self._stream_last_chunk_at
             if self._stream_last_chunk_at is not None
@@ -318,8 +331,7 @@ class RemoteAgentInvocation(AgentInvocation):
         self._stream_last_chunk_at = chunk_at
         delta = max(chunk_at - last_chunk_at, 0.0)
 
-        if attributes.response_time_to_first_chunk is None:
-            attributes.response_time_to_first_chunk = delta
+        if is_first_chunk:
             self._metrics.client_operation_time_to_first_chunk(
                 delta,
                 attributes,
@@ -336,7 +348,9 @@ class RemoteAgentInvocation(AgentInvocation):
         )
 
     def _record_metrics(self) -> None:
-        attributes = cast("RemoteAgentAttributes", self._semconv_attributes)
+        attributes = cast(
+            "InvokeAgentClientAttributes", self._semconv_attributes
+        )
         duration_seconds = max(
             timeit.default_timer() - self._monotonic_start_s,
             0.0,

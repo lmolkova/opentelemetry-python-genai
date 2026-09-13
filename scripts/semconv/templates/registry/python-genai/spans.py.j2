@@ -1,0 +1,120 @@
+{% import "common.j2" as common %}
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+# Code generated from OpenTelemetry GenAI semantic conventions. DO NOT EDIT.
+
+from __future__ import annotations
+
+from collections.abc import Mapping, Sequence
+from enum import Enum
+
+from opentelemetry.context import Context
+from opentelemetry.trace import SpanKind, Tracer
+from opentelemetry.util.genai.semconv.{{ ctx.root_namespace }} import attributes as Attr
+from opentelemetry.util.genai.semconv._span import _Span
+{% if ctx.telemetry_groups %}
+from opentelemetry.util.genai.semconv.{{ ctx.root_namespace }}.attribute_sets import (
+{% for group_signal, telemetry_group in ctx.telemetry_groups | items %}
+    {{ common.attribute_set_class_name(group_signal, ctx.telemetry_groups) }},
+{% endfor %}
+)
+from opentelemetry.util.genai.types import (
+    InputMessage,
+    OutputMessage,
+    SystemInstructionPart,
+    ToolDefinition,
+)
+{% endif %}
+from opentelemetry.util.types import AnyValue, AttributeValue
+
+
+def _value(value: AttributeValue | Enum) -> AttributeValue:
+    return value.value if isinstance(value, Enum) else value
+
+
+{% for signal in ctx.spans %}
+{% set class_name = common.span_class_name(signal, ctx.spans) %}
+{% set carrier = common.attribute_set_class_name(signal.type, ctx.telemetry_groups) if signal.type in ctx.telemetry_groups else "" %}
+class {{ class_name }}(_Span):
+    """`{{ signal.type }}` span."""
+
+{% for attribute in signal.attributes %}
+{% if attribute.type == "template[string]" %}
+    def set_{{ common.template_setter_name(attribute) }}(self, name: str, value: str | None) -> None:
+        self._set_attribute({{ common.constant(attribute, ctx.root_namespace) }} + f".{name}", value)
+
+{% else %}
+    def set_{{ common.field_name(attribute, ctx.root_namespace) }}(
+        self, value: {{ common.python_type(attribute, ctx.root_namespace) }} | None
+    ) -> None:
+{% if attribute.type == "any" %}
+        self._set_json_attribute({{ common.constant(attribute, ctx.root_namespace) }}, value)
+{% else %}
+        self._set_attribute({{ common.constant(attribute, ctx.root_namespace) }}, value)
+{% endif %}
+
+{% endif %}
+{% endfor %}
+{% if carrier %}
+    def apply(self, attributes: {{ carrier }}) -> None:
+        """Apply attributes that are not fixed at span creation."""
+{% for attribute in signal.attributes %}
+{% if attribute.key not in params.content_attributes and not attribute.sampling_relevant %}
+{% if attribute.type != "template[string]" %}
+{% if attribute.key in params.omit_falsy_attributes %}
+        self.set_{{ common.field_name(attribute, ctx.root_namespace) }}(attributes.{{ common.field_name(attribute, ctx.root_namespace) }} or None)
+{% else %}
+        self.set_{{ common.field_name(attribute, ctx.root_namespace) }}(attributes.{{ common.field_name(attribute, ctx.root_namespace) }})
+{% endif %}
+{% endif %}
+{% endif %}
+{% endfor %}
+
+{% endif %}
+{% endfor %}
+class _Spans:
+    """Creates spans following the {{ ctx.root_namespace }} semantic conventions."""
+
+    def __init__(self, tracer: Tracer) -> None:
+        self._tracer = tracer
+
+{% for signal in ctx.spans %}
+{% set class_name = common.span_class_name(signal, ctx.spans) %}
+    def {{ common.span_method_name(signal, ctx.spans) }}(
+        self,
+        name: str,
+        *,
+{% for attribute in signal.attributes %}
+{% if attribute.sampling_relevant %}
+{% if attribute.requirement_level == "required" %}
+        {{ common.field_name(attribute, ctx.root_namespace) }}: {{ common.python_type(attribute, ctx.root_namespace) }},
+{% endif %}
+{% endif %}
+{% endfor %}
+{% for attribute in signal.attributes %}
+{% if attribute.sampling_relevant %}
+{% if attribute.requirement_level != "required" %}
+        {{ common.field_name(attribute, ctx.root_namespace) }}: {{ common.python_type(attribute, ctx.root_namespace) }} | None = None,
+{% endif %}
+{% endif %}
+{% endfor %}
+        context: Context | None = None,
+    ) -> {{ class_name }}:
+        """Start a `{{ signal.type }}` span."""
+        attributes: dict[str, AttributeValue] = {}
+{% for attribute in signal.attributes %}
+{% if attribute.sampling_relevant %}
+        if {{ common.field_name(attribute, ctx.root_namespace) }} is not None:
+            attributes[{{ common.constant(attribute, ctx.root_namespace) }}] = _value({{ common.field_name(attribute, ctx.root_namespace) }})
+{% endif %}
+{% endfor %}
+        span = self._tracer.start_span(
+            name,
+            context=context,
+            kind=SpanKind.{{ signal.kind | upper_case }},
+            attributes=attributes,
+        )
+        return {{ class_name }}(span)
+
+{% endfor %}
+__all__ = ["_Spans"]

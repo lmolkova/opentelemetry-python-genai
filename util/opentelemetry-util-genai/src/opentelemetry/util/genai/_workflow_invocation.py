@@ -14,7 +14,7 @@ from opentelemetry.util.genai._invocation import (
 from opentelemetry.util.genai.completion_hook import CompletionHook
 from opentelemetry.util.genai.semconv.gen_ai import (
     GenAiOperationName,
-    WorkflowAttributes,
+    InvokeWorkflowAttributes,
 )
 from opentelemetry.util.genai.semconv.gen_ai._metrics import _Metrics
 from opentelemetry.util.genai.semconv.gen_ai._spans import (
@@ -39,8 +39,8 @@ class WorkflowInvocation(GenAIInvocation):
 
     _name = _Attribute[str | None]("workflow_name")
     conversation_id = _Attribute[str | None]()
-    input_messages = _Attribute[list[InputMessage]]()
-    output_messages = _Attribute[list[OutputMessage]]()
+    input_messages = _Attribute[list[InputMessage]](default_factory=list)
+    output_messages = _Attribute[list[OutputMessage]](default_factory=list)
 
     def __init__(
         self,
@@ -54,7 +54,7 @@ class WorkflowInvocation(GenAIInvocation):
     ) -> None:
         """Use handler.workflow(name) rather than calling this directly."""
         _operation_name = GenAiOperationName.INVOKE_WORKFLOW.value
-        self._semconv_attributes = WorkflowAttributes(
+        self._semconv_attributes = InvokeWorkflowAttributes(
             operation_name=_operation_name,
             workflow_name=name,
         )
@@ -69,7 +69,6 @@ class WorkflowInvocation(GenAIInvocation):
         self._workflow_span: InvokeWorkflowSpan = self._spans.invoke_workflow(
             self._span_name,
             operation_name=self._semconv_attributes.operation_name,
-            workflow_name=self._semconv_attributes.workflow_name,
         )
         self._start(self._workflow_span)
 

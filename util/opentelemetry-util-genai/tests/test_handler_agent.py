@@ -29,8 +29,8 @@ from opentelemetry.util.genai.invocation import (
     RemoteAgentInvocation,
 )
 from opentelemetry.util.genai.semconv.gen_ai import (
-    LocalAgentAttributes,
-    RemoteAgentAttributes,
+    InvokeAgentAttributes,
+    InvokeAgentClientAttributes,
 )
 from opentelemetry.util.genai.types import (
     ContentCapturingMode,
@@ -58,7 +58,9 @@ class TestLocalAgentInvocation(unittest.TestCase):  # pylint: disable=too-many-p
         )
         assert isinstance(invocation, LocalAgentInvocation)
         assert isinstance(invocation, AgentInvocation)
-        assert isinstance(invocation._semconv_attributes, LocalAgentAttributes)
+        assert isinstance(
+            invocation._semconv_attributes, InvokeAgentAttributes
+        )
         invocation.stop()
 
         spans = self.span_exporter.get_finished_spans()
@@ -472,7 +474,7 @@ class TestRemoteAgentInvocation(unittest.TestCase):
         assert isinstance(invocation, RemoteAgentInvocation)
         assert isinstance(invocation, AgentInvocation)
         assert isinstance(
-            invocation._semconv_attributes, RemoteAgentAttributes
+            invocation._semconv_attributes, InvokeAgentClientAttributes
         )
         invocation.stop()
         assert (

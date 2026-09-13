@@ -1,0 +1,95 @@
+{% import "common.j2" as common %}
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+# Code generated from OpenTelemetry GenAI semantic conventions. DO NOT EDIT.
+
+from __future__ import annotations
+
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
+
+from opentelemetry.util.genai.semconv.{{ ctx.root_namespace }} import attributes as Attr
+from opentelemetry.util.genai.types import (
+    InputMessage,
+    OutputMessage,
+    SystemInstructionPart,
+    ToolDefinition,
+)
+from opentelemetry.util.types import AnyValue
+
+{% for group_signal, telemetry_group in ctx.telemetry_groups | items %}
+{% set collected = namespace(attributes=[], keys=[], required=[]) %}
+{% for signal in ctx.spans %}
+{% if signal.type == group_signal %}
+{% for attribute in signal.attributes %}
+{% if attribute.key not in collected.keys %}
+{% set collected.attributes = collected.attributes + [attribute] %}
+{% set collected.keys = collected.keys + [attribute.key] %}
+{% endif %}
+{% if attribute.requirement_level == "required" and attribute.key not in collected.required %}
+{% set collected.required = collected.required + [attribute.key] %}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% for metric in ctx.metrics %}
+{% if metric.name in telemetry_group.metrics %}
+{% for attribute in metric.attributes %}
+{% set shared_with_span = namespace(value=false) %}
+{% for candidate_signal, candidate_group in ctx.telemetry_groups | items %}
+{% if metric.name in candidate_group.metrics %}
+{% for span in ctx.spans %}
+{% if span.type == candidate_signal %}
+{% for span_attribute in span.attributes %}
+{% if span_attribute.key == attribute.key %}
+{% set shared_with_span.value = true %}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% if shared_with_span.value and attribute.key not in collected.keys %}
+{% set collected.attributes = collected.attributes + [attribute] %}
+{% set collected.keys = collected.keys + [attribute.key] %}
+{% endif %}
+{% if shared_with_span.value and attribute.requirement_level == "required" and attribute.key not in collected.required %}
+{% set collected.required = collected.required + [attribute.key] %}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% for event in ctx.events %}
+{% if event.name in telemetry_group.events | default([]) %}
+{% for attribute in event.attributes %}
+{% if attribute.key not in collected.keys %}
+{% set collected.attributes = collected.attributes + [attribute] %}
+{% set collected.keys = collected.keys + [attribute.key] %}
+{% endif %}
+{% if attribute.requirement_level == "required" and attribute.key not in collected.required %}
+{% set collected.required = collected.required + [attribute.key] %}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endfor %}
+@dataclass(kw_only=True)
+class {{ common.attribute_set_class_name(group_signal, ctx.telemetry_groups) }}:
+    """Typed attributes for the related GenAI span."""
+
+{% for attribute in collected.attributes %}
+{% if attribute.key in collected.required %}
+    {{ common.field_name(attribute, ctx.root_namespace) }}: {{ common.python_type(attribute, ctx.root_namespace) }}
+{% endif %}
+{% endfor %}
+{% for attribute in collected.attributes %}
+{% if attribute.key not in collected.required %}
+    {{ common.field_name(attribute, ctx.root_namespace) }}: {{ common.python_type(attribute, ctx.root_namespace) }} | None = None
+{% endif %}
+{% endfor %}
+
+{% endfor %}
+__all__ = [
+{% for group_signal, telemetry_group in ctx.telemetry_groups | items %}
+    "{{ common.attribute_set_class_name(group_signal, ctx.telemetry_groups) }}",
+{% endfor %}
+]

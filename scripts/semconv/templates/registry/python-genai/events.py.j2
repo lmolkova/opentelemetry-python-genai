@@ -1,0 +1,134 @@
+{% import "common.j2" as common %}
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+# Code generated from OpenTelemetry GenAI semantic conventions. DO NOT EDIT.
+
+from __future__ import annotations
+
+from collections.abc import Mapping, Sequence
+
+from opentelemetry._logs import Logger
+from opentelemetry.context import Context
+from opentelemetry.util.genai.semconv.{{ ctx.root_namespace }} import attributes as Attr
+from opentelemetry.util.genai.semconv._event import _Event
+{% set carriers = namespace(present=false) %}
+{% for group_signal, telemetry_group in ctx.telemetry_groups | items %}
+{% for event in ctx.events %}
+{% if event.name in telemetry_group.events | default([]) %}
+{% set carriers.present = true %}
+{% endif %}
+{% endfor %}
+{% endfor %}
+{% if carriers.present %}
+from opentelemetry.util.genai.semconv.{{ ctx.root_namespace }}.attribute_sets import (
+{% for group_signal, telemetry_group in ctx.telemetry_groups | items %}
+{% for event in ctx.events %}
+{% if event.name in telemetry_group.events | default([]) %}
+    {{ common.attribute_set_class_name(group_signal, ctx.telemetry_groups) }},
+{% endif %}
+{% endfor %}
+{% endfor %}
+)
+{% endif %}
+from opentelemetry.util.genai.types import (
+    InputMessage,
+    OutputMessage,
+    SystemInstructionPart,
+    ToolDefinition,
+)
+from opentelemetry.util.types import AnyValue
+
+
+{% for event in ctx.events %}
+class {{ common.event_class_name(event) }}(_Event):
+    """`{{ event.name }}` event."""
+
+{% for attribute in event.attributes %}
+{% if attribute.type == "template[string]" %}
+    def set_{{ common.template_setter_name(attribute) }}(self, name: str, value: str | None) -> None:
+        self._set_attribute({{ common.constant(attribute, ctx.root_namespace) }} + f".{name}", value)
+
+{% elif attribute.type == "any" %}
+    def set_{{ common.field_name(attribute, ctx.root_namespace) }}(
+        self, value: {{ common.python_type(attribute, ctx.root_namespace) }} | None
+    ) -> None:
+        self._set_structured_attribute({{ common.constant(attribute, ctx.root_namespace) }}, value)
+
+{% endif %}
+{% endfor %}
+
+{% endfor %}
+class _Events:
+    """Creates events following the {{ ctx.root_namespace }} semantic conventions."""
+
+    def __init__(self, logger: Logger) -> None:
+        self._logger = logger
+
+{% for event in ctx.events %}
+{% set carrier = namespace(name="") %}
+{% for group_signal, telemetry_group in ctx.telemetry_groups | items %}
+{% if event.name in telemetry_group.events | default([]) %}
+{% set carrier.name = common.attribute_set_class_name(group_signal, ctx.telemetry_groups) %}
+{% endif %}
+{% endfor %}
+{% if carrier.name %}
+    def {{ common.event_method_name(event) }}_from_attributes(
+        self,
+        attributes: {{ carrier.name }},
+        *,
+        additional_attributes: Mapping[str, AnyValue] | None = None,
+        context: Context | None = None,
+    ) -> {{ common.event_class_name(event) }}:
+        """Create a `{{ event.name }}` event from aggregate attributes."""
+        return self.{{ common.event_method_name(event) }}(
+{% for attribute in event.attributes %}
+{% if attribute.key not in params.content_attributes and attribute.type != "template[string]" %}
+            {{ common.field_name(attribute, ctx.root_namespace) }}=attributes.{{ common.field_name(attribute, ctx.root_namespace) }},
+{% endif %}
+{% endfor %}
+            additional_attributes=additional_attributes,
+            context=context,
+        )
+
+{% endif %}
+    def {{ common.event_method_name(event) }}(
+        self,
+        *,
+{% for attribute in event.attributes | required %}
+        {{ common.field_name(attribute, ctx.root_namespace) }}: {{ common.python_type(attribute, ctx.root_namespace) }},
+{% endfor %}
+{% for attribute in event.attributes | not_required %}
+        {{ common.field_name(attribute, ctx.root_namespace) }}: {{ common.python_type(attribute, ctx.root_namespace) }} | None = None,
+{% endfor %}
+        additional_attributes: Mapping[str, AnyValue] | None = None,
+        context: Context | None = None,
+    ) -> {{ common.event_class_name(event) }}:
+        """Create a `{{ event.name }}` event."""
+        event = {{ common.event_class_name(event) }}(
+            self._logger,
+            "{{ event.name }}",
+            context=context,
+        )
+{% for attribute in event.attributes %}
+{% if attribute.type == "template[string]" %}
+        if {{ common.field_name(attribute, ctx.root_namespace) }} is not None:
+            for name, value in {{ common.field_name(attribute, ctx.root_namespace) }}.items():
+                event.set_{{ common.template_setter_name(attribute) }}(name, value)
+{% elif attribute.type == "any" %}
+        event.set_{{ common.field_name(attribute, ctx.root_namespace) }}({{ common.field_name(attribute, ctx.root_namespace) }})
+{% else %}
+        event._set_attribute({{ common.constant(attribute, ctx.root_namespace) }}, {{ common.field_name(attribute, ctx.root_namespace) }})
+{% endif %}
+{% endfor %}
+        if additional_attributes is not None:
+            event.set_attributes(additional_attributes)
+        return event
+
+{% endfor %}
+
+__all__ = [
+{% for event in ctx.events %}
+    "{{ common.event_class_name(event) }}",
+{% endfor %}
+    "_Events",
+]

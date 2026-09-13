@@ -1,0 +1,163 @@
+whitespace_control:
+  trim_blocks: true
+  lstrip_blocks: true
+  keep_trailing_newline: true
+
+text_maps:
+  python_types:
+    boolean: bool
+    double: float
+    int: int
+    string: str
+    string[]: Sequence[str]
+    int[]: Sequence[int]
+    double[]: Sequence[float]
+    boolean[]: Sequence[bool]
+    template[string]: str
+
+  structured_types:
+    gen_ai.input.messages: Sequence[InputMessage]
+    gen_ai.output.messages: Sequence[OutputMessage]
+    gen_ai.system_instructions: Sequence[SystemInstructionPart]
+    gen_ai.tool.definitions: Sequence[ToolDefinition]
+    gen_ai.prompt.variable: Mapping[str, object]
+
+params:
+  histogram_boundaries:
+    gen_ai.client.operation.duration: &client_operation_duration
+      [0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 1.28, 2.56, 5.12, 10.24, 20.48, 40.96, 81.92]
+    gen_ai.client.operation.time_per_output_chunk: *client_operation_duration
+    gen_ai.client.operation.time_to_first_chunk: *client_operation_duration
+    gen_ai.client.token.usage:
+      [1, 4, 16, 64, 256, 1024, 4096, 16384, 65536, 262144, 1048576, 4194304, 16777216, 67108864]
+    gen_ai.execute_tool.duration: *client_operation_duration
+    gen_ai.invoke_agent.duration:
+      [0.1, 0.2, 0.4, 0.8, 1.6, 3.2, 6.4, 12.8, 25.6, 51.2, 102.4, 204.8, 409.6]
+    gen_ai.invoke_workflow.duration:
+      [1, 5, 10, 30, 60, 120, 300, 600, 1800, 3600, 7200]
+
+  telemetry_groups:
+    gen_ai.inference.client:
+      metrics:
+        - gen_ai.client.token.usage
+        - gen_ai.client.operation.duration
+        - gen_ai.client.operation.time_to_first_chunk
+        - gen_ai.client.operation.time_per_output_chunk
+      events: [gen_ai.client.inference.operation.details]
+    gen_ai.embeddings.client:
+      metrics: [gen_ai.client.token.usage, gen_ai.client.operation.duration]
+    gen_ai.retrieval.client:
+      metrics: [gen_ai.client.operation.duration]
+    gen_ai.fetch_response.client:
+      metrics:
+        - gen_ai.client.operation.duration
+        - gen_ai.client.operation.time_to_first_chunk
+        - gen_ai.client.operation.time_per_output_chunk
+    gen_ai.invoke_agent.internal:
+      metrics:
+        - gen_ai.invoke_agent.duration
+        - gen_ai.invoke_agent.inference_calls
+        - gen_ai.invoke_agent.tool_calls
+    gen_ai.invoke_agent.client:
+      metrics:
+        - gen_ai.client.token.usage
+        - gen_ai.client.operation.duration
+        - gen_ai.client.operation.time_to_first_chunk
+        - gen_ai.client.operation.time_per_output_chunk
+    gen_ai.execute_tool.internal:
+      metrics: [gen_ai.execute_tool.duration]
+    gen_ai.invoke_workflow.internal:
+      metrics: [gen_ai.invoke_workflow.duration]
+
+  content_attributes:
+    - gen_ai.input.messages
+    - gen_ai.output.messages
+    - gen_ai.system_instructions
+    - gen_ai.tool.definitions
+    - gen_ai.prompt.variable
+    - gen_ai.retrieval.documents
+    - gen_ai.retrieval.query.text
+    - gen_ai.tool.call.arguments
+    - gen_ai.tool.call.result
+    - gen_ai.memory.query.text
+    - gen_ai.memory.records
+
+  omit_falsy_attributes:
+    - gen_ai.conversation.compacted
+    - gen_ai.usage.audio.cache_read.input_tokens
+    - gen_ai.usage.audio.input_tokens
+    - gen_ai.usage.audio.output_tokens
+    - gen_ai.usage.cache_read.input_tokens
+    - gen_ai.usage.cache_write.input_tokens
+    - gen_ai.usage.image.cache_read.input_tokens
+    - gen_ai.usage.image.input_tokens
+    - gen_ai.usage.image.output_tokens
+    - gen_ai.usage.reasoning.output_tokens
+    - gen_ai.usage.text.cache_read.input_tokens
+    - gen_ai.usage.text.input_tokens
+    - gen_ai.usage.text.output_tokens
+
+templates:
+  - template: attributes.py.j2
+    filter: >
+      $params.telemetry_groups as $telemetry_groups
+      | semconv_grouped_attributes({"v2": true})
+      | map(. as $group | . + {
+          telemetry_groups: ($telemetry_groups | with_entries(
+            select(.key | startswith($group.root_namespace + "."))))
+        })
+    application_mode: each
+    file_name: "{{ ctx.root_namespace }}/attributes.py"
+  - template: init.py.j2
+    filter: >
+      $params.telemetry_groups as $telemetry_groups
+      | semconv_grouped_attributes({"v2": true})
+      | map(. as $group | . + {
+          telemetry_groups: ($telemetry_groups | with_entries(
+            select(.key | startswith($group.root_namespace + "."))))
+        })
+    application_mode: each
+    file_name: "{{ ctx.root_namespace }}/__init__.py"
+  - template: attribute_sets.py.j2
+    filter: >
+      {
+        spans: semconv_spans({"v2": true}),
+        metrics: semconv_metrics({"v2": true}),
+        events: semconv_events({"v2": true}),
+        root_namespace: ($params.telemetry_groups | keys | .[0] | split(".") | .[0]),
+        telemetry_groups: $params.telemetry_groups
+      }
+    application_mode: single
+    file_name: "{{ ctx.root_namespace }}/attribute_sets.py"
+  - template: spans.py.j2
+    filter: >
+      $params.telemetry_groups as $telemetry_groups
+      | semconv_grouped_spans({"v2": true})
+      | map(. as $group | . + {
+          telemetry_groups: ($telemetry_groups | with_entries(
+            select(.key | startswith($group.root_namespace + "."))))
+        })
+    application_mode: each
+    file_name: "{{ ctx.root_namespace }}/_spans.py"
+  - template: metrics.py.j2
+    filter: >
+      $params.telemetry_groups as $telemetry_groups
+      | semconv_spans({"v2": true}) as $spans
+      | semconv_grouped_metrics({"v2": true})
+      | map(. as $group | . + {
+          spans: $spans,
+          telemetry_groups: ($telemetry_groups | with_entries(
+            select(.key | startswith($group.root_namespace + "."))))
+        })
+    application_mode: each
+    file_name: "{{ ctx.root_namespace }}/_metrics.py"
+  - template: events.py.j2
+    filter: >
+      $params.telemetry_groups as $telemetry_groups
+      | semconv_grouped_events({"v2": true})
+      | map(. as $group | . + {
+          telemetry_groups: ($telemetry_groups | with_entries(
+            select(.key | startswith($group.root_namespace + "."))))
+        })
+    application_mode: each
+    file_name: "{{ ctx.root_namespace }}/_events.py"

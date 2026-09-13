@@ -342,8 +342,7 @@ class TelemetryHandlerRetrievalContextManagerTest(_RetrievalTestBase):
 
 
 class TelemetryHandlerRetrievalSamplingTest(_RetrievalTestBase):
-    def test_sampling_attributes_available_at_span_creation(self) -> None:
-        """Sampling-relevant attributes must be present at start_span() time."""
+    def test_attributes_are_applied_after_span_creation(self) -> None:
         captured_attributes: dict = {}
 
         class AttributeCapturingSampler:  # pylint: disable=no-self-use
@@ -376,16 +375,10 @@ class TelemetryHandlerRetrievalSamplingTest(_RetrievalTestBase):
         )
         invocation.stop()
 
-        self.assertEqual(
-            captured_attributes[GenAI.GEN_AI_OPERATION_NAME], "retrieval"
-        )
-        self.assertEqual(
-            captured_attributes[GenAI.GEN_AI_DATA_SOURCE_ID], "DS42"
-        )
-        self.assertEqual(
-            captured_attributes[GenAI.GEN_AI_PROVIDER_NAME], "pinecone"
-        )
-        self.assertEqual(
-            captured_attributes["server.address"], "db.example.com"
-        )
-        self.assertEqual(captured_attributes["server.port"], 443)
+        self.assertEqual(captured_attributes, {})
+        attributes = self._get_finished_spans()[0].attributes
+        self.assertEqual(attributes[GenAI.GEN_AI_OPERATION_NAME], "retrieval")
+        self.assertEqual(attributes[GenAI.GEN_AI_DATA_SOURCE_ID], "DS42")
+        self.assertEqual(attributes[GenAI.GEN_AI_PROVIDER_NAME], "pinecone")
+        self.assertEqual(attributes["server.address"], "db.example.com")
+        self.assertEqual(attributes["server.port"], 443)

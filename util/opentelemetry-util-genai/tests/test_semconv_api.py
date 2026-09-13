@@ -11,6 +11,7 @@ from opentelemetry._logs import Logger
 from opentelemetry.metrics import Histogram, Meter
 from opentelemetry.test.test_base import TestBase
 from opentelemetry.trace import SpanKind, StatusCode
+from opentelemetry.util.genai.semconv.aws import AWS_BEDROCK_GUARDRAIL_ID
 from opentelemetry.util.genai.semconv.gen_ai import (
     GenAiOperationName,
     InferenceAttributes,
@@ -18,6 +19,12 @@ from opentelemetry.util.genai.semconv.gen_ai import (
 from opentelemetry.util.genai.semconv.gen_ai._events import _Events
 from opentelemetry.util.genai.semconv.gen_ai._metrics import _Metrics
 from opentelemetry.util.genai.semconv.gen_ai._spans import _Spans
+from opentelemetry.util.genai.semconv.mcp import MCPMethodName
+from opentelemetry.util.genai.semconv.mcp._metrics import (
+    _Metrics as MCPMetrics,
+)
+from opentelemetry.util.genai.semconv.mcp._spans import _Spans as MCPSpans
+from opentelemetry.util.genai.semconv.openai import OpenAIApiType
 from opentelemetry.util.genai.types import InputMessage, TextPart
 
 
@@ -81,7 +88,7 @@ class TestSpans(TestBase):
         error = ValueError("bad request")
 
         with self.assertRaises(ValueError) as raised:
-            with self.spans.retrieval("retrieval", operation_name="retrieval"):
+            with self.spans.retrieval("retrieval"):
                 raise error
 
         assert raised.exception is error
@@ -96,7 +103,7 @@ class TestSpans(TestBase):
     def test_context_manager_makes_span_current(self) -> None:
         tracer = self.tracer_provider.get_tracer(__name__)
 
-        with self.spans.retrieval("retrieval", operation_name="retrieval"):
+        with self.spans.retrieval("retrieval"):
             with tracer.start_as_current_span("child"):
                 pass
 
@@ -106,7 +113,7 @@ class TestSpans(TestBase):
         assert child.parent.span_id == retrieval.context.span_id
 
     def test_explicit_error_type_does_not_end_span(self) -> None:
-        span = self.spans.retrieval("retrieval", operation_name="retrieval")
+        span = self.spans.retrieval("retrieval")
 
         span.set_error_details("429", "rate limited")
         assert self.get_finished_spans() == []
@@ -251,3 +258,30 @@ class TestMetrics(TestBase):
         assert attributes.maps[1] is additional_attributes
         assert attributes["gen_ai.operation.name"] == "chat"
         assert attributes["custom.attribute"] == "value"
+
+
+class TestNamespacedSemconv(TestBase):
+    def test_mcp_span_and_metric(self) -> None:
+        spans = MCPSpans(self.tracer_provider.get_tracer(__name__))
+        with spans.client("tools/call") as span:
+            span.set_method_name(MCPMethodName.TOOLS_CALL)
+            span.set_prompt_variable("topic", "telemetry")
+
+        (recorded,) = self.get_finished_spans()
+        assert recorded.attributes is not None
+        assert recorded.attributes["mcp.method.name"] == "tools/call"
+        assert recorded.attributes["gen_ai.prompt.variable.topic"] == (
+            "telemetry"
+        )
+
+        metrics = MCPMetrics(self.meter_provider.get_meter(__name__))
+        metrics.client_operation_duration(
+            0.5,
+            method_name=MCPMethodName.TOOLS_CALL,
+        )
+        (metric,) = self.get_sorted_metrics() or []
+        assert metric.name == "mcp.client.operation.duration"
+
+    def test_attribute_only_namespaces(self) -> None:
+        assert AWS_BEDROCK_GUARDRAIL_ID == "aws.bedrock.guardrail.id"
+        assert OpenAIApiType.RESPONSES == "responses"

@@ -90,12 +90,6 @@ class RetrievalInvocation(GenAIInvocation):
         )
         self._retrieval_span: RetrievalSpan = self._spans.retrieval(
             self._span_name,
-            operation_name=self._semconv_attributes.operation_name,
-            data_source_id=self._semconv_attributes.data_source_id,
-            provider_name=self._semconv_attributes.provider_name,
-            request_model=self._semconv_attributes.request_model,
-            server_address=self._semconv_attributes.server_address,
-            server_port=self._semconv_attributes.server_port,
         )
         self._start(self._retrieval_span)
 

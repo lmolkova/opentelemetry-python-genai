@@ -265,12 +265,13 @@ class TelemetryHandlerWorkflowSamplingTest(_WorkflowTestBase):
         self.assertEqual(
             captured_attributes[GenAI.GEN_AI_OPERATION_NAME], "invoke_workflow"
         )
-        self.assertEqual(
-            captured_attributes[GenAI.GEN_AI_WORKFLOW_NAME], "my-workflow"
-        )
+        self.assertNotIn(GenAI.GEN_AI_WORKFLOW_NAME, captured_attributes)
 
         spans = self._get_finished_spans()
         self.assertEqual(len(spans), 1)
+        self.assertEqual(
+            spans[0].attributes[GenAI.GEN_AI_WORKFLOW_NAME], "my-workflow"
+        )
 
     def test_workflow_context_manager_sets_attributes_on_span(self) -> None:
         with self.handler.workflow("wf") as inv:

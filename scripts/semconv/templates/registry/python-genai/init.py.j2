@@ -1,0 +1,42 @@
+{% import "common.j2" as common %}
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+# Code generated from OpenTelemetry GenAI semantic conventions. DO NOT EDIT.
+
+from opentelemetry.util.genai.semconv.{{ ctx.root_namespace }} import attributes
+from opentelemetry.util.genai.semconv.{{ ctx.root_namespace }}.attributes import (
+{% for attribute in ctx.attributes %}
+    {{ attribute.key | screaming_snake_case }},
+{% if attribute.type.members %}
+    {{ common.enum_name(attribute) }},
+{% if attribute.key | pascal_case != common.enum_name(attribute) %}
+    {{ attribute.key | pascal_case }},
+{% endif %}
+{% endif %}
+{% endfor %}
+)
+{% if ctx.telemetry_groups %}
+from opentelemetry.util.genai.semconv.{{ ctx.root_namespace }}.attribute_sets import (
+{% for group_signal, telemetry_group in ctx.telemetry_groups | items %}
+    {{ common.attribute_set_class_name(group_signal, ctx.telemetry_groups) }},
+{% endfor %}
+)
+{% endif %}
+
+__all__ = [
+{% for attribute in ctx.attributes %}
+    "{{ attribute.key | screaming_snake_case }}",
+{% if attribute.type.members %}
+    "{{ common.enum_name(attribute) }}",
+{% if attribute.key | pascal_case != common.enum_name(attribute) %}
+    "{{ attribute.key | pascal_case }}",
+{% endif %}
+{% endif %}
+{% endfor %}
+{% if ctx.telemetry_groups %}
+{% for group_signal, telemetry_group in ctx.telemetry_groups | items %}
+    "{{ common.attribute_set_class_name(group_signal, ctx.telemetry_groups) }}",
+{% endfor %}
+{% endif %}
+    "attributes",
+]

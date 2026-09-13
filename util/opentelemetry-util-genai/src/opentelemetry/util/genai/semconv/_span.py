@@ -17,7 +17,7 @@ from opentelemetry.util.genai.utils import fq_exception_type, gen_ai_json_dumps
 from opentelemetry.util.types import AttributeValue
 
 
-class GenAISpan:
+class _Span:
     def __init__(self, span: Span) -> None:
         self._span = span
         self._scope: AbstractContextManager[Span] | None = None
@@ -93,4 +93,4 @@ class GenAISpan:
         self._span.end()
 
 
-__all__ = ["GenAISpan"]
+__all__ = ["_Span"]

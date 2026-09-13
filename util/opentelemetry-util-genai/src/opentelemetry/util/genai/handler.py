@@ -51,12 +51,6 @@ from opentelemetry.trace import (
 )
 from opentelemetry.util.genai._inference_invocation import LLMInvocation
 from opentelemetry.util.genai._invocation import Error
-from opentelemetry.util.genai._metric_boundaries import (
-    CLIENT_OPERATION_DURATION,
-    CLIENT_TOKEN_USAGE,
-    INVOKE_AGENT_DURATION,
-    INVOKE_WORKFLOW_DURATION,
-)
 from opentelemetry.util.genai.completion_hook import (
     CompletionHook,
     _NoOpCompletionHook,
@@ -129,16 +123,7 @@ class TelemetryHandler:
             meter_provider=meter_provider,
             schema_url=schema_url,
         )
-        self._metrics = _Metrics(
-            meter,
-            client_token_usage_boundaries=CLIENT_TOKEN_USAGE,
-            client_operation_duration_boundaries=CLIENT_OPERATION_DURATION,
-            client_operation_time_to_first_chunk_boundaries=CLIENT_OPERATION_DURATION,
-            client_operation_time_per_output_chunk_boundaries=CLIENT_OPERATION_DURATION,
-            invoke_workflow_duration_boundaries=INVOKE_WORKFLOW_DURATION,
-            invoke_agent_duration_boundaries=INVOKE_AGENT_DURATION,
-            execute_tool_duration_boundaries=CLIENT_OPERATION_DURATION,
-        )
+        self._metrics = _Metrics(meter)
         self._logger = get_logger(
             instrumentation_scope_name,
             version,

@@ -1,0 +1,52 @@
+{% import "common.j2" as common %}
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+# Code generated from OpenTelemetry GenAI semantic conventions. DO NOT EDIT.
+
+{% set enum_state = namespace(present=false) %}
+{% for attribute in ctx.attributes %}
+{% if attribute.type.members %}{% set enum_state.present = true %}{% endif %}
+{% endfor %}
+{% if enum_state.present %}
+from enum import Enum
+{% endif %}
+from typing import Final
+
+{% for attribute in ctx.attributes %}
+{{ attribute.key | screaming_snake_case }}: Final[str] = "{{ attribute.key }}"
+"""{{ attribute.brief | trim }}{% if attribute.note %}
+
+{{ attribute.note | trim }}{% endif %}"""
+
+{% endfor %}
+{% for attribute in ctx.attributes %}
+{% if attribute.type.members %}
+class {{ common.enum_name(attribute) }}(str, Enum):
+    """Known values for `{{ attribute.key }}`."""
+
+{% for member in attribute.type.members %}
+    {{ member.id | screaming_snake_case }} = "{{ member.value }}"
+    """{{ member.brief | default(value=member.id) | trim }}{% if member.note %}
+
+    {{ member.note | trim }}{% endif %}"""
+{% endfor %}
+
+{% endif %}
+{% endfor %}
+{% for attribute in ctx.attributes %}
+{% if attribute.type.members %}
+{{ attribute.key | pascal_case }} = {{ common.enum_name(attribute) }}
+{% endif %}
+{% endfor %}
+
+__all__ = [
+{% for attribute in ctx.attributes %}
+    "{{ attribute.key | screaming_snake_case }}",
+{% endfor %}
+{% for attribute in ctx.attributes %}
+{% if attribute.type.members %}
+    "{{ common.enum_name(attribute) }}",
+    "{{ attribute.key | pascal_case }}",
+{% endif %}
+{% endfor %}
+]

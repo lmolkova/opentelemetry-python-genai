@@ -1,0 +1,149 @@
+{% import "common.j2" as common %}
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+# Code generated from OpenTelemetry GenAI semantic conventions. DO NOT EDIT.
+
+from __future__ import annotations
+
+from collections import ChainMap
+from collections.abc import Mapping, MutableMapping, Sequence
+from enum import Enum
+from functools import cached_property
+from typing import cast
+
+from opentelemetry.context import Context
+from opentelemetry.metrics import Histogram, Meter
+from opentelemetry.util.genai.semconv.{{ ctx.root_namespace }} import attributes as Attr
+{% if ctx.telemetry_groups %}
+from opentelemetry.util.genai.semconv.{{ ctx.root_namespace }}.attribute_sets import (
+{% for group_signal, telemetry_group in ctx.telemetry_groups | items %}
+    {{ common.attribute_set_class_name(group_signal, ctx.telemetry_groups) }},
+{% endfor %}
+)
+{% endif %}
+from opentelemetry.util.types import AttributeValue
+
+def _value(value: AttributeValue | Enum) -> AttributeValue:
+    return value.value if isinstance(value, Enum) else value
+
+
+def _combine_attributes(
+    typed_attributes: dict[str, AttributeValue],
+    additional_attributes: Mapping[str, AttributeValue] | None,
+) -> Mapping[str, AttributeValue]:
+    if not additional_attributes:
+        return typed_attributes
+    if not typed_attributes:
+        return additional_attributes
+    return ChainMap(
+        typed_attributes,
+        cast("MutableMapping[str, AttributeValue]", additional_attributes),
+    )
+
+
+class _Metrics:
+    """Records metrics following the {{ ctx.root_namespace }} semantic conventions."""
+
+    def __init__(
+        self,
+        meter: Meter,
+        *,
+{% for metric in ctx.metrics %}
+        {{ common.metric_method_name(metric, ctx.root_namespace) }}_boundaries: Sequence[float] | None = None,
+{% endfor %}
+    ) -> None:
+        self._meter = meter
+        self._boundaries = {
+{% for metric in ctx.metrics %}
+            "{{ metric.name }}": {% if metric.name in params.histogram_boundaries %}{{ common.metric_method_name(metric, ctx.root_namespace) }}_boundaries if {{ common.metric_method_name(metric, ctx.root_namespace) }}_boundaries is not None else {{ params.histogram_boundaries[metric.name] | tojson }}{% else %}{{ common.metric_method_name(metric, ctx.root_namespace) }}_boundaries{% endif %},
+{% endfor %}
+        }
+
+{% for metric in ctx.metrics %}
+{% set carriers = namespace(names=[], keys=[]) %}
+{% for group_signal, telemetry_group in ctx.telemetry_groups | items %}
+{% if metric.name in telemetry_group.metrics %}
+{% set carriers.names = carriers.names + [common.attribute_set_class_name(group_signal, ctx.telemetry_groups)] %}
+{% for span in ctx.spans %}
+{% if span.type == group_signal %}
+{% for attribute in span.attributes %}
+{% if attribute.key not in carriers.keys %}
+{% set carriers.keys = carriers.keys + [attribute.key] %}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% if carriers.names %}
+    def {{ common.metric_method_name(metric, ctx.root_namespace) }}(
+        self,
+        value: {% if metric.unit == "s" %}float{% else %}int{% endif %},
+        attributes: {{ carriers.names | join(" | ") }},
+        *,
+{% for attribute in metric.attributes | required %}
+{% if attribute.key not in carriers.keys %}
+        {{ common.field_name(attribute, ctx.root_namespace) }}: {{ common.python_type(attribute, ctx.root_namespace) }},
+{% endif %}
+{% endfor %}
+{% for attribute in metric.attributes | not_required %}
+{% if attribute.key not in carriers.keys %}
+        {{ common.field_name(attribute, ctx.root_namespace) }}: {{ common.python_type(attribute, ctx.root_namespace) }} | None = None,
+{% endif %}
+{% endfor %}
+        additional_attributes: Mapping[str, AttributeValue] | None = None,
+        context: Context | None = None,
+    ) -> None:
+        """Record `{{ metric.name }}` from aggregate attributes."""
+        self.{{ common.metric_method_name(metric, ctx.root_namespace) }}_explicit(
+            value,
+{% for attribute in metric.attributes %}
+{% if attribute.key in carriers.keys %}
+            {{ common.field_name(attribute, ctx.root_namespace) }}=attributes.{{ common.field_name(attribute, ctx.root_namespace) }},
+{% else %}
+            {{ common.field_name(attribute, ctx.root_namespace) }}={{ common.field_name(attribute, ctx.root_namespace) }},
+{% endif %}
+{% endfor %}
+            additional_attributes=additional_attributes,
+            context=context,
+        )
+
+    def {{ common.metric_method_name(metric, ctx.root_namespace) }}_explicit(
+{% else %}
+    def {{ common.metric_method_name(metric, ctx.root_namespace) }}(
+{% endif %}
+        self,
+        value: {% if metric.unit == "s" %}float{% else %}int{% endif %},
+        *,
+{% for attribute in metric.attributes | required %}
+        {{ common.field_name(attribute, ctx.root_namespace) }}: {{ common.python_type(attribute, ctx.root_namespace) }},
+{% endfor %}
+{% for attribute in metric.attributes | not_required %}
+        {{ common.field_name(attribute, ctx.root_namespace) }}: {{ common.python_type(attribute, ctx.root_namespace) }} | None = None,
+{% endfor %}
+        additional_attributes: Mapping[str, AttributeValue] | None = None,
+        context: Context | None = None,
+    ) -> None:
+        """Record `{{ metric.name }}`."""
+        typed_attributes: dict[str, AttributeValue] = {}
+{% for attribute in metric.attributes %}
+        if {{ common.field_name(attribute, ctx.root_namespace) }} is not None:
+            typed_attributes[{{ common.constant(attribute, ctx.root_namespace) }}] = _value({{ common.field_name(attribute, ctx.root_namespace) }})
+{% endfor %}
+        self._{{ common.metric_method_name(metric, ctx.root_namespace) }}_instrument.record(
+            value,
+            attributes=_combine_attributes(typed_attributes, additional_attributes),
+            context=context,
+        )
+
+    @cached_property
+    def _{{ common.metric_method_name(metric, ctx.root_namespace) }}_instrument(self) -> Histogram:
+        return self._meter.create_histogram(
+            "{{ metric.name }}",
+            unit="{{ metric.unit }}",
+            description={{ metric.brief | trim | tojson }},
+            explicit_bucket_boundaries_advisory=self._boundaries["{{ metric.name }}"],
+        )
+
+{% endfor %}
+__all__ = ["_Metrics"]

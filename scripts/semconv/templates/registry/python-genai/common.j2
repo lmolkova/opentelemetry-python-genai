@@ -1,0 +1,112 @@
+{% macro pascal_name(value) -%}
+{%- for component in value | split_id -%}
+{%- for word in component.split("_") -%}
+{{- word | pascal_case | acronym -}}
+{%- endfor -%}
+{%- endfor -%}
+{%- endmacro %}
+
+{% macro default_field_name(attribute, root_namespace) -%}
+{%- set attribute_namespace = attribute.key | regex_replace("\\..*$", "") -%}
+{%- set default_name = attribute.key | snake_case -%}
+{%- if attribute_namespace == root_namespace -%}
+{%- set default_name = attribute.key | regex_replace("^[^.]+\\.", "") | snake_case -%}
+{%- endif -%}
+{{- default_name -}}
+{%- endmacro %}
+
+{% macro field_name(attribute, root_namespace) -%}
+{{- default_field_name(attribute, root_namespace) -}}
+{%- endmacro %}
+
+{% macro constant(attribute, root_namespace) -%}
+{%- set default_constant = attribute.key | tojson -%}
+{%- if attribute.key | regex_replace("\\..*$", "") == root_namespace -%}
+{%- set default_constant = "Attr." ~ (attribute.key | screaming_snake_case) -%}
+{%- endif -%}
+{{- default_constant -}}
+{%- endmacro %}
+
+{% macro enum_name(attribute) -%}
+{{- pascal_name(attribute.key) -}}
+{%- endmacro %}
+
+{% macro python_type(attribute, root_namespace) -%}
+{%- if attribute.type.members and attribute.key | regex_replace("\\..*$", "") == root_namespace -%}Attr.{{ enum_name(attribute) }} | str
+{%- elif attribute.type.members -%}str
+{%- else -%}
+{{- attribute.key | map_text("structured_types", attribute.type | map_text("python_types", "AnyValue")) -}}
+{%- endif -%}
+{%- endmacro %}
+
+{% macro template_setter_name(attribute) -%}
+{{- attribute.key | regex_replace("^[^.]+\\.", "") | snake_case -}}
+{%- endmacro %}
+
+{% macro span_operation(signal) -%}
+{{- signal_operation(signal.type) -}}
+{%- endmacro %}
+
+{% macro signal_operation(signal_type) -%}
+{%- set operation = signal_type | regex_replace("^[^.]+\\.", "") -%}
+{%- if operation == "client" or operation == "server" or operation == "internal" -%}
+{{- operation -}}
+{%- else -%}
+{{- operation | regex_replace("\\.(client|server|internal)$", "") -}}
+{%- endif -%}
+{%- endmacro %}
+
+{% macro attribute_set_class_name(signal_type, telemetry_groups) -%}
+{%- set operation = signal_operation(signal_type) -%}
+{%- set matches = namespace(count=0) -%}
+{%- for candidate, value in telemetry_groups | items -%}
+{%- if signal_operation(candidate) == operation -%}
+{%- set matches.count = matches.count + 1 -%}
+{%- endif -%}
+{%- endfor -%}
+{{- pascal_name(operation) -}}
+{%- set kind = signal_type | regex_replace("^.*\\.", "") -%}
+{%- if matches.count > 1 and kind != "internal" -%}
+{{- pascal_name(kind) -}}
+{%- endif -%}Attributes
+{%- endmacro %}
+
+{% macro span_class_name(signal, signals) -%}
+{%- set operation = span_operation(signal) -%}
+{%- set matches = namespace(count=0) -%}
+{%- for candidate in signals -%}
+{%- if span_operation(candidate) == operation -%}
+{%- set matches.count = matches.count + 1 -%}
+{%- endif -%}
+{%- endfor -%}
+{{- pascal_name(operation) -}}
+{%- if matches.count > 1 and signal.kind != "internal" -%}
+{{- signal.kind | pascal_case -}}
+{%- endif -%}Span
+{%- endmacro %}
+
+{% macro span_method_name(signal, signals) -%}
+{%- set operation = span_operation(signal) -%}
+{%- set matches = namespace(count=0) -%}
+{%- for candidate in signals -%}
+{%- if span_operation(candidate) == operation -%}
+{%- set matches.count = matches.count + 1 -%}
+{%- endif -%}
+{%- endfor -%}
+{{- operation | snake_case -}}
+{%- if matches.count > 1 and signal.kind != "internal" -%}
+_{{- signal.kind | snake_case -}}
+{%- endif -%}
+{%- endmacro %}
+
+{% macro event_class_name(event) -%}
+{{- pascal_name(event.name | regex_replace("^[^.]+\\.", "")) -}}Event
+{%- endmacro %}
+
+{% macro event_method_name(event) -%}
+{{- event.name | regex_replace("^[^.]+\\.", "") | snake_case -}}
+{%- endmacro %}
+
+{% macro metric_method_name(metric, root_namespace) -%}
+{{- metric.name | regex_replace("^" ~ root_namespace ~ "\\.", "") | snake_case -}}
+{%- endmacro %}

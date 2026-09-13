@@ -3,7 +3,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
+from dataclasses import asdict, is_dataclass
 from enum import Enum
 from typing import cast
 
@@ -12,7 +13,21 @@ from opentelemetry.context import Context
 from opentelemetry.util.types import AnyValue
 
 
-class GenAIEvent:
+def _structured_value(value: object) -> AnyValue:
+    if is_dataclass(value) and not isinstance(value, type):
+        return _structured_value(asdict(value))
+    if isinstance(value, Mapping):
+        mapping = cast("Mapping[str, object]", value)
+        return {name: _structured_value(item) for name, item in mapping.items()}
+    if isinstance(value, Sequence) and not isinstance(
+        value, (str, bytes, bytearray)
+    ):
+        sequence = cast("Sequence[object]", value)
+        return [_structured_value(item) for item in sequence]
+    return cast("AnyValue", value)
+
+
+class _Event:
     def __init__(
         self,
         logger: Logger,
@@ -42,8 +57,15 @@ class GenAIEvent:
             value = cast("AnyValue", value.value)
         self._attributes[name] = value
 
+    def _set_structured_attribute(
+        self, name: str, value: object | None
+    ) -> None:
+        if value is None:
+            return
+        self._attributes[name] = _structured_value(value)
+
     def emit(self) -> None:
         self._logger.emit(self._log_record)
 
 
-__all__ = ["GenAIEvent"]
+__all__ = ["_Event"]

@@ -6,6 +6,7 @@ import logging
 import os
 import urllib.parse
 from base64 import b64decode, b64encode
+from dataclasses import asdict, is_dataclass
 from functools import partial
 from typing import Any
 
@@ -163,6 +164,8 @@ def fq_exception_type(exception: BaseException) -> str:
 
 class _GenAiJsonEncoder(json.JSONEncoder):
     def default(self, o: Any) -> Any:
+        if is_dataclass(o) and not isinstance(o, type):
+            return asdict(o)
         if isinstance(o, bytes):
             return b64encode(o).decode()
         return super().default(o)

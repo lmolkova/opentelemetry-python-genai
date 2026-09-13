@@ -10,8 +10,8 @@ from opentelemetry.util.genai._attribute import _Attribute
 from opentelemetry.util.genai._invocation import Error, GenAIInvocation
 from opentelemetry.util.genai.completion_hook import CompletionHook
 from opentelemetry.util.genai.semconv.gen_ai import (
+    ExecuteToolAttributes,
     GenAiOperationName,
-    ToolAttributes,
 )
 from opentelemetry.util.genai.semconv.gen_ai._metrics import _Metrics
 from opentelemetry.util.genai.semconv.gen_ai._spans import (
@@ -74,7 +74,7 @@ class ToolInvocation(GenAIInvocation):
             ``invocation.tool_description`` on the returned invocation instead.
         """
         _operation_name = GenAiOperationName.EXECUTE_TOOL.value
-        self._semconv_attributes = ToolAttributes(
+        self._semconv_attributes = ExecuteToolAttributes(
             operation_name=_operation_name,
             tool_name=name,
             tool_type=tool_type,

@@ -100,7 +100,9 @@ class InferenceInvocation(GenAIInvocation):
     conversation_compacted = _Attribute[bool | None]()
     prompt_name = _Attribute[str | None]()
     prompt_version = _Attribute[str | None]()
-    prompt_variables = _Attribute[Mapping[str, object] | None]()
+    prompt_variables = _Attribute[Mapping[str, object] | None](
+        "prompt_variable"
+    )
     tool_definitions = _Attribute[list[ToolDefinition] | None]()
     output_type = _Attribute[str | None]()
 
@@ -229,8 +231,9 @@ class InferenceInvocation(GenAIInvocation):
             span.set_system_instructions(
                 attributes.system_instructions or None
             )
-            if attributes.prompt_variables:
-                for name, value in attributes.prompt_variables.items():
+            span.set_tool_definitions(attributes.tool_definitions or None)
+            if attributes.prompt_variable:
+                for name, value in attributes.prompt_variable.items():
                     span.set_prompt_variable(
                         name,
                         value
@@ -301,8 +304,8 @@ class InferenceInvocation(GenAIInvocation):
             event.set_system_instructions(
                 attributes.system_instructions or None
             )
-            if attributes.prompt_variables:
-                for name, value in attributes.prompt_variables.items():
+            if attributes.prompt_variable:
+                for name, value in attributes.prompt_variable.items():
                     event.set_prompt_variable(
                         name,
                         value

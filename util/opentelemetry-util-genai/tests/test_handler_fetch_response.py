@@ -109,25 +109,28 @@ class TelemetryHandlerFetchResponseTest(_FetchResponseTestBase):
     # required and conditionally required attributes
     # ------------------------------------------------------------------
 
-    def test_required_attributes_are_set_at_span_creation(self) -> None:
+    def test_sampling_attributes_are_set_at_span_creation(self) -> None:
         invocation = self._fetch_response()
 
         attrs = invocation.span.attributes
         self.assertEqual(attrs[GenAI.GEN_AI_OPERATION_NAME], "fetch_response")
         self.assertEqual(attrs[GenAI.GEN_AI_PROVIDER_NAME], "openai")
-        self.assertEqual(attrs[GenAI.GEN_AI_RESPONSE_ID], RESPONSE_ID)
+        self.assertNotIn(GenAI.GEN_AI_RESPONSE_ID, attrs)
         invocation.stop()
+
+        attrs = self._get_finished_spans()[0].attributes
+        self.assertEqual(attrs[GenAI.GEN_AI_RESPONSE_ID], RESPONSE_ID)
 
     def test_response_id_is_exposed(self) -> None:
         invocation = self._fetch_response()
         self.assertEqual(invocation.response_id, RESPONSE_ID)
         invocation.stop()
 
-    def test_request_stream_is_set_at_span_creation(self) -> None:
+    def test_request_stream_is_not_a_span_attribute(self) -> None:
         invocation = self._fetch_response(request_stream=True)
 
-        self.assertIs(
-            invocation.span.attributes[GenAI.GEN_AI_REQUEST_STREAM], True
+        self.assertNotIn(
+            GenAI.GEN_AI_REQUEST_STREAM, invocation.span.attributes
         )
         invocation.stop()
 

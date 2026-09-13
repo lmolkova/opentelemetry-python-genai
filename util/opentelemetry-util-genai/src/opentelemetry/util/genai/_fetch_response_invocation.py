@@ -86,11 +86,11 @@ class FetchResponseInvocation(GenAIInvocation):
 
     @property
     def _request_stream(self) -> bool | None:
-        return self._semconv_attributes.request_stream
+        return self._request_stream_value
 
     @_request_stream.setter
     def _request_stream(self, value: bool | None) -> None:
-        self._semconv_attributes.request_stream = value
+        self._request_stream_value = value
 
     def __init__(
         self,
@@ -109,11 +109,11 @@ class FetchResponseInvocation(GenAIInvocation):
     ) -> None:
         """Use handler.fetch_response() rather than calling this directly."""
         operation_name = GenAiOperationName.FETCH_RESPONSE.value
+        self._request_stream_value = request_stream
         self._semconv_attributes = FetchResponseAttributes(
             operation_name=operation_name,
             provider_name=provider,
             response_id=response_id,
-            request_stream=request_stream,
             server_address=server_address,
             server_port=server_port,
         )
@@ -134,8 +134,6 @@ class FetchResponseInvocation(GenAIInvocation):
                 self._span_name,
                 operation_name=self._semconv_attributes.operation_name,
                 provider_name=self._semconv_attributes.provider_name,
-                response_id=self._semconv_attributes.response_id,
-                request_stream=self._semconv_attributes.request_stream,
                 server_address=self._semconv_attributes.server_address,
                 server_port=self._semconv_attributes.server_port,
             )
@@ -148,6 +146,7 @@ class FetchResponseInvocation(GenAIInvocation):
         return self._semconv_attributes.response_id
 
     def _on_stream_chunk(self, chunk_at: float) -> None:
+        is_first_chunk = self._stream_last_chunk_at is None
         last_chunk_at = (
             self._stream_last_chunk_at
             if self._stream_last_chunk_at is not None
@@ -156,8 +155,7 @@ class FetchResponseInvocation(GenAIInvocation):
         self._stream_last_chunk_at = chunk_at
         delta = max(chunk_at - last_chunk_at, 0.0)
 
-        if self._semconv_attributes.response_time_to_first_chunk is None:
-            self._semconv_attributes.response_time_to_first_chunk = delta
+        if is_first_chunk:
             self._metrics.client_operation_time_to_first_chunk(
                 delta,
                 self._semconv_attributes,
