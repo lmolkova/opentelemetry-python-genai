@@ -53,6 +53,25 @@ class TestSpans(TestBase):
             == "user"
         )
 
+    def test_span_setters_ignore_none(self) -> None:
+        span = self.spans.inference(
+            "chat model",
+            provider_name="custom-provider",
+            operation_name=GenAiOperationName.CHAT,
+        )
+
+        span.set_response_model("model")
+        span.set_response_model(None)
+        span.set_request_temperature(None)
+        span.set_input_messages(None)
+        span.end()
+
+        (recorded,) = self.get_finished_spans()
+        assert recorded.attributes is not None
+        assert recorded.attributes["gen_ai.response.model"] == "model"
+        assert "gen_ai.request.temperature" not in recorded.attributes
+        assert "gen_ai.input.messages" not in recorded.attributes
+
     def test_context_manager_records_error_and_reraises(self) -> None:
         error = ValueError("bad request")
 

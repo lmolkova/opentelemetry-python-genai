@@ -4,19 +4,21 @@
 from __future__ import annotations
 
 import timeit
+from collections.abc import Sequence
+from typing import cast
 
 from opentelemetry._logs import Logger
-from opentelemetry.semconv.attributes import server_attributes
 from opentelemetry.util.genai._invocation import (
     Error,
     GenAIInvocation,
-    get_content_attributes,
 )
 from opentelemetry.util.genai.completion_hook import CompletionHook
 from opentelemetry.util.genai.semconv.gen_ai import GenAiOperationName
-from opentelemetry.util.genai.semconv.gen_ai import attributes as Attr
 from opentelemetry.util.genai.semconv.gen_ai._metrics import _Metrics
-from opentelemetry.util.genai.semconv.gen_ai._spans import _Spans
+from opentelemetry.util.genai.semconv.gen_ai._spans import (
+    FetchResponseSpan,
+    _Spans,
+)
 from opentelemetry.util.genai.types import (
     ErrorTypeResolver,
     MessagePart,
@@ -25,7 +27,6 @@ from opentelemetry.util.genai.types import (
     ToolDefinition,
 )
 from opentelemetry.util.genai.utils import ContentCapturingMode
-from opentelemetry.util.types import AttributeValue
 
 
 class FetchResponseInvocation(GenAIInvocation):
@@ -113,7 +114,7 @@ class FetchResponseInvocation(GenAIInvocation):
         ) = []
         """System instructions for the model. Passing ``MessagePart`` is deprecated; use ``SystemInstructionPart``."""
         self.tool_definitions: list[ToolDefinition] | None = None
-        self._start(
+        self._fetch_response_span: FetchResponseSpan = (
             self._spans.fetch_response(
                 self._span_name,
                 operation_name=self._operation_name,
@@ -124,29 +125,12 @@ class FetchResponseInvocation(GenAIInvocation):
                 server_port=self._server_port,
             )
         )
+        self._start(self._fetch_response_span)
 
     @property
     def response_id(self) -> str:
         """The identifier of the response being fetched."""
         return self._response_id
-
-    def _get_start_attributes(self) -> dict[str, AttributeValue]:
-        """Return attributes known at span creation time."""
-        optional_attrs: tuple[tuple[str, AttributeValue | None], ...] = (
-            (server_attributes.SERVER_ADDRESS, self._server_address),
-            (server_attributes.SERVER_PORT, self._server_port),
-        )
-        return {
-            Attr.GEN_AI_OPERATION_NAME: self._operation_name,
-            Attr.GEN_AI_PROVIDER_NAME: self._provider,
-            Attr.GEN_AI_RESPONSE_ID: self._response_id,
-            **(
-                {Attr.GEN_AI_REQUEST_STREAM: self._request_stream}
-                if self._request_stream is not None
-                else {}
-            ),
-            **{k: v for k, v in optional_attrs if v is not None},
-        }
 
     def _on_stream_chunk(self, chunk_at: float) -> None:
         last_chunk_at = (
@@ -182,36 +166,32 @@ class FetchResponseInvocation(GenAIInvocation):
             context=self._span_context,
         )
 
-    def _get_attributes(self) -> dict[str, AttributeValue]:
-        optional_attrs: tuple[tuple[str, AttributeValue | None], ...] = (
-            (Attr.GEN_AI_REQUEST_STREAM_CURSOR, self.stream_cursor),
-            (
-                Attr.GEN_AI_RESPONSE_FINISH_REASONS,
-                self.finish_reasons or None,
-            ),
-            (Attr.GEN_AI_RESPONSE_MODEL, self.response_model_name),
-            (Attr.GEN_AI_RESPONSE_STATUS, self.response_status),
-        )
-        return {k: v for k, v in optional_attrs if v is not None}
-
     def _apply_finish(self, error: Error | None = None) -> None:
         if error is not None:
-            self._apply_error_attributes(error)
-        attributes = self._get_attributes()
-        attributes.update(
-            get_content_attributes(
-                # A fetched response does not carry the original request's
-                # input messages.
-                input_messages=(),
-                output_messages=self.output_messages,
-                system_instruction=self.system_instruction,
-                tool_definitions=self.tool_definitions,
-                for_span=True,
-                content_capturing_mode=self._content_capturing_mode,
+            self._fetch_response_span.set_error_details(
+                error.type, error.message
+            )
+            self._error_type = error.type
+        span = self._fetch_response_span
+        span.set_request_stream_cursor(self.stream_cursor)
+        span.set_response_finish_reasons(self.finish_reasons or None)
+        span.set_response_model(self.response_model_name)
+        span.set_response_status(self.response_status)
+        span.set_output_messages(
+            (self.output_messages or None)
+            if self._should_capture_content_on_span
+            else None
+        )
+        span.set_system_instructions(
+            cast(
+                "Sequence[SystemInstructionPart] | None",
+                (self.system_instruction or None)
+                if self._should_capture_content_on_span
+                else None,
             )
         )
-        attributes.update(self.attributes)
-        self.span.set_attributes(attributes)
+        span.set_tool_definitions(self.tool_definitions)
+        span.set_attributes(self.attributes)
         duration_seconds = max(
             timeit.default_timer() - self._monotonic_start_s,
             0.0,
@@ -223,7 +203,7 @@ class FetchResponseInvocation(GenAIInvocation):
             server_port=self._server_port,
             response_model=self.response_model_name,
             provider_name=self._provider,
-            error_type=self._metric_error_type,
+            error_type=self._error_type,
             additional_attributes=self.metric_attributes,
             context=self._span_context,
         )

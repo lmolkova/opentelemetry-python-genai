@@ -9,26 +9,13 @@ from opentelemetry._logs import Logger
 from opentelemetry.util.genai._invocation import Error, GenAIInvocation
 from opentelemetry.util.genai.completion_hook import CompletionHook
 from opentelemetry.util.genai.semconv.gen_ai import GenAiOperationName
-from opentelemetry.util.genai.semconv.gen_ai import attributes as Attr
 from opentelemetry.util.genai.semconv.gen_ai._metrics import _Metrics
-from opentelemetry.util.genai.semconv.gen_ai._spans import _Spans
-from opentelemetry.util.genai.utils import (
-    ContentCapturingMode,
-    gen_ai_json_dumps,
+from opentelemetry.util.genai.semconv.gen_ai._spans import (
+    ExecuteToolSpan,
+    _Spans,
 )
-from opentelemetry.util.types import AnyValue, AttributeValue
-
-
-def _any_value_to_attribute_value(value: AnyValue) -> AttributeValue | None:
-    """Serialize an AnyValue to an AttributeValue for OTel span attributes."""
-    if value is None:
-        return None
-    if isinstance(value, (bool, str, bytes, int, float)):
-        return value
-    try:
-        return gen_ai_json_dumps(value)
-    except (TypeError, ValueError):
-        return str(value)
+from opentelemetry.util.genai.utils import ContentCapturingMode
+from opentelemetry.util.types import AnyValue
 
 
 class ToolInvocation(GenAIInvocation):
@@ -95,14 +82,14 @@ class ToolInvocation(GenAIInvocation):
         self.tool_description: str | None = tool_description
         self._tool_type: str | None = tool_type
         self._agent_name: str | None = agent_name
-        self._start(
-            self._spans.execute_tool(
-                self._span_name,
-                operation_name=self._operation_name,
-                tool_name=self._name,
-                tool_type=self._tool_type,
-            )
+        self._tool_span: ExecuteToolSpan = self._spans.execute_tool(
+            self._span_name,
+            operation_name=self._operation_name,
+            tool_name=self._name,
+            tool_type=self._tool_type,
+            agent_name=self._agent_name,
         )
+        self._start(self._tool_span)
 
     @property
     def should_capture_content_on_span(self) -> bool:
@@ -113,43 +100,19 @@ class ToolInvocation(GenAIInvocation):
         """
         return self._should_capture_content_on_span
 
-    def _get_start_attributes(self) -> dict[str, AttributeValue]:
-        """Return sampling-relevant attributes available at span creation time."""
-        optional_attrs = (
-            (Attr.GEN_AI_TOOL_NAME, self._name),
-            (Attr.GEN_AI_TOOL_TYPE, self._tool_type),
-        )
-        return {
-            Attr.GEN_AI_OPERATION_NAME: self._operation_name,
-            **{k: v for k, v in optional_attrs if v is not None},
-        }
-
     def _apply_finish(self, error: Error | None = None) -> None:
         if error is not None:
-            self._apply_error_attributes(error)
-        capture_content_on_span = self._should_capture_content_on_span
-        optional_attrs = (
-            (Attr.GEN_AI_TOOL_CALL_ID, self.tool_call_id),
-            (Attr.GEN_AI_TOOL_DESCRIPTION, self.tool_description),
-            (Attr.GEN_AI_AGENT_NAME, self._agent_name),
-            (
-                Attr.GEN_AI_TOOL_CALL_ARGUMENTS,
-                _any_value_to_attribute_value(self.arguments)
-                if capture_content_on_span and self.arguments is not None
-                else None,
-            ),
-            (
-                Attr.GEN_AI_TOOL_CALL_RESULT,
-                _any_value_to_attribute_value(self.tool_result)
-                if capture_content_on_span and self.tool_result is not None
-                else None,
-            ),
+            self._tool_span.set_error_details(error.type, error.message)
+            self._error_type = error.type
+        self._tool_span.set_tool_call_id(self.tool_call_id)
+        self._tool_span.set_tool_description(self.tool_description)
+        self._tool_span.set_tool_call_arguments(
+            self.arguments if self._should_capture_content_on_span else None
         )
-        attributes: dict[str, AttributeValue] = {
-            k: v for k, v in optional_attrs if v is not None
-        }
-        attributes.update(self.attributes)
-        self.span.set_attributes(attributes)
+        self._tool_span.set_tool_call_result(
+            self.tool_result if self._should_capture_content_on_span else None
+        )
+        self._tool_span.set_attributes(self.attributes)
         self._record_metrics()
 
     def _record_metrics(self) -> None:
@@ -160,7 +123,7 @@ class ToolInvocation(GenAIInvocation):
         self._metrics.execute_tool_duration(
             duration_seconds,
             tool_name=self._name,
-            error_type=self._metric_error_type,
+            error_type=self._error_type,
             tool_type=self._tool_type,
             agent_name=self._agent_name,
             additional_attributes=self.metric_attributes,

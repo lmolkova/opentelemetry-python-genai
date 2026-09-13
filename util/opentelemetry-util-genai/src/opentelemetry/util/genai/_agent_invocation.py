@@ -5,24 +5,25 @@ from __future__ import annotations
 
 import timeit
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
+from typing import cast
 
 from opentelemetry._logs import Logger
-from opentelemetry.semconv.attributes import server_attributes
 from opentelemetry.util.genai._invocation import (
     Error,
     GenAIInvocation,
-    get_content_attributes,
 )
 from opentelemetry.util.genai.completion_hook import CompletionHook
 from opentelemetry.util.genai.semconv.gen_ai import (
     GenAiOperationName,
     GenAiTokenType,
 )
-from opentelemetry.util.genai.semconv.gen_ai import (
-    attributes as Attr,
-)
 from opentelemetry.util.genai.semconv.gen_ai._metrics import _Metrics
-from opentelemetry.util.genai.semconv.gen_ai._spans import _Spans
+from opentelemetry.util.genai.semconv.gen_ai._spans import (
+    InvokeAgentClientSpan,
+    InvokeAgentSpan,
+    _Spans,
+)
 from opentelemetry.util.genai.types import (
     InputMessage,
     MessagePart,
@@ -31,7 +32,6 @@ from opentelemetry.util.genai.types import (
     ToolDefinition,
 )
 from opentelemetry.util.genai.utils import ContentCapturingMode
-from opentelemetry.util.types import AttributeValue
 
 
 class AgentInvocation(GenAIInvocation, ABC):
@@ -97,68 +97,54 @@ class AgentInvocation(GenAIInvocation, ABC):
         ) = []
         """System instructions for the agent. Passing ``MessagePart`` is deprecated; use ``SystemInstructionPart``."""
         self.tool_definitions: list[ToolDefinition] | None = None
+        self._agent_span: InvokeAgentSpan | InvokeAgentClientSpan
 
     @property
     def agent_name(self) -> str | None:
         """The agent name provided at construction time."""
         return self._agent_name
 
-    def _get_agent_attributes(self) -> dict[str, AttributeValue]:
-        optional_attrs = (
-            (Attr.GEN_AI_AGENT_DESCRIPTION, self.agent_description),
-        )
-        return {k: v for k, v in optional_attrs if v is not None}
-
-    def _get_request_attributes(self) -> dict[str, AttributeValue]:
-        optional_attrs = (
-            (Attr.GEN_AI_CONVERSATION_ID, self.conversation_id),
-            (Attr.GEN_AI_DATA_SOURCE_ID, self.data_source_id),
-            (Attr.GEN_AI_OUTPUT_TYPE, self.output_type),
-            (Attr.GEN_AI_REQUEST_TEMPERATURE, self.temperature),
-            (Attr.GEN_AI_REQUEST_TOP_P, self.top_p),
-            (Attr.GEN_AI_REQUEST_FREQUENCY_PENALTY, self.frequency_penalty),
-            (Attr.GEN_AI_REQUEST_PRESENCE_PENALTY, self.presence_penalty),
-            (Attr.GEN_AI_REQUEST_MAX_TOKENS, self.max_tokens),
-            (Attr.GEN_AI_REQUEST_STOP_SEQUENCES, self.stop_sequences),
-            (Attr.GEN_AI_REQUEST_SEED, self.seed),
-            (Attr.GEN_AI_REQUEST_CHOICE_COUNT, self.choice_count),
-        )
-        return {k: v for k, v in optional_attrs if v is not None}
-
-    def _get_response_attributes(self) -> dict[str, AttributeValue]:
-        if self.finish_reasons:
-            return {Attr.GEN_AI_RESPONSE_FINISH_REASONS: self.finish_reasons}
-        return {}
-
-    def _get_usage_attributes(self) -> dict[str, AttributeValue]:
-        optional_attrs = (
-            (Attr.GEN_AI_USAGE_INPUT_TOKENS, self.input_tokens),
-            (Attr.GEN_AI_USAGE_OUTPUT_TOKENS, self.output_tokens),
-        )
-        return {k: v for k, v in optional_attrs if v is not None}
-
-    def _get_content_attributes_for_span(self) -> dict[str, AttributeValue]:
-        return get_content_attributes(
-            input_messages=self.input_messages,
-            output_messages=self.output_messages,
-            system_instruction=self.system_instruction,
-            tool_definitions=self.tool_definitions,
-            for_span=True,
-            content_capturing_mode=self._content_capturing_mode,
-        )
-
     def _apply_finish(self, error: Error | None = None) -> None:
+        span = self._agent_span
         if error is not None:
-            self._apply_error_attributes(error)
+            span.set_error_details(error.type, error.message)
+            self._error_type = error.type
 
-        attributes: dict[str, AttributeValue] = {}
-        attributes.update(self._get_agent_attributes())
-        attributes.update(self._get_request_attributes())
-        attributes.update(self._get_response_attributes())
-        attributes.update(self._get_usage_attributes())
-        attributes.update(self._get_content_attributes_for_span())
-        attributes.update(self.attributes)
-        self.span.set_attributes(attributes)
+        span.set_agent_description(self.agent_description)
+        span.set_conversation_id(self.conversation_id)
+        span.set_data_source_id(self.data_source_id)
+        span.set_output_type(self.output_type)
+        span.set_request_temperature(self.temperature)
+        span.set_request_top_p(self.top_p)
+        span.set_request_frequency_penalty(self.frequency_penalty)
+        span.set_request_presence_penalty(self.presence_penalty)
+        span.set_request_max_tokens(self.max_tokens)
+        span.set_request_stop_sequences(self.stop_sequences)
+        span.set_request_seed(self.seed)
+        span.set_request_choice_count(self.choice_count)
+        span.set_response_finish_reasons(self.finish_reasons or None)
+        span.set_usage_input_tokens(self.input_tokens)
+        span.set_usage_output_tokens(self.output_tokens)
+        span.set_input_messages(
+            (self.input_messages or None)
+            if self._should_capture_content_on_span
+            else None
+        )
+        span.set_output_messages(
+            (self.output_messages or None)
+            if self._should_capture_content_on_span
+            else None
+        )
+        span.set_system_instructions(
+            cast(
+                "Sequence[SystemInstructionPart] | None",
+                (self.system_instruction or None)
+                if self._should_capture_content_on_span
+                else None,
+            )
+        )
+        span.set_tool_definitions(self.tool_definitions)
+        span.set_attributes(self.attributes)
         self._call_completion_hook(
             inputs=self.input_messages,
             outputs=self.output_messages,
@@ -201,24 +187,13 @@ class LocalAgentInvocation(AgentInvocation):
             agent_name=agent_name,
             content_capturing_mode=content_capturing_mode,
         )
-        self._start(
-            self._spans.invoke_agent(
-                self._span_name,
-                operation_name=self._operation_name,
-                agent_name=self._agent_name,
-                request_model=self._request_model,
-            )
+        self._agent_span = self._spans.invoke_agent(
+            self._span_name,
+            operation_name=self._operation_name,
+            agent_name=self._agent_name,
+            request_model=self._request_model,
         )
-
-    def _get_start_attributes(self) -> dict[str, AttributeValue]:
-        optional_attrs = (
-            (Attr.GEN_AI_REQUEST_MODEL, self._request_model),
-            (Attr.GEN_AI_AGENT_NAME, self._agent_name),
-        )
-        return {
-            Attr.GEN_AI_OPERATION_NAME: self._operation_name,
-            **{k: v for k, v in optional_attrs if v is not None},
-        }
+        self._start(self._agent_span)
 
     def _record_metrics(self) -> None:
         duration_seconds = max(
@@ -227,7 +202,7 @@ class LocalAgentInvocation(AgentInvocation):
         )
         self._metrics.invoke_agent_duration(
             duration_seconds,
-            error_type=self._metric_error_type,
+            error_type=self._error_type,
             agent_name=self._agent_name,
             request_model=self._request_model,
             additional_attributes=self.metric_attributes,
@@ -282,17 +257,16 @@ class RemoteAgentInvocation(AgentInvocation):
         self._cache_write_input_tokens: int | None = None
         self.cache_read_input_tokens: int | None = None
 
-        self._start(
-            self._spans.invoke_agent_client(
-                self._span_name,
-                operation_name=self._operation_name,
-                provider_name=self._provider,
-                agent_name=self._agent_name,
-                request_model=self._request_model,
-                server_address=self._server_address,
-                server_port=self._server_port,
-            )
+        self._agent_span = self._spans.invoke_agent_client(
+            self._span_name,
+            operation_name=self._operation_name,
+            provider_name=self._provider,
+            agent_name=self._agent_name,
+            request_model=self._request_model,
+            server_address=self._server_address,
+            server_port=self._server_port,
         )
+        self._start(self._agent_span)
 
     @property
     def cache_write_input_tokens(self) -> int | None:
@@ -316,46 +290,14 @@ class RemoteAgentInvocation(AgentInvocation):
     def cache_creation_input_tokens(self, value: int | None) -> None:
         self._cache_write_input_tokens = value
 
-    def _get_start_attributes(self) -> dict[str, AttributeValue]:
-        optional_attrs = (
-            (Attr.GEN_AI_REQUEST_MODEL, self._request_model),
-            (Attr.GEN_AI_AGENT_NAME, self._agent_name),
-            (server_attributes.SERVER_ADDRESS, self._server_address),
-            (server_attributes.SERVER_PORT, self._server_port),
-            (Attr.GEN_AI_PROVIDER_NAME, self._provider),
-        )
-        return {
-            Attr.GEN_AI_OPERATION_NAME: self._operation_name,
-            **{k: v for k, v in optional_attrs if v is not None},
-        }
-
-    def _get_agent_attributes(self) -> dict[str, AttributeValue]:
-        optional_attrs = (
-            (Attr.GEN_AI_AGENT_ID, self.agent_id),
-            (Attr.GEN_AI_AGENT_DESCRIPTION, self.agent_description),
-            (Attr.GEN_AI_AGENT_VERSION, self.agent_version),
-        )
-        return {k: v for k, v in optional_attrs if v is not None}
-
-    def _get_request_attributes(self) -> dict[str, AttributeValue]:
-        attrs = super()._get_request_attributes()
-        if self.previous_response_id is not None:
-            attrs[Attr.GEN_AI_REQUEST_PREVIOUS_RESPONSE_ID] = (
-                self.previous_response_id
-            )
-        return attrs
-
-    def _get_usage_attributes(self) -> dict[str, AttributeValue]:
-        attrs = super()._get_usage_attributes()
-        if self.cache_write_input_tokens is not None:
-            attrs[Attr.GEN_AI_USAGE_CACHE_WRITE_INPUT_TOKENS] = (
-                self.cache_write_input_tokens
-            )
-        if self.cache_read_input_tokens is not None:
-            attrs[Attr.GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS] = (
-                self.cache_read_input_tokens
-            )
-        return attrs
+    def _apply_finish(self, error: Error | None = None) -> None:
+        span = cast("InvokeAgentClientSpan", self._agent_span)
+        span.set_agent_id(self.agent_id)
+        span.set_agent_version(self.agent_version)
+        span.set_request_previous_response_id(self.previous_response_id)
+        span.set_usage_cache_write_input_tokens(self.cache_write_input_tokens)
+        span.set_usage_cache_read_input_tokens(self.cache_read_input_tokens)
+        super()._apply_finish(error)
 
     def _on_stream_chunk(self, chunk_at: float) -> None:
         last_chunk_at = (
@@ -403,7 +345,7 @@ class RemoteAgentInvocation(AgentInvocation):
             server_port=self._server_port,
             request_model=self._request_model,
             provider_name=self._provider,
-            error_type=self._metric_error_type,
+            error_type=self._error_type,
             additional_attributes=self.metric_attributes,
             context=self._span_context,
         )

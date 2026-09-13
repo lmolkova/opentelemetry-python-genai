@@ -6,18 +6,18 @@ from __future__ import annotations
 import timeit
 
 from opentelemetry._logs import Logger
-from opentelemetry.semconv.attributes import server_attributes
 from opentelemetry.util.genai._invocation import Error, GenAIInvocation
 from opentelemetry.util.genai.completion_hook import CompletionHook
 from opentelemetry.util.genai.semconv.gen_ai import (
     GenAiOperationName,
     GenAiTokenType,
 )
-from opentelemetry.util.genai.semconv.gen_ai import attributes as Attr
 from opentelemetry.util.genai.semconv.gen_ai._metrics import _Metrics
-from opentelemetry.util.genai.semconv.gen_ai._spans import _Spans
+from opentelemetry.util.genai.semconv.gen_ai._spans import (
+    EmbeddingsSpan,
+    _Spans,
+)
 from opentelemetry.util.genai.utils import ContentCapturingMode
-from opentelemetry.util.types import AttributeValue
 
 
 class EmbeddingInvocation(GenAIInvocation):
@@ -63,44 +63,29 @@ class EmbeddingInvocation(GenAIInvocation):
         self.input_tokens: int | None = None
         self.dimension_count: int | None = None
         self.response_model_name: str | None = None
-        self._start(
-            self._spans.embeddings(
-                self._span_name,
-                operation_name=self._operation_name,
-                provider_name=self._provider,
-                request_model=self._request_model,
-                server_address=self._server_address,
-                server_port=self._server_port,
-            )
+        self._embedding_span: EmbeddingsSpan = self._spans.embeddings(
+            self._span_name,
+            operation_name=self._operation_name,
+            provider_name=self._provider,
+            request_model=self._request_model,
+            server_address=self._server_address,
+            server_port=self._server_port,
         )
-
-    def _get_start_attributes(self) -> dict[str, AttributeValue]:
-        """Return sampling-relevant attributes available at span creation time."""
-        optional_attrs = (
-            (Attr.GEN_AI_REQUEST_MODEL, self._request_model),
-            (Attr.GEN_AI_PROVIDER_NAME, self._provider),
-            (server_attributes.SERVER_ADDRESS, self._server_address),
-            (server_attributes.SERVER_PORT, self._server_port),
-        )
-        return {
-            Attr.GEN_AI_OPERATION_NAME: self._operation_name,
-            **{k: v for k, v in optional_attrs if v is not None},
-        }
+        self._start(self._embedding_span)
 
     def _apply_finish(self, error: Error | None = None) -> None:
-        optional_attrs = (
-            (Attr.GEN_AI_EMBEDDINGS_DIMENSION_COUNT, self.dimension_count),
-            (Attr.GEN_AI_REQUEST_ENCODING_FORMATS, self.encoding_formats),
-            (Attr.GEN_AI_RESPONSE_MODEL, self.response_model_name),
-            (Attr.GEN_AI_USAGE_INPUT_TOKENS, self.input_tokens),
-        )
-        attributes: dict[str, AttributeValue] = {
-            key: value for key, value in optional_attrs if value is not None
-        }
         if error is not None:
-            self._apply_error_attributes(error)
-        attributes.update(self.attributes)
-        self.span.set_attributes(attributes)
+            self._embedding_span.set_error_details(error.type, error.message)
+            self._error_type = error.type
+        self._embedding_span.set_embeddings_dimension_count(
+            self.dimension_count
+        )
+        self._embedding_span.set_request_encoding_formats(
+            self.encoding_formats
+        )
+        self._embedding_span.set_response_model(self.response_model_name)
+        self._embedding_span.set_usage_input_tokens(self.input_tokens)
+        self._embedding_span.set_attributes(self.attributes)
         duration_seconds = max(
             timeit.default_timer() - self._monotonic_start_s,
             0.0,
@@ -113,7 +98,7 @@ class EmbeddingInvocation(GenAIInvocation):
             request_model=self._request_model,
             response_model=self.response_model_name,
             provider_name=self._provider,
-            error_type=self._metric_error_type,
+            error_type=self._error_type,
             additional_attributes=self.metric_attributes,
             context=self._span_context,
         )

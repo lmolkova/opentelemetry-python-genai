@@ -4,11 +4,15 @@
 from __future__ import annotations
 
 import timeit
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from typing import cast
 
 from opentelemetry._logs import Logger, LogRecord
-from opentelemetry.semconv.attributes import server_attributes
+from opentelemetry.semconv.attributes import (
+    error_attributes,
+    server_attributes,
+)
 from opentelemetry.trace import INVALID_SPAN, Span, Tracer
 from opentelemetry.util.genai._invocation import (
     Error,
@@ -24,7 +28,10 @@ from opentelemetry.util.genai.semconv.gen_ai import (
     attributes as Attr,
 )
 from opentelemetry.util.genai.semconv.gen_ai._metrics import _Metrics
-from opentelemetry.util.genai.semconv.gen_ai._spans import _Spans
+from opentelemetry.util.genai.semconv.gen_ai._spans import (
+    InferenceSpan,
+    _Spans,
+)
 from opentelemetry.util.genai.types import (
     ErrorTypeResolver,
     InputMessage,
@@ -35,6 +42,7 @@ from opentelemetry.util.genai.types import (
 )
 from opentelemetry.util.genai.utils import (
     ContentCapturingMode,
+    gen_ai_json_dumps,
     should_emit_event,
 )
 from opentelemetry.util.types import AttributeValue
@@ -124,16 +132,15 @@ class InferenceInvocation(GenAIInvocation):
         self.top_k: int | None = None
         self.request_choice_count: int | None = None
         self.output_type: str | None = None
-        self._start(
-            self._spans.inference(
-                self._span_name,
-                operation_name=self._operation_name,
-                provider_name=self._provider,
-                request_model=self._request_model,
-                server_address=self._server_address,
-                server_port=self._server_port,
-            )
+        self._inference_span: InferenceSpan = self._spans.inference(
+            self._span_name,
+            operation_name=self._operation_name,
+            provider_name=self._provider,
+            request_model=self._request_model,
+            server_address=self._server_address,
+            server_port=self._server_port,
         )
+        self._start(self._inference_span)
 
     @property
     def cache_creation_input_tokens(self) -> int | None:
@@ -198,16 +205,14 @@ class InferenceInvocation(GenAIInvocation):
             context=self._span_context,
         )
 
-    def _get_message_attributes(
-        self, *, for_span: bool
-    ) -> dict[str, AttributeValue]:
+    def _get_event_message_attributes(self) -> dict[str, AttributeValue]:
         return get_content_attributes(
             input_messages=self.input_messages,
             output_messages=self.output_messages,
             system_instruction=self.system_instruction,
             tool_definitions=self.tool_definitions,
             prompt_variables=self.prompt_variables,
-            for_span=for_span,
+            for_span=False,
             content_capturing_mode=self._content_capturing_mode,
         )
 
@@ -223,7 +228,7 @@ class InferenceInvocation(GenAIInvocation):
             return reasons or None
         return None
 
-    def _get_start_attributes(self) -> dict[str, AttributeValue]:
+    def _get_event_start_attributes(self) -> dict[str, AttributeValue]:
         optional_attrs = (
             (Attr.GEN_AI_REQUEST_MODEL, self._request_model),
             (Attr.GEN_AI_PROVIDER_NAME, self._provider),
@@ -235,7 +240,7 @@ class InferenceInvocation(GenAIInvocation):
             **{k: v for k, v in optional_attrs if v is not None},
         }
 
-    def _get_attributes(self) -> dict[str, AttributeValue]:
+    def _get_event_attributes(self) -> dict[str, AttributeValue]:
         attrs: dict[str, AttributeValue] = {}
         optional_attrs = (
             (Attr.GEN_AI_CONVERSATION_ID, self.conversation_id),
@@ -332,12 +337,85 @@ class InferenceInvocation(GenAIInvocation):
         return attrs
 
     def _apply_finish(self, error: Error | None = None) -> None:
+        span = self._inference_span
         if error is not None:
-            self._apply_error_attributes(error)
-        attributes = self._get_attributes()
-        attributes.update(self._get_message_attributes(for_span=True))
-        attributes.update(self.attributes)
-        self.span.set_attributes(attributes)
+            span.set_error_details(error.type, error.message)
+            self._error_type = error.type
+        span.set_conversation_id(self.conversation_id)
+        span.set_request_stream(self._request_stream)
+        span.set_request_temperature(self.temperature)
+        span.set_request_top_p(self.top_p)
+        span.set_request_top_k(self.top_k)
+        span.set_request_frequency_penalty(self.frequency_penalty)
+        span.set_request_presence_penalty(self.presence_penalty)
+        span.set_request_max_tokens(self.max_tokens)
+        span.set_request_stop_sequences(self.stop_sequences)
+        span.set_request_seed(self.seed)
+        span.set_response_finish_reasons(self._get_finish_reasons())
+        span.set_response_model(self.response_model_name)
+        span.set_response_id(self.response_id)
+        span.set_usage_input_tokens(self.input_tokens)
+        span.set_usage_output_tokens(self.output_tokens)
+        span.set_request_choice_count(self.request_choice_count)
+        span.set_output_type(self.output_type)
+        span.set_usage_cache_write_input_tokens(
+            self.cache_write_input_tokens or None
+        )
+        span.set_usage_cache_read_input_tokens(
+            self.cache_read_input_tokens or None
+        )
+        span.set_usage_reasoning_output_tokens(self.thinking_tokens or None)
+        span.set_usage_text_input_tokens(self.text_input_tokens or None)
+        span.set_usage_image_input_tokens(self.image_input_tokens or None)
+        span.set_usage_audio_input_tokens(self.audio_input_tokens or None)
+        span.set_usage_text_output_tokens(self.text_output_tokens or None)
+        span.set_usage_image_output_tokens(self.image_output_tokens or None)
+        span.set_usage_audio_output_tokens(self.audio_output_tokens or None)
+        span.set_usage_text_cache_read_input_tokens(
+            self.text_cache_read_input_tokens or None
+        )
+        span.set_usage_image_cache_read_input_tokens(
+            self.image_cache_read_input_tokens or None
+        )
+        span.set_usage_audio_cache_read_input_tokens(
+            self.audio_cache_read_input_tokens or None
+        )
+        span.set_request_reasoning_level(self.reasoning_level)
+        span.set_request_previous_response_id(self.previous_response_id)
+        span.set_conversation_compacted(
+            True if self.conversation_compacted else None
+        )
+        span.set_prompt_name(self.prompt_name)
+        span.set_prompt_version(self.prompt_version)
+        span.set_response_time_to_first_chunk(self._ttfc_seconds)
+        span.set_input_messages(
+            (self.input_messages or None)
+            if self._should_capture_content_on_span
+            else None
+        )
+        span.set_output_messages(
+            (self.output_messages or None)
+            if self._should_capture_content_on_span
+            else None
+        )
+        span.set_system_instructions(
+            cast(
+                "Sequence[SystemInstructionPart] | None",
+                (self.system_instruction or None)
+                if self._should_capture_content_on_span
+                else None,
+            )
+        )
+        span.set_tool_definitions(self.tool_definitions)
+        if self._should_capture_content_on_span and self.prompt_variables:
+            for name, value in self.prompt_variables.items():
+                span.set_prompt_variable(
+                    name,
+                    value
+                    if isinstance(value, str)
+                    else gen_ai_json_dumps(value),
+                )
+        span.set_attributes(self.attributes)
         duration_seconds = max(
             timeit.default_timer() - self._monotonic_start_s,
             0.0,
@@ -350,7 +428,7 @@ class InferenceInvocation(GenAIInvocation):
             request_model=self._request_model,
             response_model=self._response_model_name,
             provider_name=self._provider,
-            error_type=self._metric_error_type,
+            error_type=self._error_type,
             additional_attributes=self.metric_attributes,
             context=self._span_context,
         )
@@ -400,9 +478,11 @@ class InferenceInvocation(GenAIInvocation):
         if not should_emit_event():
             return None
 
-        attributes = self._get_start_attributes()
-        attributes.update(self._get_attributes())
-        attributes.update(self._get_message_attributes(for_span=False))
+        attributes = self._get_event_start_attributes()
+        attributes.update(self._get_event_attributes())
+        attributes.update(self._get_event_message_attributes())
+        if self._error_type is not None:
+            attributes[error_attributes.ERROR_TYPE] = self._error_type
         attributes.update(self.attributes)
         return LogRecord(
             event_name="gen_ai.client.inference.operation.details",

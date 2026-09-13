@@ -56,12 +56,21 @@ class GenAISpan:
         for name, value in attributes.items():
             self._span.set_attribute(name, value)
 
-    def _set_attribute(self, name: str, value: AttributeValue | Enum) -> None:
+    def _set_attribute(
+        self, name: str, value: AttributeValue | Enum | None
+    ) -> None:
+        if value is None:
+            return
         if isinstance(value, Enum):
             value = cast("AttributeValue", value.value)
         self._span.set_attribute(name, value)
 
-    def _set_json_attribute(self, name: str, value: object) -> None:
+    def _set_json_attribute(self, name: str, value: object | None) -> None:
+        if value is None:
+            return
+        if isinstance(value, (bool, str, bytes, int, float)):
+            self._span.set_attribute(name, value)
+            return
         self._span.set_attribute(name, gen_ai_json_dumps(value))
 
     def set_error(self, error: BaseException, /) -> None:

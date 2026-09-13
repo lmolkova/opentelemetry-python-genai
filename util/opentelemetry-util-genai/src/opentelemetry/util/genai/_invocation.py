@@ -16,10 +16,8 @@ from typing_extensions import Self
 
 from opentelemetry._logs import Logger, LogRecord
 from opentelemetry.context import Context, attach, detach
-from opentelemetry.semconv.attributes import error_attributes
 from opentelemetry.trace import INVALID_SPAN as _INVALID_SPAN
 from opentelemetry.trace import Span, set_span_in_context
-from opentelemetry.trace.status import Status, StatusCode
 from opentelemetry.util.genai.completion_hook import (
     CompletionHook,
     _NoOpCompletionHook,
@@ -91,7 +89,7 @@ class GenAIInvocation(AbstractContextManager["GenAIInvocation"]):
             {} if metric_attributes is None else metric_attributes
         )
         """Additional attributes to set on metrics. Must be low cardinality. Not set on spans or events."""
-        self._metric_error_type: str | None = None
+        self._error_type: str | None = None
         self.span: Span = _INVALID_SPAN
         self._span_context: Context
         self._span_name: str = span_name
@@ -119,12 +117,6 @@ class GenAIInvocation(AbstractContextManager["GenAIInvocation"]):
         self._span_context = set_span_in_context(self.span)
         self._monotonic_start_s = timeit.default_timer()
         self._context_token = attach(self._span_context)
-
-    def _apply_error_attributes(self, error: Error) -> None:
-        """Apply error status and error.type attribute to the span, events, and metrics."""
-        self.span.set_status(Status(StatusCode.ERROR, error.message))
-        self.attributes[error_attributes.ERROR_TYPE] = error.type
-        self._metric_error_type = error.type
 
     def _call_completion_hook(
         self,

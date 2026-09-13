@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import timeit
-from dataclasses import asdict
 
 from opentelemetry._logs import Logger
 from opentelemetry.util.genai._invocation import (
@@ -13,18 +12,16 @@ from opentelemetry.util.genai._invocation import (
 )
 from opentelemetry.util.genai.completion_hook import CompletionHook
 from opentelemetry.util.genai.semconv.gen_ai import GenAiOperationName
-from opentelemetry.util.genai.semconv.gen_ai import attributes as Attr
 from opentelemetry.util.genai.semconv.gen_ai._metrics import _Metrics
-from opentelemetry.util.genai.semconv.gen_ai._spans import _Spans
+from opentelemetry.util.genai.semconv.gen_ai._spans import (
+    InvokeWorkflowSpan,
+    _Spans,
+)
 from opentelemetry.util.genai.types import (
     InputMessage,
     OutputMessage,
 )
-from opentelemetry.util.genai.utils import (
-    ContentCapturingMode,
-    gen_ai_json_dumps,
-)
-from opentelemetry.util.types import AttributeValue
+from opentelemetry.util.genai.utils import ContentCapturingMode
 
 
 class WorkflowInvocation(GenAIInvocation):
@@ -61,52 +58,29 @@ class WorkflowInvocation(GenAIInvocation):
         self.conversation_id: str | None = None
         self.input_messages: list[InputMessage] = []
         self.output_messages: list[OutputMessage] = []
-        self._start(
-            self._spans.invoke_workflow(
-                self._span_name,
-                operation_name=self._operation_name,
-                workflow_name=self._name,
-            )
+        self._workflow_span: InvokeWorkflowSpan = self._spans.invoke_workflow(
+            self._span_name,
+            operation_name=self._operation_name,
+            workflow_name=self._name,
         )
-
-    def _get_start_attributes(self) -> dict[str, AttributeValue]:
-        """Return sampling-relevant attributes available at span creation time."""
-        attrs: dict[str, AttributeValue] = {
-            Attr.GEN_AI_OPERATION_NAME: self._operation_name,
-        }
-        if self._name is not None:
-            attrs[Attr.GEN_AI_WORKFLOW_NAME] = self._name
-        return attrs
-
-    def _get_messages_for_span(self) -> dict[str, AttributeValue]:
-        if not self._should_capture_content_on_span:
-            return {}
-        optional_attrs = (
-            (
-                Attr.GEN_AI_INPUT_MESSAGES,
-                gen_ai_json_dumps([asdict(m) for m in self.input_messages])
-                if self.input_messages
-                else None,
-            ),
-            (
-                Attr.GEN_AI_OUTPUT_MESSAGES,
-                gen_ai_json_dumps([asdict(m) for m in self.output_messages])
-                if self.output_messages
-                else None,
-            ),
-        )
-        return {
-            key: value for key, value in optional_attrs if value is not None
-        }
+        self._start(self._workflow_span)
 
     def _apply_finish(self, error: Error | None = None) -> None:
-        attributes: dict[str, AttributeValue] = self._get_messages_for_span()
-        if self.conversation_id is not None:
-            attributes[Attr.GEN_AI_CONVERSATION_ID] = self.conversation_id
         if error is not None:
-            self._apply_error_attributes(error)
-        attributes.update(self.attributes)
-        self.span.set_attributes(attributes)
+            self._workflow_span.set_error_details(error.type, error.message)
+            self._error_type = error.type
+        self._workflow_span.set_conversation_id(self.conversation_id)
+        self._workflow_span.set_input_messages(
+            (self.input_messages or None)
+            if self._should_capture_content_on_span
+            else None
+        )
+        self._workflow_span.set_output_messages(
+            (self.output_messages or None)
+            if self._should_capture_content_on_span
+            else None
+        )
+        self._workflow_span.set_attributes(self.attributes)
         self._call_completion_hook(
             inputs=self.input_messages,
             outputs=self.output_messages,
@@ -120,7 +94,7 @@ class WorkflowInvocation(GenAIInvocation):
         )
         self._metrics.invoke_workflow_duration(
             duration_seconds,
-            error_type=self._metric_error_type,
+            error_type=self._error_type,
             workflow_name=self._name,
             additional_attributes=self.metric_attributes,
             context=self._span_context,

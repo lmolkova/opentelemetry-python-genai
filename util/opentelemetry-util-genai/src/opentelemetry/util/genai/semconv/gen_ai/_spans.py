@@ -37,495 +37,557 @@ def _value(value: AttributeValue | Enum) -> AttributeValue:
 class InferenceSpan(GenAISpan):
     """`gen_ai.inference.client` span."""
 
-    def set_usage_input_tokens(self, value: int) -> None:
+    def set_usage_input_tokens(self, value: int | None) -> None:
         self._set_attribute(Attr.GEN_AI_USAGE_INPUT_TOKENS, value)
 
-    def set_usage_output_tokens(self, value: int) -> None:
+    def set_usage_output_tokens(self, value: int | None) -> None:
         self._set_attribute(Attr.GEN_AI_USAGE_OUTPUT_TOKENS, value)
 
-    def set_usage_text_input_tokens(self, value: int) -> None:
+    def set_usage_text_input_tokens(self, value: int | None) -> None:
         self._set_attribute(Attr.GEN_AI_USAGE_TEXT_INPUT_TOKENS, value)
 
-    def set_usage_image_input_tokens(self, value: int) -> None:
+    def set_usage_image_input_tokens(self, value: int | None) -> None:
         self._set_attribute(Attr.GEN_AI_USAGE_IMAGE_INPUT_TOKENS, value)
 
-    def set_usage_audio_input_tokens(self, value: int) -> None:
+    def set_usage_audio_input_tokens(self, value: int | None) -> None:
         self._set_attribute(Attr.GEN_AI_USAGE_AUDIO_INPUT_TOKENS, value)
 
-    def set_usage_text_cache_read_input_tokens(self, value: int) -> None:
+    def set_usage_text_cache_read_input_tokens(
+        self, value: int | None
+    ) -> None:
         self._set_attribute(
             Attr.GEN_AI_USAGE_TEXT_CACHE_READ_INPUT_TOKENS, value
         )
 
-    def set_usage_image_cache_read_input_tokens(self, value: int) -> None:
+    def set_usage_image_cache_read_input_tokens(
+        self, value: int | None
+    ) -> None:
         self._set_attribute(
             Attr.GEN_AI_USAGE_IMAGE_CACHE_READ_INPUT_TOKENS, value
         )
 
-    def set_usage_audio_cache_read_input_tokens(self, value: int) -> None:
+    def set_usage_audio_cache_read_input_tokens(
+        self, value: int | None
+    ) -> None:
         self._set_attribute(
             Attr.GEN_AI_USAGE_AUDIO_CACHE_READ_INPUT_TOKENS, value
         )
 
-    def set_usage_text_output_tokens(self, value: int) -> None:
+    def set_usage_text_output_tokens(self, value: int | None) -> None:
         self._set_attribute(Attr.GEN_AI_USAGE_TEXT_OUTPUT_TOKENS, value)
 
-    def set_usage_image_output_tokens(self, value: int) -> None:
+    def set_usage_image_output_tokens(self, value: int | None) -> None:
         self._set_attribute(Attr.GEN_AI_USAGE_IMAGE_OUTPUT_TOKENS, value)
 
-    def set_usage_audio_output_tokens(self, value: int) -> None:
+    def set_usage_audio_output_tokens(self, value: int | None) -> None:
         self._set_attribute(Attr.GEN_AI_USAGE_AUDIO_OUTPUT_TOKENS, value)
 
-    def set_usage_cache_read_input_tokens(self, value: int) -> None:
+    def set_usage_cache_read_input_tokens(self, value: int | None) -> None:
         self._set_attribute(Attr.GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS, value)
 
-    def set_usage_cache_write_input_tokens(self, value: int) -> None:
+    def set_usage_cache_write_input_tokens(self, value: int | None) -> None:
         self._set_attribute(Attr.GEN_AI_USAGE_CACHE_WRITE_INPUT_TOKENS, value)
 
     def set_system_instructions(
-        self, value: Sequence[SystemInstructionPart]
+        self, value: Sequence[SystemInstructionPart] | None
     ) -> None:
         self._set_json_attribute(
-            Attr.GEN_AI_SYSTEM_INSTRUCTIONS, [asdict(item) for item in value]
+            Attr.GEN_AI_SYSTEM_INSTRUCTIONS,
+            [asdict(item) for item in value] if value is not None else None,
         )
 
-    def set_input_messages(self, value: Sequence[InputMessage]) -> None:
+    def set_input_messages(self, value: Sequence[InputMessage] | None) -> None:
         self._set_json_attribute(
-            Attr.GEN_AI_INPUT_MESSAGES, [asdict(item) for item in value]
+            Attr.GEN_AI_INPUT_MESSAGES,
+            [asdict(item) for item in value] if value is not None else None,
         )
 
-    def set_output_messages(self, value: Sequence[OutputMessage]) -> None:
+    def set_output_messages(
+        self, value: Sequence[OutputMessage] | None
+    ) -> None:
         self._set_json_attribute(
-            Attr.GEN_AI_OUTPUT_MESSAGES, [asdict(item) for item in value]
+            Attr.GEN_AI_OUTPUT_MESSAGES,
+            [asdict(item) for item in value] if value is not None else None,
         )
 
-    def set_tool_definitions(self, value: Sequence[ToolDefinition]) -> None:
+    def set_tool_definitions(
+        self, value: Sequence[ToolDefinition] | None
+    ) -> None:
         self._set_json_attribute(
-            Attr.GEN_AI_TOOL_DEFINITIONS, [asdict(item) for item in value]
+            Attr.GEN_AI_TOOL_DEFINITIONS,
+            [asdict(item) for item in value] if value is not None else None,
         )
 
-    def set_request_max_tokens(self, value: int) -> None:
+    def set_request_max_tokens(self, value: int | None) -> None:
         self._set_attribute(Attr.GEN_AI_REQUEST_MAX_TOKENS, value)
 
-    def set_request_choice_count(self, value: int) -> None:
+    def set_request_choice_count(self, value: int | None) -> None:
         self._set_attribute(Attr.GEN_AI_REQUEST_CHOICE_COUNT, value)
 
-    def set_request_temperature(self, value: float) -> None:
+    def set_request_temperature(self, value: float | None) -> None:
         self._set_attribute(Attr.GEN_AI_REQUEST_TEMPERATURE, value)
 
-    def set_request_top_k(self, value: int) -> None:
+    def set_request_top_k(self, value: int | None) -> None:
         self._set_attribute(Attr.GEN_AI_REQUEST_TOP_K, value)
 
-    def set_request_top_p(self, value: float) -> None:
+    def set_request_top_p(self, value: float | None) -> None:
         self._set_attribute(Attr.GEN_AI_REQUEST_TOP_P, value)
 
-    def set_request_stop_sequences(self, value: Sequence[str]) -> None:
+    def set_request_stop_sequences(self, value: Sequence[str] | None) -> None:
         self._set_attribute(Attr.GEN_AI_REQUEST_STOP_SEQUENCES, value)
 
-    def set_request_frequency_penalty(self, value: float) -> None:
+    def set_request_frequency_penalty(self, value: float | None) -> None:
         self._set_attribute(Attr.GEN_AI_REQUEST_FREQUENCY_PENALTY, value)
 
-    def set_request_presence_penalty(self, value: float) -> None:
+    def set_request_presence_penalty(self, value: float | None) -> None:
         self._set_attribute(Attr.GEN_AI_REQUEST_PRESENCE_PENALTY, value)
 
-    def set_request_seed(self, value: int) -> None:
+    def set_request_seed(self, value: int | None) -> None:
         self._set_attribute(Attr.GEN_AI_REQUEST_SEED, value)
 
-    def set_output_type(self, value: GenAiOutputType | str) -> None:
+    def set_output_type(self, value: GenAiOutputType | str | None) -> None:
         self._set_attribute(Attr.GEN_AI_OUTPUT_TYPE, value)
 
-    def set_request_stream(self, value: bool) -> None:
+    def set_request_stream(self, value: bool | None) -> None:
         self._set_attribute(Attr.GEN_AI_REQUEST_STREAM, value)
 
-    def set_request_reasoning_level(self, value: str) -> None:
+    def set_request_reasoning_level(self, value: str | None) -> None:
         self._set_attribute(Attr.GEN_AI_REQUEST_REASONING_LEVEL, value)
 
-    def set_request_previous_response_id(self, value: str) -> None:
+    def set_request_previous_response_id(self, value: str | None) -> None:
         self._set_attribute(Attr.GEN_AI_REQUEST_PREVIOUS_RESPONSE_ID, value)
 
-    def set_response_id(self, value: str) -> None:
+    def set_response_id(self, value: str | None) -> None:
         self._set_attribute(Attr.GEN_AI_RESPONSE_ID, value)
 
-    def set_response_model(self, value: str) -> None:
+    def set_response_model(self, value: str | None) -> None:
         self._set_attribute(Attr.GEN_AI_RESPONSE_MODEL, value)
 
-    def set_response_finish_reasons(self, value: Sequence[str]) -> None:
+    def set_response_finish_reasons(self, value: Sequence[str] | None) -> None:
         self._set_attribute(Attr.GEN_AI_RESPONSE_FINISH_REASONS, value)
 
-    def set_response_time_to_first_chunk(self, value: float) -> None:
+    def set_response_time_to_first_chunk(self, value: float | None) -> None:
         self._set_attribute(Attr.GEN_AI_RESPONSE_TIME_TO_FIRST_CHUNK, value)
 
-    def set_usage_reasoning_output_tokens(self, value: int) -> None:
+    def set_usage_reasoning_output_tokens(self, value: int | None) -> None:
         self._set_attribute(Attr.GEN_AI_USAGE_REASONING_OUTPUT_TOKENS, value)
 
-    def set_prompt_name(self, value: str) -> None:
+    def set_prompt_name(self, value: str | None) -> None:
         self._set_attribute(Attr.GEN_AI_PROMPT_NAME, value)
 
-    def set_prompt_version(self, value: str) -> None:
+    def set_prompt_version(self, value: str | None) -> None:
         self._set_attribute(Attr.GEN_AI_PROMPT_VERSION, value)
 
-    def set_prompt_variable(self, name: str, value: str) -> None:
+    def set_prompt_variable(self, name: str, value: str | None) -> None:
         self._set_attribute(f"{Attr.GEN_AI_PROMPT_VARIABLE}.{name}", value)
 
-    def set_conversation_id(self, value: str) -> None:
+    def set_conversation_id(self, value: str | None) -> None:
         self._set_attribute(Attr.GEN_AI_CONVERSATION_ID, value)
 
-    def set_conversation_compacted(self, value: bool) -> None:
+    def set_conversation_compacted(self, value: bool | None) -> None:
         self._set_attribute(Attr.GEN_AI_CONVERSATION_COMPACTED, value)
 
 
 class EmbeddingsSpan(GenAISpan):
     """`gen_ai.embeddings.client` span."""
 
-    def set_request_encoding_formats(self, value: Sequence[str]) -> None:
+    def set_request_encoding_formats(
+        self, value: Sequence[str] | None
+    ) -> None:
         self._set_attribute(Attr.GEN_AI_REQUEST_ENCODING_FORMATS, value)
 
-    def set_usage_input_tokens(self, value: int) -> None:
+    def set_usage_input_tokens(self, value: int | None) -> None:
         self._set_attribute(Attr.GEN_AI_USAGE_INPUT_TOKENS, value)
 
-    def set_embeddings_dimension_count(self, value: int) -> None:
+    def set_embeddings_dimension_count(self, value: int | None) -> None:
         self._set_attribute(Attr.GEN_AI_EMBEDDINGS_DIMENSION_COUNT, value)
 
-    def set_response_model(self, value: str) -> None:
+    def set_response_model(self, value: str | None) -> None:
         self._set_attribute(Attr.GEN_AI_RESPONSE_MODEL, value)
 
 
 class RetrievalSpan(GenAISpan):
     """`gen_ai.retrieval.client` span."""
 
-    def set_request_model(self, value: str) -> None:
+    def set_request_model(self, value: str | None) -> None:
         self._set_attribute(Attr.GEN_AI_REQUEST_MODEL, value)
 
-    def set_operation_name(self, value: GenAiOperationName | str) -> None:
+    def set_operation_name(
+        self, value: GenAiOperationName | str | None
+    ) -> None:
         self._set_attribute(Attr.GEN_AI_OPERATION_NAME, value)
 
-    def set_server_address(self, value: str) -> None:
+    def set_server_address(self, value: str | None) -> None:
         self._set_attribute(ServerAttributes.SERVER_ADDRESS, value)
 
-    def set_server_port(self, value: int) -> None:
+    def set_server_port(self, value: int | None) -> None:
         self._set_attribute(ServerAttributes.SERVER_PORT, value)
 
-    def set_retrieval_query_text(self, value: str) -> None:
+    def set_retrieval_query_text(self, value: str | None) -> None:
         self._set_attribute(Attr.GEN_AI_RETRIEVAL_QUERY_TEXT, value)
 
-    def set_retrieval_top_k(self, value: int) -> None:
+    def set_retrieval_top_k(self, value: int | None) -> None:
         self._set_attribute(Attr.GEN_AI_RETRIEVAL_TOP_K, value)
 
-    def set_retrieval_documents(self, value: AnyValue) -> None:
+    def set_retrieval_documents(self, value: AnyValue | None) -> None:
         self._set_json_attribute(Attr.GEN_AI_RETRIEVAL_DOCUMENTS, value)
 
-    def set_provider_name(self, value: GenAiProviderName | str) -> None:
+    def set_provider_name(self, value: GenAiProviderName | str | None) -> None:
         self._set_attribute(Attr.GEN_AI_PROVIDER_NAME, value)
 
-    def set_data_source_id(self, value: str) -> None:
+    def set_data_source_id(self, value: str | None) -> None:
         self._set_attribute(Attr.GEN_AI_DATA_SOURCE_ID, value)
 
 
 class FetchResponseSpan(GenAISpan):
     """`gen_ai.fetch_response.client` span."""
 
-    def set_response_id(self, value: str) -> None:
+    def set_response_id(self, value: str | None) -> None:
         self._set_attribute(Attr.GEN_AI_RESPONSE_ID, value)
 
-    def set_request_stream_cursor(self, value: str) -> None:
+    def set_request_stream_cursor(self, value: str | None) -> None:
         self._set_attribute(Attr.GEN_AI_REQUEST_STREAM_CURSOR, value)
 
     def set_system_instructions(
-        self, value: Sequence[SystemInstructionPart]
+        self, value: Sequence[SystemInstructionPart] | None
     ) -> None:
         self._set_json_attribute(
-            Attr.GEN_AI_SYSTEM_INSTRUCTIONS, [asdict(item) for item in value]
+            Attr.GEN_AI_SYSTEM_INSTRUCTIONS,
+            [asdict(item) for item in value] if value is not None else None,
         )
 
-    def set_output_messages(self, value: Sequence[OutputMessage]) -> None:
+    def set_output_messages(
+        self, value: Sequence[OutputMessage] | None
+    ) -> None:
         self._set_json_attribute(
-            Attr.GEN_AI_OUTPUT_MESSAGES, [asdict(item) for item in value]
+            Attr.GEN_AI_OUTPUT_MESSAGES,
+            [asdict(item) for item in value] if value is not None else None,
         )
 
-    def set_tool_definitions(self, value: Sequence[ToolDefinition]) -> None:
+    def set_tool_definitions(
+        self, value: Sequence[ToolDefinition] | None
+    ) -> None:
         self._set_json_attribute(
-            Attr.GEN_AI_TOOL_DEFINITIONS, [asdict(item) for item in value]
+            Attr.GEN_AI_TOOL_DEFINITIONS,
+            [asdict(item) for item in value] if value is not None else None,
         )
 
-    def set_response_model(self, value: str) -> None:
+    def set_response_model(self, value: str | None) -> None:
         self._set_attribute(Attr.GEN_AI_RESPONSE_MODEL, value)
 
-    def set_response_status(self, value: GenAiResponseStatus | str) -> None:
+    def set_response_status(
+        self, value: GenAiResponseStatus | str | None
+    ) -> None:
         self._set_attribute(Attr.GEN_AI_RESPONSE_STATUS, value)
 
-    def set_response_finish_reasons(self, value: Sequence[str]) -> None:
+    def set_response_finish_reasons(self, value: Sequence[str] | None) -> None:
         self._set_attribute(Attr.GEN_AI_RESPONSE_FINISH_REASONS, value)
 
 
 class MemorySpan(GenAISpan):
     """`gen_ai.memory.client` span."""
 
-    def set_operation_name(self, value: GenAiOperationName | str) -> None:
+    def set_operation_name(
+        self, value: GenAiOperationName | str | None
+    ) -> None:
         self._set_attribute(Attr.GEN_AI_OPERATION_NAME, value)
 
-    def set_server_address(self, value: str) -> None:
+    def set_server_address(self, value: str | None) -> None:
         self._set_attribute(ServerAttributes.SERVER_ADDRESS, value)
 
-    def set_server_port(self, value: int) -> None:
+    def set_server_port(self, value: int | None) -> None:
         self._set_attribute(ServerAttributes.SERVER_PORT, value)
 
-    def set_provider_name(self, value: GenAiProviderName | str) -> None:
+    def set_provider_name(self, value: GenAiProviderName | str | None) -> None:
         self._set_attribute(Attr.GEN_AI_PROVIDER_NAME, value)
 
-    def set_memory_store_id(self, value: str) -> None:
+    def set_memory_store_id(self, value: str | None) -> None:
         self._set_attribute(Attr.GEN_AI_MEMORY_STORE_ID, value)
 
-    def set_memory_record_id(self, value: str) -> None:
+    def set_memory_record_id(self, value: str | None) -> None:
         self._set_attribute(Attr.GEN_AI_MEMORY_RECORD_ID, value)
 
-    def set_memory_record_count(self, value: int) -> None:
+    def set_memory_record_count(self, value: int | None) -> None:
         self._set_attribute(Attr.GEN_AI_MEMORY_RECORD_COUNT, value)
 
-    def set_memory_query_text(self, value: str) -> None:
+    def set_memory_query_text(self, value: str | None) -> None:
         self._set_attribute(Attr.GEN_AI_MEMORY_QUERY_TEXT, value)
 
-    def set_memory_records(self, value: AnyValue) -> None:
+    def set_memory_records(self, value: AnyValue | None) -> None:
         self._set_json_attribute(Attr.GEN_AI_MEMORY_RECORDS, value)
 
 
 class CreateAgentSpan(GenAISpan):
     """`gen_ai.create_agent.client` span."""
 
-    def set_agent_id(self, value: str) -> None:
+    def set_agent_id(self, value: str | None) -> None:
         self._set_attribute(Attr.GEN_AI_AGENT_ID, value)
 
-    def set_agent_description(self, value: str) -> None:
+    def set_agent_description(self, value: str | None) -> None:
         self._set_attribute(Attr.GEN_AI_AGENT_DESCRIPTION, value)
 
-    def set_agent_version(self, value: str) -> None:
+    def set_agent_version(self, value: str | None) -> None:
         self._set_attribute(Attr.GEN_AI_AGENT_VERSION, value)
 
     def set_system_instructions(
-        self, value: Sequence[SystemInstructionPart]
+        self, value: Sequence[SystemInstructionPart] | None
     ) -> None:
         self._set_json_attribute(
-            Attr.GEN_AI_SYSTEM_INSTRUCTIONS, [asdict(item) for item in value]
+            Attr.GEN_AI_SYSTEM_INSTRUCTIONS,
+            [asdict(item) for item in value] if value is not None else None,
         )
 
 
 class InvokeAgentClientSpan(GenAISpan):
     """`gen_ai.invoke_agent.client` span."""
 
-    def set_usage_input_tokens(self, value: int) -> None:
+    def set_usage_input_tokens(self, value: int | None) -> None:
         self._set_attribute(Attr.GEN_AI_USAGE_INPUT_TOKENS, value)
 
-    def set_usage_output_tokens(self, value: int) -> None:
+    def set_usage_output_tokens(self, value: int | None) -> None:
         self._set_attribute(Attr.GEN_AI_USAGE_OUTPUT_TOKENS, value)
 
     def set_system_instructions(
-        self, value: Sequence[SystemInstructionPart]
+        self, value: Sequence[SystemInstructionPart] | None
     ) -> None:
         self._set_json_attribute(
-            Attr.GEN_AI_SYSTEM_INSTRUCTIONS, [asdict(item) for item in value]
+            Attr.GEN_AI_SYSTEM_INSTRUCTIONS,
+            [asdict(item) for item in value] if value is not None else None,
         )
 
-    def set_input_messages(self, value: Sequence[InputMessage]) -> None:
+    def set_input_messages(self, value: Sequence[InputMessage] | None) -> None:
         self._set_json_attribute(
-            Attr.GEN_AI_INPUT_MESSAGES, [asdict(item) for item in value]
+            Attr.GEN_AI_INPUT_MESSAGES,
+            [asdict(item) for item in value] if value is not None else None,
         )
 
-    def set_output_messages(self, value: Sequence[OutputMessage]) -> None:
+    def set_output_messages(
+        self, value: Sequence[OutputMessage] | None
+    ) -> None:
         self._set_json_attribute(
-            Attr.GEN_AI_OUTPUT_MESSAGES, [asdict(item) for item in value]
+            Attr.GEN_AI_OUTPUT_MESSAGES,
+            [asdict(item) for item in value] if value is not None else None,
         )
 
-    def set_tool_definitions(self, value: Sequence[ToolDefinition]) -> None:
+    def set_tool_definitions(
+        self, value: Sequence[ToolDefinition] | None
+    ) -> None:
         self._set_json_attribute(
-            Attr.GEN_AI_TOOL_DEFINITIONS, [asdict(item) for item in value]
+            Attr.GEN_AI_TOOL_DEFINITIONS,
+            [asdict(item) for item in value] if value is not None else None,
         )
 
-    def set_request_max_tokens(self, value: int) -> None:
+    def set_request_max_tokens(self, value: int | None) -> None:
         self._set_attribute(Attr.GEN_AI_REQUEST_MAX_TOKENS, value)
 
-    def set_request_choice_count(self, value: int) -> None:
+    def set_request_choice_count(self, value: int | None) -> None:
         self._set_attribute(Attr.GEN_AI_REQUEST_CHOICE_COUNT, value)
 
-    def set_request_temperature(self, value: float) -> None:
+    def set_request_temperature(self, value: float | None) -> None:
         self._set_attribute(Attr.GEN_AI_REQUEST_TEMPERATURE, value)
 
-    def set_request_top_p(self, value: float) -> None:
+    def set_request_top_p(self, value: float | None) -> None:
         self._set_attribute(Attr.GEN_AI_REQUEST_TOP_P, value)
 
-    def set_request_stop_sequences(self, value: Sequence[str]) -> None:
+    def set_request_stop_sequences(self, value: Sequence[str] | None) -> None:
         self._set_attribute(Attr.GEN_AI_REQUEST_STOP_SEQUENCES, value)
 
-    def set_request_frequency_penalty(self, value: float) -> None:
+    def set_request_frequency_penalty(self, value: float | None) -> None:
         self._set_attribute(Attr.GEN_AI_REQUEST_FREQUENCY_PENALTY, value)
 
-    def set_request_presence_penalty(self, value: float) -> None:
+    def set_request_presence_penalty(self, value: float | None) -> None:
         self._set_attribute(Attr.GEN_AI_REQUEST_PRESENCE_PENALTY, value)
 
-    def set_request_seed(self, value: int) -> None:
+    def set_request_seed(self, value: int | None) -> None:
         self._set_attribute(Attr.GEN_AI_REQUEST_SEED, value)
 
-    def set_output_type(self, value: GenAiOutputType | str) -> None:
+    def set_output_type(self, value: GenAiOutputType | str | None) -> None:
         self._set_attribute(Attr.GEN_AI_OUTPUT_TYPE, value)
 
-    def set_response_finish_reasons(self, value: Sequence[str]) -> None:
+    def set_response_finish_reasons(self, value: Sequence[str] | None) -> None:
         self._set_attribute(Attr.GEN_AI_RESPONSE_FINISH_REASONS, value)
 
-    def set_conversation_id(self, value: str) -> None:
+    def set_conversation_id(self, value: str | None) -> None:
         self._set_attribute(Attr.GEN_AI_CONVERSATION_ID, value)
 
-    def set_data_source_id(self, value: str) -> None:
+    def set_data_source_id(self, value: str | None) -> None:
         self._set_attribute(Attr.GEN_AI_DATA_SOURCE_ID, value)
 
-    def set_agent_description(self, value: str) -> None:
+    def set_agent_description(self, value: str | None) -> None:
         self._set_attribute(Attr.GEN_AI_AGENT_DESCRIPTION, value)
 
-    def set_usage_text_input_tokens(self, value: int) -> None:
+    def set_usage_text_input_tokens(self, value: int | None) -> None:
         self._set_attribute(Attr.GEN_AI_USAGE_TEXT_INPUT_TOKENS, value)
 
-    def set_usage_image_input_tokens(self, value: int) -> None:
+    def set_usage_image_input_tokens(self, value: int | None) -> None:
         self._set_attribute(Attr.GEN_AI_USAGE_IMAGE_INPUT_TOKENS, value)
 
-    def set_usage_audio_input_tokens(self, value: int) -> None:
+    def set_usage_audio_input_tokens(self, value: int | None) -> None:
         self._set_attribute(Attr.GEN_AI_USAGE_AUDIO_INPUT_TOKENS, value)
 
-    def set_usage_text_cache_read_input_tokens(self, value: int) -> None:
+    def set_usage_text_cache_read_input_tokens(
+        self, value: int | None
+    ) -> None:
         self._set_attribute(
             Attr.GEN_AI_USAGE_TEXT_CACHE_READ_INPUT_TOKENS, value
         )
 
-    def set_usage_image_cache_read_input_tokens(self, value: int) -> None:
+    def set_usage_image_cache_read_input_tokens(
+        self, value: int | None
+    ) -> None:
         self._set_attribute(
             Attr.GEN_AI_USAGE_IMAGE_CACHE_READ_INPUT_TOKENS, value
         )
 
-    def set_usage_audio_cache_read_input_tokens(self, value: int) -> None:
+    def set_usage_audio_cache_read_input_tokens(
+        self, value: int | None
+    ) -> None:
         self._set_attribute(
             Attr.GEN_AI_USAGE_AUDIO_CACHE_READ_INPUT_TOKENS, value
         )
 
-    def set_usage_text_output_tokens(self, value: int) -> None:
+    def set_usage_text_output_tokens(self, value: int | None) -> None:
         self._set_attribute(Attr.GEN_AI_USAGE_TEXT_OUTPUT_TOKENS, value)
 
-    def set_usage_image_output_tokens(self, value: int) -> None:
+    def set_usage_image_output_tokens(self, value: int | None) -> None:
         self._set_attribute(Attr.GEN_AI_USAGE_IMAGE_OUTPUT_TOKENS, value)
 
-    def set_usage_audio_output_tokens(self, value: int) -> None:
+    def set_usage_audio_output_tokens(self, value: int | None) -> None:
         self._set_attribute(Attr.GEN_AI_USAGE_AUDIO_OUTPUT_TOKENS, value)
 
-    def set_usage_cache_read_input_tokens(self, value: int) -> None:
+    def set_usage_cache_read_input_tokens(self, value: int | None) -> None:
         self._set_attribute(Attr.GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS, value)
 
-    def set_usage_cache_write_input_tokens(self, value: int) -> None:
+    def set_usage_cache_write_input_tokens(self, value: int | None) -> None:
         self._set_attribute(Attr.GEN_AI_USAGE_CACHE_WRITE_INPUT_TOKENS, value)
 
-    def set_request_previous_response_id(self, value: str) -> None:
+    def set_request_previous_response_id(self, value: str | None) -> None:
         self._set_attribute(Attr.GEN_AI_REQUEST_PREVIOUS_RESPONSE_ID, value)
 
-    def set_agent_id(self, value: str) -> None:
+    def set_agent_id(self, value: str | None) -> None:
         self._set_attribute(Attr.GEN_AI_AGENT_ID, value)
 
-    def set_agent_version(self, value: str) -> None:
+    def set_agent_version(self, value: str | None) -> None:
         self._set_attribute(Attr.GEN_AI_AGENT_VERSION, value)
 
 
 class InvokeAgentSpan(GenAISpan):
     """`gen_ai.invoke_agent.internal` span."""
 
-    def set_usage_input_tokens(self, value: int) -> None:
+    def set_usage_input_tokens(self, value: int | None) -> None:
         self._set_attribute(Attr.GEN_AI_USAGE_INPUT_TOKENS, value)
 
-    def set_usage_output_tokens(self, value: int) -> None:
+    def set_usage_output_tokens(self, value: int | None) -> None:
         self._set_attribute(Attr.GEN_AI_USAGE_OUTPUT_TOKENS, value)
 
     def set_system_instructions(
-        self, value: Sequence[SystemInstructionPart]
+        self, value: Sequence[SystemInstructionPart] | None
     ) -> None:
-        self._set_json_attribute(Attr.GEN_AI_SYSTEM_INSTRUCTIONS, value)
-
-    def set_input_messages(self, value: Sequence[InputMessage]) -> None:
         self._set_json_attribute(
-            Attr.GEN_AI_INPUT_MESSAGES, [asdict(item) for item in value]
+            Attr.GEN_AI_SYSTEM_INSTRUCTIONS,
+            [asdict(item) for item in value] if value is not None else None,
         )
 
-    def set_output_messages(self, value: Sequence[OutputMessage]) -> None:
+    def set_input_messages(self, value: Sequence[InputMessage] | None) -> None:
         self._set_json_attribute(
-            Attr.GEN_AI_OUTPUT_MESSAGES, [asdict(item) for item in value]
+            Attr.GEN_AI_INPUT_MESSAGES,
+            [asdict(item) for item in value] if value is not None else None,
         )
 
-    def set_tool_definitions(self, value: Sequence[ToolDefinition]) -> None:
+    def set_output_messages(
+        self, value: Sequence[OutputMessage] | None
+    ) -> None:
         self._set_json_attribute(
-            Attr.GEN_AI_TOOL_DEFINITIONS, [asdict(item) for item in value]
+            Attr.GEN_AI_OUTPUT_MESSAGES,
+            [asdict(item) for item in value] if value is not None else None,
         )
 
-    def set_request_max_tokens(self, value: int) -> None:
+    def set_tool_definitions(
+        self, value: Sequence[ToolDefinition] | None
+    ) -> None:
+        self._set_json_attribute(
+            Attr.GEN_AI_TOOL_DEFINITIONS,
+            [asdict(item) for item in value] if value is not None else None,
+        )
+
+    def set_request_max_tokens(self, value: int | None) -> None:
         self._set_attribute(Attr.GEN_AI_REQUEST_MAX_TOKENS, value)
 
-    def set_request_choice_count(self, value: int) -> None:
+    def set_request_choice_count(self, value: int | None) -> None:
         self._set_attribute(Attr.GEN_AI_REQUEST_CHOICE_COUNT, value)
 
-    def set_request_temperature(self, value: float) -> None:
+    def set_request_temperature(self, value: float | None) -> None:
         self._set_attribute(Attr.GEN_AI_REQUEST_TEMPERATURE, value)
 
-    def set_request_top_p(self, value: float) -> None:
+    def set_request_top_p(self, value: float | None) -> None:
         self._set_attribute(Attr.GEN_AI_REQUEST_TOP_P, value)
 
-    def set_request_stop_sequences(self, value: Sequence[str]) -> None:
+    def set_request_stop_sequences(self, value: Sequence[str] | None) -> None:
         self._set_attribute(Attr.GEN_AI_REQUEST_STOP_SEQUENCES, value)
 
-    def set_request_frequency_penalty(self, value: float) -> None:
+    def set_request_frequency_penalty(self, value: float | None) -> None:
         self._set_attribute(Attr.GEN_AI_REQUEST_FREQUENCY_PENALTY, value)
 
-    def set_request_presence_penalty(self, value: float) -> None:
+    def set_request_presence_penalty(self, value: float | None) -> None:
         self._set_attribute(Attr.GEN_AI_REQUEST_PRESENCE_PENALTY, value)
 
-    def set_request_seed(self, value: int) -> None:
+    def set_request_seed(self, value: int | None) -> None:
         self._set_attribute(Attr.GEN_AI_REQUEST_SEED, value)
 
-    def set_output_type(self, value: GenAiOutputType | str) -> None:
+    def set_output_type(self, value: GenAiOutputType | str | None) -> None:
         self._set_attribute(Attr.GEN_AI_OUTPUT_TYPE, value)
 
-    def set_response_finish_reasons(self, value: Sequence[str]) -> None:
+    def set_response_finish_reasons(self, value: Sequence[str] | None) -> None:
         self._set_attribute(Attr.GEN_AI_RESPONSE_FINISH_REASONS, value)
 
-    def set_conversation_id(self, value: str) -> None:
+    def set_conversation_id(self, value: str | None) -> None:
         self._set_attribute(Attr.GEN_AI_CONVERSATION_ID, value)
 
-    def set_data_source_id(self, value: str) -> None:
+    def set_data_source_id(self, value: str | None) -> None:
         self._set_attribute(Attr.GEN_AI_DATA_SOURCE_ID, value)
 
-    def set_agent_description(self, value: str) -> None:
+    def set_agent_description(self, value: str | None) -> None:
         self._set_attribute(Attr.GEN_AI_AGENT_DESCRIPTION, value)
 
 
 class ExecuteToolSpan(GenAISpan):
     """`gen_ai.execute_tool.internal` span."""
 
-    def set_tool_call_id(self, value: str) -> None:
+    def set_tool_call_id(self, value: str | None) -> None:
         self._set_attribute(Attr.GEN_AI_TOOL_CALL_ID, value)
 
-    def set_tool_description(self, value: str) -> None:
+    def set_tool_description(self, value: str | None) -> None:
         self._set_attribute(Attr.GEN_AI_TOOL_DESCRIPTION, value)
 
-    def set_tool_call_arguments(self, value: AnyValue) -> None:
+    def set_tool_call_arguments(self, value: AnyValue | None) -> None:
         self._set_json_attribute(Attr.GEN_AI_TOOL_CALL_ARGUMENTS, value)
 
-    def set_tool_call_result(self, value: AnyValue) -> None:
+    def set_tool_call_result(self, value: AnyValue | None) -> None:
         self._set_json_attribute(Attr.GEN_AI_TOOL_CALL_RESULT, value)
 
 
 class InvokeWorkflowSpan(GenAISpan):
     """`gen_ai.invoke_workflow.internal` span."""
 
-    def set_workflow_name(self, value: str) -> None:
+    def set_workflow_name(self, value: str | None) -> None:
         self._set_attribute(Attr.GEN_AI_WORKFLOW_NAME, value)
 
-    def set_conversation_id(self, value: str) -> None:
+    def set_conversation_id(self, value: str | None) -> None:
         self._set_attribute(Attr.GEN_AI_CONVERSATION_ID, value)
 
-    def set_input_messages(self, value: Sequence[InputMessage]) -> None:
-        self._set_json_attribute(Attr.GEN_AI_INPUT_MESSAGES, value)
+    def set_input_messages(self, value: Sequence[InputMessage] | None) -> None:
+        self._set_json_attribute(
+            Attr.GEN_AI_INPUT_MESSAGES,
+            [asdict(item) for item in value] if value is not None else None,
+        )
 
-    def set_output_messages(self, value: Sequence[OutputMessage]) -> None:
-        self._set_json_attribute(Attr.GEN_AI_OUTPUT_MESSAGES, value)
+    def set_output_messages(
+        self, value: Sequence[OutputMessage] | None
+    ) -> None:
+        self._set_json_attribute(
+            Attr.GEN_AI_OUTPUT_MESSAGES,
+            [asdict(item) for item in value] if value is not None else None,
+        )
 
 
 class PlanSpan(GenAISpan):
