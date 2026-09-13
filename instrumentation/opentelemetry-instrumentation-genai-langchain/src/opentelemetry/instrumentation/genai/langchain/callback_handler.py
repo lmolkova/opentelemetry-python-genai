@@ -516,8 +516,7 @@ class OpenTelemetryLangChainCallbackHandler(BaseCallbackHandler):
                             name=name_str,
                         )
                     output_messages.append(output_message)
-                    if finish_reason:
-                        finish_reasons.append(finish_reason)
+                    finish_reasons.append(finish_reason or "error")
 
                     # Get token usage if available
                     if chat_generation.message.usage_metadata:

@@ -1220,6 +1220,7 @@ class TestOnLlmEndToolCalls:
         assigned: list[OutputMessage] = llm_inv.output_messages
         assert len(assigned) == 1
         assert assigned[0].finish_reason == "tool_calls"
+        assert llm_inv.finish_reasons == ["tool_calls"]
         assert len(assigned[0].parts) == 1
         part = assigned[0].parts[0]
         assert isinstance(part, ToolCallRequestPart)
@@ -1251,12 +1252,35 @@ class TestOnLlmEndToolCalls:
         assigned: list[OutputMessage] = llm_inv.output_messages
         assert len(assigned) == 1
         assert assigned[0].finish_reason == "tool_use"
+        assert llm_inv.finish_reasons == ["tool_use"]
         assert len(assigned[0].parts) == 1
         part = assigned[0].parts[0]
         assert isinstance(part, ToolCallRequestPart)
         assert part.name == "get_weather"
         assert part.id == "tooluse_abc"
         assert part.arguments == {"location": "London"}
+
+    def test_on_llm_end_preserves_finish_reasons_positional_alignment(self):
+        run_id = _run_id()
+        handler, _, llm_inv = _make_handler_with_llm_invocation(run_id)
+
+        gen1 = ChatGeneration(
+            message=AIMessage(content="First"),
+            generation_info={"finish_reason": "stop"},
+        )
+        gen2 = ChatGeneration(
+            message=AIMessage(content="Second"),
+            generation_info=None,
+        )
+        gen3 = ChatGeneration(
+            message=AIMessage(content="Third"),
+            generation_info={"finish_reason": "length"},
+        )
+        response = LLMResult(generations=[[gen1, gen2, gen3]])
+
+        handler.on_llm_end(response=response, run_id=run_id)
+
+        assert llm_inv.finish_reasons == ["stop", "error", "length"]
 
     def test_on_llm_end_preserves_message_name(self):
         run_id = _run_id()
