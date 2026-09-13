@@ -5,12 +5,8 @@ from __future__ import annotations
 
 import timeit
 from abc import ABC, abstractmethod
-from typing import Final
 
 from opentelemetry._logs import Logger
-from opentelemetry.semconv._incubating.attributes import (
-    gen_ai_attributes as GenAI,
-)
 from opentelemetry.semconv.attributes import server_attributes
 from opentelemetry.util.genai._invocation import (
     Error,
@@ -18,7 +14,13 @@ from opentelemetry.util.genai._invocation import (
     get_content_attributes,
 )
 from opentelemetry.util.genai.completion_hook import CompletionHook
-from opentelemetry.util.genai.semconv.gen_ai import GenAiTokenType
+from opentelemetry.util.genai.semconv.gen_ai import (
+    GenAiOperationName,
+    GenAiTokenType,
+)
+from opentelemetry.util.genai.semconv.gen_ai import (
+    attributes as Attr,
+)
 from opentelemetry.util.genai.semconv.gen_ai._metrics import _Metrics
 from opentelemetry.util.genai.semconv.gen_ai._spans import _Spans
 from opentelemetry.util.genai.types import (
@@ -30,13 +32,6 @@ from opentelemetry.util.genai.types import (
 )
 from opentelemetry.util.genai.utils import ContentCapturingMode
 from opentelemetry.util.types import AttributeValue
-
-_GEN_AI_USAGE_CACHE_WRITE_INPUT_TOKENS: Final = (
-    "gen_ai.usage.cache_write.input_tokens"
-)
-_GEN_AI_REQUEST_PREVIOUS_RESPONSE_ID: Final = (
-    "gen_ai.request.previous_response.id"
-)
 
 
 class AgentInvocation(GenAIInvocation, ABC):
@@ -61,7 +56,7 @@ class AgentInvocation(GenAIInvocation, ABC):
         agent_name: str | None = None,
         content_capturing_mode: ContentCapturingMode | None = None,
     ) -> None:
-        _operation_name = GenAI.GenAiOperationNameValues.INVOKE_AGENT.value
+        _operation_name = GenAiOperationName.INVOKE_AGENT.value
         super().__init__(
             spans,
             metrics,
@@ -110,35 +105,35 @@ class AgentInvocation(GenAIInvocation, ABC):
 
     def _get_agent_attributes(self) -> dict[str, AttributeValue]:
         optional_attrs = (
-            (GenAI.GEN_AI_AGENT_DESCRIPTION, self.agent_description),
+            (Attr.GEN_AI_AGENT_DESCRIPTION, self.agent_description),
         )
         return {k: v for k, v in optional_attrs if v is not None}
 
     def _get_request_attributes(self) -> dict[str, AttributeValue]:
         optional_attrs = (
-            (GenAI.GEN_AI_CONVERSATION_ID, self.conversation_id),
-            (GenAI.GEN_AI_DATA_SOURCE_ID, self.data_source_id),
-            (GenAI.GEN_AI_OUTPUT_TYPE, self.output_type),
-            (GenAI.GEN_AI_REQUEST_TEMPERATURE, self.temperature),
-            (GenAI.GEN_AI_REQUEST_TOP_P, self.top_p),
-            (GenAI.GEN_AI_REQUEST_FREQUENCY_PENALTY, self.frequency_penalty),
-            (GenAI.GEN_AI_REQUEST_PRESENCE_PENALTY, self.presence_penalty),
-            (GenAI.GEN_AI_REQUEST_MAX_TOKENS, self.max_tokens),
-            (GenAI.GEN_AI_REQUEST_STOP_SEQUENCES, self.stop_sequences),
-            (GenAI.GEN_AI_REQUEST_SEED, self.seed),
-            (GenAI.GEN_AI_REQUEST_CHOICE_COUNT, self.choice_count),
+            (Attr.GEN_AI_CONVERSATION_ID, self.conversation_id),
+            (Attr.GEN_AI_DATA_SOURCE_ID, self.data_source_id),
+            (Attr.GEN_AI_OUTPUT_TYPE, self.output_type),
+            (Attr.GEN_AI_REQUEST_TEMPERATURE, self.temperature),
+            (Attr.GEN_AI_REQUEST_TOP_P, self.top_p),
+            (Attr.GEN_AI_REQUEST_FREQUENCY_PENALTY, self.frequency_penalty),
+            (Attr.GEN_AI_REQUEST_PRESENCE_PENALTY, self.presence_penalty),
+            (Attr.GEN_AI_REQUEST_MAX_TOKENS, self.max_tokens),
+            (Attr.GEN_AI_REQUEST_STOP_SEQUENCES, self.stop_sequences),
+            (Attr.GEN_AI_REQUEST_SEED, self.seed),
+            (Attr.GEN_AI_REQUEST_CHOICE_COUNT, self.choice_count),
         )
         return {k: v for k, v in optional_attrs if v is not None}
 
     def _get_response_attributes(self) -> dict[str, AttributeValue]:
         if self.finish_reasons:
-            return {GenAI.GEN_AI_RESPONSE_FINISH_REASONS: self.finish_reasons}
+            return {Attr.GEN_AI_RESPONSE_FINISH_REASONS: self.finish_reasons}
         return {}
 
     def _get_usage_attributes(self) -> dict[str, AttributeValue]:
         optional_attrs = (
-            (GenAI.GEN_AI_USAGE_INPUT_TOKENS, self.input_tokens),
-            (GenAI.GEN_AI_USAGE_OUTPUT_TOKENS, self.output_tokens),
+            (Attr.GEN_AI_USAGE_INPUT_TOKENS, self.input_tokens),
+            (Attr.GEN_AI_USAGE_OUTPUT_TOKENS, self.output_tokens),
         )
         return {k: v for k, v in optional_attrs if v is not None}
 
@@ -217,11 +212,11 @@ class LocalAgentInvocation(AgentInvocation):
 
     def _get_start_attributes(self) -> dict[str, AttributeValue]:
         optional_attrs = (
-            (GenAI.GEN_AI_REQUEST_MODEL, self._request_model),
-            (GenAI.GEN_AI_AGENT_NAME, self._agent_name),
+            (Attr.GEN_AI_REQUEST_MODEL, self._request_model),
+            (Attr.GEN_AI_AGENT_NAME, self._agent_name),
         )
         return {
-            GenAI.GEN_AI_OPERATION_NAME: self._operation_name,
+            Attr.GEN_AI_OPERATION_NAME: self._operation_name,
             **{k: v for k, v in optional_attrs if v is not None},
         }
 
@@ -323,29 +318,29 @@ class RemoteAgentInvocation(AgentInvocation):
 
     def _get_start_attributes(self) -> dict[str, AttributeValue]:
         optional_attrs = (
-            (GenAI.GEN_AI_REQUEST_MODEL, self._request_model),
-            (GenAI.GEN_AI_AGENT_NAME, self._agent_name),
+            (Attr.GEN_AI_REQUEST_MODEL, self._request_model),
+            (Attr.GEN_AI_AGENT_NAME, self._agent_name),
             (server_attributes.SERVER_ADDRESS, self._server_address),
             (server_attributes.SERVER_PORT, self._server_port),
-            (GenAI.GEN_AI_PROVIDER_NAME, self._provider),
+            (Attr.GEN_AI_PROVIDER_NAME, self._provider),
         )
         return {
-            GenAI.GEN_AI_OPERATION_NAME: self._operation_name,
+            Attr.GEN_AI_OPERATION_NAME: self._operation_name,
             **{k: v for k, v in optional_attrs if v is not None},
         }
 
     def _get_agent_attributes(self) -> dict[str, AttributeValue]:
         optional_attrs = (
-            (GenAI.GEN_AI_AGENT_ID, self.agent_id),
-            (GenAI.GEN_AI_AGENT_DESCRIPTION, self.agent_description),
-            (GenAI.GEN_AI_AGENT_VERSION, self.agent_version),
+            (Attr.GEN_AI_AGENT_ID, self.agent_id),
+            (Attr.GEN_AI_AGENT_DESCRIPTION, self.agent_description),
+            (Attr.GEN_AI_AGENT_VERSION, self.agent_version),
         )
         return {k: v for k, v in optional_attrs if v is not None}
 
     def _get_request_attributes(self) -> dict[str, AttributeValue]:
         attrs = super()._get_request_attributes()
         if self.previous_response_id is not None:
-            attrs[_GEN_AI_REQUEST_PREVIOUS_RESPONSE_ID] = (
+            attrs[Attr.GEN_AI_REQUEST_PREVIOUS_RESPONSE_ID] = (
                 self.previous_response_id
             )
         return attrs
@@ -353,11 +348,11 @@ class RemoteAgentInvocation(AgentInvocation):
     def _get_usage_attributes(self) -> dict[str, AttributeValue]:
         attrs = super()._get_usage_attributes()
         if self.cache_write_input_tokens is not None:
-            attrs[_GEN_AI_USAGE_CACHE_WRITE_INPUT_TOKENS] = (
+            attrs[Attr.GEN_AI_USAGE_CACHE_WRITE_INPUT_TOKENS] = (
                 self.cache_write_input_tokens
             )
         if self.cache_read_input_tokens is not None:
-            attrs[GenAI.GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS] = (
+            attrs[Attr.GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS] = (
                 self.cache_read_input_tokens
             )
         return attrs

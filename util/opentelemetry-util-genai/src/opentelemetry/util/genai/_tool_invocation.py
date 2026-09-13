@@ -6,11 +6,10 @@ from __future__ import annotations
 import timeit
 
 from opentelemetry._logs import Logger
-from opentelemetry.semconv._incubating.attributes import (
-    gen_ai_attributes as GenAI,
-)
 from opentelemetry.util.genai._invocation import Error, GenAIInvocation
 from opentelemetry.util.genai.completion_hook import CompletionHook
+from opentelemetry.util.genai.semconv.gen_ai import GenAiOperationName
+from opentelemetry.util.genai.semconv.gen_ai import attributes as Attr
 from opentelemetry.util.genai.semconv.gen_ai._metrics import _Metrics
 from opentelemetry.util.genai.semconv.gen_ai._spans import _Spans
 from opentelemetry.util.genai.utils import (
@@ -75,7 +74,7 @@ class ToolInvocation(GenAIInvocation):
             is deprecated. Set ``invocation.tool_call_id`` and
             ``invocation.tool_description`` on the returned invocation instead.
         """
-        _operation_name = GenAI.GenAiOperationNameValues.EXECUTE_TOOL.value
+        _operation_name = GenAiOperationName.EXECUTE_TOOL.value
         super().__init__(
             spans,
             metrics,
@@ -117,11 +116,11 @@ class ToolInvocation(GenAIInvocation):
     def _get_start_attributes(self) -> dict[str, AttributeValue]:
         """Return sampling-relevant attributes available at span creation time."""
         optional_attrs = (
-            (GenAI.GEN_AI_TOOL_NAME, self._name),
-            (GenAI.GEN_AI_TOOL_TYPE, self._tool_type),
+            (Attr.GEN_AI_TOOL_NAME, self._name),
+            (Attr.GEN_AI_TOOL_TYPE, self._tool_type),
         )
         return {
-            GenAI.GEN_AI_OPERATION_NAME: self._operation_name,
+            Attr.GEN_AI_OPERATION_NAME: self._operation_name,
             **{k: v for k, v in optional_attrs if v is not None},
         }
 
@@ -130,17 +129,17 @@ class ToolInvocation(GenAIInvocation):
             self._apply_error_attributes(error)
         capture_content_on_span = self._should_capture_content_on_span
         optional_attrs = (
-            (GenAI.GEN_AI_TOOL_CALL_ID, self.tool_call_id),
-            (GenAI.GEN_AI_TOOL_DESCRIPTION, self.tool_description),
-            (GenAI.GEN_AI_AGENT_NAME, self._agent_name),
+            (Attr.GEN_AI_TOOL_CALL_ID, self.tool_call_id),
+            (Attr.GEN_AI_TOOL_DESCRIPTION, self.tool_description),
+            (Attr.GEN_AI_AGENT_NAME, self._agent_name),
             (
-                GenAI.GEN_AI_TOOL_CALL_ARGUMENTS,
+                Attr.GEN_AI_TOOL_CALL_ARGUMENTS,
                 _any_value_to_attribute_value(self.arguments)
                 if capture_content_on_span and self.arguments is not None
                 else None,
             ),
             (
-                GenAI.GEN_AI_TOOL_CALL_RESULT,
+                Attr.GEN_AI_TOOL_CALL_RESULT,
                 _any_value_to_attribute_value(self.tool_result)
                 if capture_content_on_span and self.tool_result is not None
                 else None,

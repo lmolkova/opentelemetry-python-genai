@@ -6,13 +6,14 @@ from __future__ import annotations
 import timeit
 
 from opentelemetry._logs import Logger
-from opentelemetry.semconv._incubating.attributes import (
-    gen_ai_attributes as GenAI,
-)
 from opentelemetry.semconv.attributes import server_attributes
 from opentelemetry.util.genai._invocation import Error, GenAIInvocation
 from opentelemetry.util.genai.completion_hook import CompletionHook
-from opentelemetry.util.genai.semconv.gen_ai import GenAiTokenType
+from opentelemetry.util.genai.semconv.gen_ai import (
+    GenAiOperationName,
+    GenAiTokenType,
+)
+from opentelemetry.util.genai.semconv.gen_ai import attributes as Attr
 from opentelemetry.util.genai.semconv.gen_ai._metrics import _Metrics
 from opentelemetry.util.genai.semconv.gen_ai._spans import _Spans
 from opentelemetry.util.genai.utils import ContentCapturingMode
@@ -39,7 +40,7 @@ class EmbeddingInvocation(GenAIInvocation):
         content_capturing_mode: ContentCapturingMode | None = None,
     ) -> None:
         """Use handler.embedding(provider) rather than calling this directly."""
-        _operation_name = GenAI.GenAiOperationNameValues.EMBEDDINGS.value
+        _operation_name = GenAiOperationName.EMBEDDINGS.value
         super().__init__(
             spans,
             metrics,
@@ -76,22 +77,22 @@ class EmbeddingInvocation(GenAIInvocation):
     def _get_start_attributes(self) -> dict[str, AttributeValue]:
         """Return sampling-relevant attributes available at span creation time."""
         optional_attrs = (
-            (GenAI.GEN_AI_REQUEST_MODEL, self._request_model),
-            (GenAI.GEN_AI_PROVIDER_NAME, self._provider),
+            (Attr.GEN_AI_REQUEST_MODEL, self._request_model),
+            (Attr.GEN_AI_PROVIDER_NAME, self._provider),
             (server_attributes.SERVER_ADDRESS, self._server_address),
             (server_attributes.SERVER_PORT, self._server_port),
         )
         return {
-            GenAI.GEN_AI_OPERATION_NAME: self._operation_name,
+            Attr.GEN_AI_OPERATION_NAME: self._operation_name,
             **{k: v for k, v in optional_attrs if v is not None},
         }
 
     def _apply_finish(self, error: Error | None = None) -> None:
         optional_attrs = (
-            (GenAI.GEN_AI_EMBEDDINGS_DIMENSION_COUNT, self.dimension_count),
-            (GenAI.GEN_AI_REQUEST_ENCODING_FORMATS, self.encoding_formats),
-            (GenAI.GEN_AI_RESPONSE_MODEL, self.response_model_name),
-            (GenAI.GEN_AI_USAGE_INPUT_TOKENS, self.input_tokens),
+            (Attr.GEN_AI_EMBEDDINGS_DIMENSION_COUNT, self.dimension_count),
+            (Attr.GEN_AI_REQUEST_ENCODING_FORMATS, self.encoding_formats),
+            (Attr.GEN_AI_RESPONSE_MODEL, self.response_model_name),
+            (Attr.GEN_AI_USAGE_INPUT_TOKENS, self.input_tokens),
         )
         attributes: dict[str, AttributeValue] = {
             key: value for key, value in optional_attrs if value is not None

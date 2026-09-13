@@ -19,6 +19,7 @@ from typing import (
 )
 
 if TYPE_CHECKING:
+
     class _ObjectProxy:
         __wrapped__: Any
 

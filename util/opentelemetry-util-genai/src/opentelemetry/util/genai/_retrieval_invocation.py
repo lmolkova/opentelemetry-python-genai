@@ -5,15 +5,14 @@ from __future__ import annotations
 
 import timeit
 from collections.abc import Mapping, Sequence
-from typing import Any, Final
+from typing import Any
 
 from opentelemetry._logs import Logger
-from opentelemetry.semconv._incubating.attributes import (
-    gen_ai_attributes as GenAI,
-)
 from opentelemetry.semconv.attributes import server_attributes
 from opentelemetry.util.genai._invocation import Error, GenAIInvocation
 from opentelemetry.util.genai.completion_hook import CompletionHook
+from opentelemetry.util.genai.semconv.gen_ai import GenAiOperationName
+from opentelemetry.util.genai.semconv.gen_ai import attributes as Attr
 from opentelemetry.util.genai.semconv.gen_ai._metrics import _Metrics
 from opentelemetry.util.genai.semconv.gen_ai._spans import _Spans
 from opentelemetry.util.genai.utils import (
@@ -21,8 +20,6 @@ from opentelemetry.util.genai.utils import (
     gen_ai_json_dumps,
 )
 from opentelemetry.util.types import AttributeValue
-
-_GEN_AI_RETRIEVAL_TOP_K: Final = "gen_ai.retrieval.top_k"
 
 
 class RetrievalInvocation(GenAIInvocation):
@@ -60,7 +57,7 @@ class RetrievalInvocation(GenAIInvocation):
         content_capturing_mode: ContentCapturingMode | None = None,
     ) -> None:
         """Use handler.retrieval() instead of calling this directly."""
-        _operation_name = GenAI.GenAiOperationNameValues.RETRIEVAL.value
+        _operation_name = GenAiOperationName.RETRIEVAL.value
         super().__init__(
             spans,
             metrics,
@@ -95,14 +92,14 @@ class RetrievalInvocation(GenAIInvocation):
     def _get_start_attributes(self) -> dict[str, AttributeValue]:
         """Return sampling-relevant attributes available at span creation time."""
         optional_attrs: tuple[tuple[str, AttributeValue | None], ...] = (
-            (GenAI.GEN_AI_DATA_SOURCE_ID, self._data_source_id),
-            (GenAI.GEN_AI_PROVIDER_NAME, self._provider),
-            (GenAI.GEN_AI_REQUEST_MODEL, self._request_model),
+            (Attr.GEN_AI_DATA_SOURCE_ID, self._data_source_id),
+            (Attr.GEN_AI_PROVIDER_NAME, self._provider),
+            (Attr.GEN_AI_REQUEST_MODEL, self._request_model),
             (server_attributes.SERVER_ADDRESS, self._server_address),
             (server_attributes.SERVER_PORT, self._server_port),
         )
         return {
-            GenAI.GEN_AI_OPERATION_NAME: self._operation_name,
+            Attr.GEN_AI_OPERATION_NAME: self._operation_name,
             **{k: v for k, v in optional_attrs if v is not None},
         }
 
@@ -113,9 +110,9 @@ class RetrievalInvocation(GenAIInvocation):
         ):
             return {}
         optional_attrs: tuple[tuple[str, AttributeValue | None], ...] = (
-            (GenAI.GEN_AI_RETRIEVAL_QUERY_TEXT, self.query_text),
+            (Attr.GEN_AI_RETRIEVAL_QUERY_TEXT, self.query_text),
             (
-                GenAI.GEN_AI_RETRIEVAL_DOCUMENTS,
+                Attr.GEN_AI_RETRIEVAL_DOCUMENTS,
                 gen_ai_json_dumps(self.documents)
                 if self.documents is not None
                 else None,
@@ -128,7 +125,7 @@ class RetrievalInvocation(GenAIInvocation):
             self._apply_error_attributes(error)
         attributes: dict[str, AttributeValue] = {}
         if self.top_k is not None:
-            attributes[_GEN_AI_RETRIEVAL_TOP_K] = int(self.top_k)
+            attributes[Attr.GEN_AI_RETRIEVAL_TOP_K] = int(self.top_k)
         attributes.update(self._get_content_attributes_for_span())
         attributes.update(self.attributes)
         self.span.set_attributes(attributes)

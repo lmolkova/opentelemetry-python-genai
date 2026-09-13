@@ -7,14 +7,13 @@ import timeit
 from dataclasses import asdict
 
 from opentelemetry._logs import Logger
-from opentelemetry.semconv._incubating.attributes import (
-    gen_ai_attributes as GenAI,
-)
 from opentelemetry.util.genai._invocation import (
     Error,
     GenAIInvocation,
 )
 from opentelemetry.util.genai.completion_hook import CompletionHook
+from opentelemetry.util.genai.semconv.gen_ai import GenAiOperationName
+from opentelemetry.util.genai.semconv.gen_ai import attributes as Attr
 from opentelemetry.util.genai.semconv.gen_ai._metrics import _Metrics
 from opentelemetry.util.genai.semconv.gen_ai._spans import _Spans
 from opentelemetry.util.genai.types import (
@@ -48,7 +47,7 @@ class WorkflowInvocation(GenAIInvocation):
         content_capturing_mode: ContentCapturingMode | None = None,
     ) -> None:
         """Use handler.workflow(name) rather than calling this directly."""
-        _operation_name = GenAI.GenAiOperationNameValues.INVOKE_WORKFLOW.value
+        _operation_name = GenAiOperationName.INVOKE_WORKFLOW.value
         super().__init__(
             spans,
             metrics,
@@ -73,10 +72,10 @@ class WorkflowInvocation(GenAIInvocation):
     def _get_start_attributes(self) -> dict[str, AttributeValue]:
         """Return sampling-relevant attributes available at span creation time."""
         attrs: dict[str, AttributeValue] = {
-            GenAI.GEN_AI_OPERATION_NAME: self._operation_name,
+            Attr.GEN_AI_OPERATION_NAME: self._operation_name,
         }
         if self._name is not None:
-            attrs[GenAI.GEN_AI_WORKFLOW_NAME] = self._name
+            attrs[Attr.GEN_AI_WORKFLOW_NAME] = self._name
         return attrs
 
     def _get_messages_for_span(self) -> dict[str, AttributeValue]:
@@ -84,13 +83,13 @@ class WorkflowInvocation(GenAIInvocation):
             return {}
         optional_attrs = (
             (
-                GenAI.GEN_AI_INPUT_MESSAGES,
+                Attr.GEN_AI_INPUT_MESSAGES,
                 gen_ai_json_dumps([asdict(m) for m in self.input_messages])
                 if self.input_messages
                 else None,
             ),
             (
-                GenAI.GEN_AI_OUTPUT_MESSAGES,
+                Attr.GEN_AI_OUTPUT_MESSAGES,
                 gen_ai_json_dumps([asdict(m) for m in self.output_messages])
                 if self.output_messages
                 else None,
@@ -103,7 +102,7 @@ class WorkflowInvocation(GenAIInvocation):
     def _apply_finish(self, error: Error | None = None) -> None:
         attributes: dict[str, AttributeValue] = self._get_messages_for_span()
         if self.conversation_id is not None:
-            attributes[GenAI.GEN_AI_CONVERSATION_ID] = self.conversation_id
+            attributes[Attr.GEN_AI_CONVERSATION_ID] = self.conversation_id
         if error is not None:
             self._apply_error_attributes(error)
         attributes.update(self.attributes)

@@ -16,9 +16,6 @@ from typing_extensions import Self
 
 from opentelemetry._logs import Logger, LogRecord
 from opentelemetry.context import Context, attach, detach
-from opentelemetry.semconv._incubating.attributes import (
-    gen_ai_attributes as GenAI,
-)
 from opentelemetry.semconv.attributes import error_attributes
 from opentelemetry.trace import INVALID_SPAN as _INVALID_SPAN
 from opentelemetry.trace import Span, set_span_in_context
@@ -27,6 +24,7 @@ from opentelemetry.util.genai.completion_hook import (
     CompletionHook,
     _NoOpCompletionHook,
 )
+from opentelemetry.util.genai.semconv.gen_ai import attributes as Attr
 from opentelemetry.util.genai.semconv.gen_ai._metrics import _Metrics
 from opentelemetry.util.genai.semconv.gen_ai._span import GenAISpan
 from opentelemetry.util.genai.semconv.gen_ai._spans import _Spans
@@ -45,9 +43,6 @@ from opentelemetry.util.genai.utils import (
     get_content_capturing_mode,
 )
 from opentelemetry.util.types import AttributeValue
-
-_GEN_AI_PROMPT_VARIABLE_PREFIX: str = "gen_ai.prompt.variable."
-
 
 ContextToken: TypeAlias = Token[Context]
 
@@ -252,33 +247,33 @@ def get_content_attributes(
     # when the content capture mode is set..
     if mode not in allowed_modes:
         return (
-            {GenAI.GEN_AI_TOOL_DEFINITIONS: serialize(tool_definitions)}
+            {Attr.GEN_AI_TOOL_DEFINITIONS: serialize(tool_definitions)}
             if tool_definitions
             else {}
         )
 
     optional_attrs = (
         (
-            GenAI.GEN_AI_INPUT_MESSAGES,
+            Attr.GEN_AI_INPUT_MESSAGES,
             serialize(input_messages) if input_messages else None,
         ),
         (
-            GenAI.GEN_AI_OUTPUT_MESSAGES,
+            Attr.GEN_AI_OUTPUT_MESSAGES,
             serialize(output_messages) if output_messages else None,
         ),
         (
-            GenAI.GEN_AI_SYSTEM_INSTRUCTIONS,
+            Attr.GEN_AI_SYSTEM_INSTRUCTIONS,
             serialize(system_instruction) if system_instruction else None,
         ),
         (
-            GenAI.GEN_AI_TOOL_DEFINITIONS,
+            Attr.GEN_AI_TOOL_DEFINITIONS,
             serialize(tool_definitions) if tool_definitions else None,
         ),
     )
     result = {key: value for key, value in optional_attrs if value is not None}
     if prompt_variables:
         for k, v in prompt_variables.items():
-            result[f"{_GEN_AI_PROMPT_VARIABLE_PREFIX}{k}"] = (
+            result[f"{Attr.GEN_AI_PROMPT_VARIABLE}.{k}"] = (
                 v if isinstance(v, str) else gen_ai_json_dumps(v)
             )
     return result

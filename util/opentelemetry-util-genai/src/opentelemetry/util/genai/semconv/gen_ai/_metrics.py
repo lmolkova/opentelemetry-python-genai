@@ -41,9 +41,7 @@ def _combine_attributes(
         return additional_attributes
     return ChainMap(
         typed_attributes,
-        cast(
-            "MutableMapping[str, AttributeValue]", additional_attributes
-        ),
+        cast("MutableMapping[str, AttributeValue]", additional_attributes),
     )
 
 
@@ -110,9 +108,7 @@ class _Metrics:
                 server_port
             )
         if request_model is not None:
-            typed_attributes[Attr.GEN_AI_REQUEST_MODEL] = _value(
-                request_model
-            )
+            typed_attributes[Attr.GEN_AI_REQUEST_MODEL] = _value(request_model)
         typed_attributes[Attr.GEN_AI_OPERATION_NAME] = _value(operation_name)
         if response_model is not None:
             typed_attributes[Attr.GEN_AI_RESPONSE_MODEL] = _value(
@@ -164,18 +160,14 @@ class _Metrics:
                 server_port
             )
         if request_model is not None:
-            typed_attributes[Attr.GEN_AI_REQUEST_MODEL] = _value(
-                request_model
-            )
+            typed_attributes[Attr.GEN_AI_REQUEST_MODEL] = _value(request_model)
         typed_attributes[Attr.GEN_AI_OPERATION_NAME] = _value(operation_name)
         if response_model is not None:
             typed_attributes[Attr.GEN_AI_RESPONSE_MODEL] = _value(
                 response_model
             )
         if provider_name is not None:
-            typed_attributes[Attr.GEN_AI_PROVIDER_NAME] = _value(
-                provider_name
-            )
+            typed_attributes[Attr.GEN_AI_PROVIDER_NAME] = _value(provider_name)
         if error_type is not None:
             typed_attributes[ErrorAttributes.ERROR_TYPE] = _value(error_type)
         self._client_operation_duration_instrument.record(
@@ -221,9 +213,7 @@ class _Metrics:
                 server_port
             )
         if request_model is not None:
-            typed_attributes[Attr.GEN_AI_REQUEST_MODEL] = _value(
-                request_model
-            )
+            typed_attributes[Attr.GEN_AI_REQUEST_MODEL] = _value(request_model)
         typed_attributes[Attr.GEN_AI_OPERATION_NAME] = _value(operation_name)
         if response_model is not None:
             typed_attributes[Attr.GEN_AI_RESPONSE_MODEL] = _value(
@@ -273,9 +263,7 @@ class _Metrics:
                 server_port
             )
         if request_model is not None:
-            typed_attributes[Attr.GEN_AI_REQUEST_MODEL] = _value(
-                request_model
-            )
+            typed_attributes[Attr.GEN_AI_REQUEST_MODEL] = _value(request_model)
         typed_attributes[Attr.GEN_AI_OPERATION_NAME] = _value(operation_name)
         if response_model is not None:
             typed_attributes[Attr.GEN_AI_RESPONSE_MODEL] = _value(
@@ -326,9 +314,7 @@ class _Metrics:
                 server_port
             )
         if request_model is not None:
-            typed_attributes[Attr.GEN_AI_REQUEST_MODEL] = _value(
-                request_model
-            )
+            typed_attributes[Attr.GEN_AI_REQUEST_MODEL] = _value(request_model)
         typed_attributes[Attr.GEN_AI_OPERATION_NAME] = _value(operation_name)
         if response_model is not None:
             typed_attributes[Attr.GEN_AI_RESPONSE_MODEL] = _value(
@@ -380,9 +366,7 @@ class _Metrics:
                 server_port
             )
         if request_model is not None:
-            typed_attributes[Attr.GEN_AI_REQUEST_MODEL] = _value(
-                request_model
-            )
+            typed_attributes[Attr.GEN_AI_REQUEST_MODEL] = _value(request_model)
         typed_attributes[Attr.GEN_AI_OPERATION_NAME] = _value(operation_name)
         if response_model is not None:
             typed_attributes[Attr.GEN_AI_RESPONSE_MODEL] = _value(
@@ -432,9 +416,7 @@ class _Metrics:
                 server_port
             )
         if request_model is not None:
-            typed_attributes[Attr.GEN_AI_REQUEST_MODEL] = _value(
-                request_model
-            )
+            typed_attributes[Attr.GEN_AI_REQUEST_MODEL] = _value(request_model)
         typed_attributes[Attr.GEN_AI_OPERATION_NAME] = _value(operation_name)
         if response_model is not None:
             typed_attributes[Attr.GEN_AI_RESPONSE_MODEL] = _value(
@@ -474,9 +456,7 @@ class _Metrics:
         if error_type is not None:
             typed_attributes[ErrorAttributes.ERROR_TYPE] = _value(error_type)
         if workflow_name is not None:
-            typed_attributes[Attr.GEN_AI_WORKFLOW_NAME] = _value(
-                workflow_name
-            )
+            typed_attributes[Attr.GEN_AI_WORKFLOW_NAME] = _value(workflow_name)
         self._invoke_workflow_duration_instrument.record(
             value,
             attributes=_combine_attributes(
@@ -513,9 +493,7 @@ class _Metrics:
         if agent_name is not None:
             typed_attributes[Attr.GEN_AI_AGENT_NAME] = _value(agent_name)
         if request_model is not None:
-            typed_attributes[Attr.GEN_AI_REQUEST_MODEL] = _value(
-                request_model
-            )
+            typed_attributes[Attr.GEN_AI_REQUEST_MODEL] = _value(request_model)
         self._invoke_agent_duration_instrument.record(
             value,
             attributes=_combine_attributes(

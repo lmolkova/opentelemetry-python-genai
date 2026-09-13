@@ -6,12 +6,8 @@ from __future__ import annotations
 import timeit
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Final
 
 from opentelemetry._logs import Logger, LogRecord
-from opentelemetry.semconv._incubating.attributes import (
-    gen_ai_attributes as GenAI,
-)
 from opentelemetry.semconv.attributes import server_attributes
 from opentelemetry.trace import INVALID_SPAN, Span, Tracer
 from opentelemetry.util.genai._invocation import (
@@ -20,7 +16,13 @@ from opentelemetry.util.genai._invocation import (
     get_content_attributes,
 )
 from opentelemetry.util.genai.completion_hook import CompletionHook
-from opentelemetry.util.genai.semconv.gen_ai import GenAiTokenType
+from opentelemetry.util.genai.semconv.gen_ai import (
+    GenAiOperationName,
+    GenAiTokenType,
+)
+from opentelemetry.util.genai.semconv.gen_ai import (
+    attributes as Attr,
+)
 from opentelemetry.util.genai.semconv.gen_ai._metrics import _Metrics
 from opentelemetry.util.genai.semconv.gen_ai._spans import _Spans
 from opentelemetry.util.genai.types import (
@@ -36,31 +38,6 @@ from opentelemetry.util.genai.utils import (
     should_emit_event,
 )
 from opentelemetry.util.types import AttributeValue
-
-_GEN_AI_USAGE_CACHE_WRITE_INPUT_TOKENS: Final = (
-    "gen_ai.usage.cache_write.input_tokens"
-)
-_GEN_AI_USAGE_TEXT_INPUT_TOKENS: Final = "gen_ai.usage.text.input_tokens"
-_GEN_AI_USAGE_IMAGE_INPUT_TOKENS: Final = "gen_ai.usage.image.input_tokens"
-_GEN_AI_USAGE_AUDIO_INPUT_TOKENS: Final = "gen_ai.usage.audio.input_tokens"
-_GEN_AI_USAGE_TEXT_OUTPUT_TOKENS: Final = "gen_ai.usage.text.output_tokens"
-_GEN_AI_USAGE_IMAGE_OUTPUT_TOKENS: Final = "gen_ai.usage.image.output_tokens"
-_GEN_AI_USAGE_AUDIO_OUTPUT_TOKENS: Final = "gen_ai.usage.audio.output_tokens"
-_GEN_AI_USAGE_TEXT_CACHE_READ_INPUT_TOKENS: Final = (
-    "gen_ai.usage.text.cache_read.input_tokens"
-)
-_GEN_AI_USAGE_IMAGE_CACHE_READ_INPUT_TOKENS: Final = (
-    "gen_ai.usage.image.cache_read.input_tokens"
-)
-_GEN_AI_USAGE_AUDIO_CACHE_READ_INPUT_TOKENS: Final = (
-    "gen_ai.usage.audio.cache_read.input_tokens"
-)
-_GEN_AI_REQUEST_REASONING_LEVEL: Final = "gen_ai.request.reasoning.level"
-_GEN_AI_REQUEST_PREVIOUS_RESPONSE_ID: Final = (
-    "gen_ai.request.previous_response.id"
-)
-_GEN_AI_CONVERSATION_COMPACTED: Final = "gen_ai.conversation.compacted"
-_GEN_AI_PROMPT_VERSION: Final = "gen_ai.prompt.version"
 
 
 class InferenceInvocation(GenAIInvocation):
@@ -84,9 +61,7 @@ class InferenceInvocation(GenAIInvocation):
         error_type_resolver: ErrorTypeResolver | None = None,
         content_capturing_mode: ContentCapturingMode | None = None,
     ) -> None:
-        operation_name = (
-            operation_name or GenAI.GenAiOperationNameValues.CHAT.value
-        )
+        operation_name = operation_name or GenAiOperationName.CHAT.value
         """Use handler.inference(provider) rather than calling this directly."""
         super().__init__(
             spans,
@@ -250,106 +225,106 @@ class InferenceInvocation(GenAIInvocation):
 
     def _get_start_attributes(self) -> dict[str, AttributeValue]:
         optional_attrs = (
-            (GenAI.GEN_AI_REQUEST_MODEL, self._request_model),
-            (GenAI.GEN_AI_PROVIDER_NAME, self._provider),
+            (Attr.GEN_AI_REQUEST_MODEL, self._request_model),
+            (Attr.GEN_AI_PROVIDER_NAME, self._provider),
             (server_attributes.SERVER_ADDRESS, self._server_address),
             (server_attributes.SERVER_PORT, self._server_port),
         )
         return {
-            GenAI.GEN_AI_OPERATION_NAME: self._operation_name,
+            Attr.GEN_AI_OPERATION_NAME: self._operation_name,
             **{k: v for k, v in optional_attrs if v is not None},
         }
 
     def _get_attributes(self) -> dict[str, AttributeValue]:
         attrs: dict[str, AttributeValue] = {}
         optional_attrs = (
-            (GenAI.GEN_AI_CONVERSATION_ID, self.conversation_id),
-            (GenAI.GEN_AI_REQUEST_STREAM, self._request_stream),
-            (GenAI.GEN_AI_REQUEST_TEMPERATURE, self.temperature),
-            (GenAI.GEN_AI_REQUEST_TOP_P, self.top_p),
-            (GenAI.GEN_AI_REQUEST_TOP_K, self.top_k),
-            (GenAI.GEN_AI_REQUEST_FREQUENCY_PENALTY, self.frequency_penalty),
-            (GenAI.GEN_AI_REQUEST_PRESENCE_PENALTY, self.presence_penalty),
-            (GenAI.GEN_AI_REQUEST_MAX_TOKENS, self.max_tokens),
-            (GenAI.GEN_AI_REQUEST_STOP_SEQUENCES, self.stop_sequences),
-            (GenAI.GEN_AI_REQUEST_SEED, self.seed),
-            (GenAI.GEN_AI_RESPONSE_FINISH_REASONS, self._get_finish_reasons()),
-            (GenAI.GEN_AI_RESPONSE_MODEL, self.response_model_name),
-            (GenAI.GEN_AI_RESPONSE_ID, self.response_id),
-            (GenAI.GEN_AI_USAGE_INPUT_TOKENS, self.input_tokens),
-            (GenAI.GEN_AI_USAGE_OUTPUT_TOKENS, self.output_tokens),
-            (GenAI.GEN_AI_REQUEST_CHOICE_COUNT, self.request_choice_count),
-            (GenAI.GEN_AI_OUTPUT_TYPE, self.output_type),
+            (Attr.GEN_AI_CONVERSATION_ID, self.conversation_id),
+            (Attr.GEN_AI_REQUEST_STREAM, self._request_stream),
+            (Attr.GEN_AI_REQUEST_TEMPERATURE, self.temperature),
+            (Attr.GEN_AI_REQUEST_TOP_P, self.top_p),
+            (Attr.GEN_AI_REQUEST_TOP_K, self.top_k),
+            (Attr.GEN_AI_REQUEST_FREQUENCY_PENALTY, self.frequency_penalty),
+            (Attr.GEN_AI_REQUEST_PRESENCE_PENALTY, self.presence_penalty),
+            (Attr.GEN_AI_REQUEST_MAX_TOKENS, self.max_tokens),
+            (Attr.GEN_AI_REQUEST_STOP_SEQUENCES, self.stop_sequences),
+            (Attr.GEN_AI_REQUEST_SEED, self.seed),
+            (Attr.GEN_AI_RESPONSE_FINISH_REASONS, self._get_finish_reasons()),
+            (Attr.GEN_AI_RESPONSE_MODEL, self.response_model_name),
+            (Attr.GEN_AI_RESPONSE_ID, self.response_id),
+            (Attr.GEN_AI_USAGE_INPUT_TOKENS, self.input_tokens),
+            (Attr.GEN_AI_USAGE_OUTPUT_TOKENS, self.output_tokens),
+            (Attr.GEN_AI_REQUEST_CHOICE_COUNT, self.request_choice_count),
+            (Attr.GEN_AI_OUTPUT_TYPE, self.output_type),
             (
-                _GEN_AI_USAGE_CACHE_WRITE_INPUT_TOKENS,
+                Attr.GEN_AI_USAGE_CACHE_WRITE_INPUT_TOKENS,
                 self.cache_write_input_tokens or None,
             ),
             (
-                GenAI.GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS,
+                Attr.GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS,
                 self.cache_read_input_tokens or None,
             ),
             (
-                GenAI.GEN_AI_USAGE_REASONING_OUTPUT_TOKENS,
+                Attr.GEN_AI_USAGE_REASONING_OUTPUT_TOKENS,
                 self.thinking_tokens or None,
             ),
             (
-                _GEN_AI_USAGE_TEXT_INPUT_TOKENS,
+                Attr.GEN_AI_USAGE_TEXT_INPUT_TOKENS,
                 self.text_input_tokens or None,
             ),
             (
-                _GEN_AI_USAGE_IMAGE_INPUT_TOKENS,
+                Attr.GEN_AI_USAGE_IMAGE_INPUT_TOKENS,
                 self.image_input_tokens or None,
             ),
             (
-                _GEN_AI_USAGE_AUDIO_INPUT_TOKENS,
+                Attr.GEN_AI_USAGE_AUDIO_INPUT_TOKENS,
                 self.audio_input_tokens or None,
             ),
             (
-                _GEN_AI_USAGE_TEXT_OUTPUT_TOKENS,
+                Attr.GEN_AI_USAGE_TEXT_OUTPUT_TOKENS,
                 self.text_output_tokens or None,
             ),
             (
-                _GEN_AI_USAGE_IMAGE_OUTPUT_TOKENS,
+                Attr.GEN_AI_USAGE_IMAGE_OUTPUT_TOKENS,
                 self.image_output_tokens or None,
             ),
             (
-                _GEN_AI_USAGE_AUDIO_OUTPUT_TOKENS,
+                Attr.GEN_AI_USAGE_AUDIO_OUTPUT_TOKENS,
                 self.audio_output_tokens or None,
             ),
             (
-                _GEN_AI_USAGE_TEXT_CACHE_READ_INPUT_TOKENS,
+                Attr.GEN_AI_USAGE_TEXT_CACHE_READ_INPUT_TOKENS,
                 self.text_cache_read_input_tokens or None,
             ),
             (
-                _GEN_AI_USAGE_IMAGE_CACHE_READ_INPUT_TOKENS,
+                Attr.GEN_AI_USAGE_IMAGE_CACHE_READ_INPUT_TOKENS,
                 self.image_cache_read_input_tokens or None,
             ),
             (
-                _GEN_AI_USAGE_AUDIO_CACHE_READ_INPUT_TOKENS,
+                Attr.GEN_AI_USAGE_AUDIO_CACHE_READ_INPUT_TOKENS,
                 self.audio_cache_read_input_tokens or None,
             ),
             (
-                _GEN_AI_REQUEST_REASONING_LEVEL,
+                Attr.GEN_AI_REQUEST_REASONING_LEVEL,
                 self.reasoning_level,
             ),
             (
-                _GEN_AI_REQUEST_PREVIOUS_RESPONSE_ID,
+                Attr.GEN_AI_REQUEST_PREVIOUS_RESPONSE_ID,
                 self.previous_response_id,
             ),
             (
-                _GEN_AI_CONVERSATION_COMPACTED,
+                Attr.GEN_AI_CONVERSATION_COMPACTED,
                 True if self.conversation_compacted else None,
             ),
             (
-                GenAI.GEN_AI_PROMPT_NAME,
+                Attr.GEN_AI_PROMPT_NAME,
                 self.prompt_name,
             ),
             (
-                _GEN_AI_PROMPT_VERSION,
+                Attr.GEN_AI_PROMPT_VERSION,
                 self.prompt_version,
             ),
             (
-                GenAI.GEN_AI_RESPONSE_TIME_TO_FIRST_CHUNK,
+                Attr.GEN_AI_RESPONSE_TIME_TO_FIRST_CHUNK,
                 self._ttfc_seconds,
             ),
         )

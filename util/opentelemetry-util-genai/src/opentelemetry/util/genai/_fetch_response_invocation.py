@@ -4,12 +4,8 @@
 from __future__ import annotations
 
 import timeit
-from typing import Final
 
 from opentelemetry._logs import Logger
-from opentelemetry.semconv._incubating.attributes import (
-    gen_ai_attributes as GenAI,
-)
 from opentelemetry.semconv.attributes import server_attributes
 from opentelemetry.util.genai._invocation import (
     Error,
@@ -17,6 +13,8 @@ from opentelemetry.util.genai._invocation import (
     get_content_attributes,
 )
 from opentelemetry.util.genai.completion_hook import CompletionHook
+from opentelemetry.util.genai.semconv.gen_ai import GenAiOperationName
+from opentelemetry.util.genai.semconv.gen_ai import attributes as Attr
 from opentelemetry.util.genai.semconv.gen_ai._metrics import _Metrics
 from opentelemetry.util.genai.semconv.gen_ai._spans import _Spans
 from opentelemetry.util.genai.types import (
@@ -28,13 +26,6 @@ from opentelemetry.util.genai.types import (
 )
 from opentelemetry.util.genai.utils import ContentCapturingMode
 from opentelemetry.util.types import AttributeValue
-
-# TODO: Migrate to gen_ai_attributes constants once available in the semconv
-# package. Added to the GenAI semantic conventions in
-# https://github.com/open-telemetry/semantic-conventions-genai/pull/353.
-_FETCH_RESPONSE_OPERATION_NAME: Final = "fetch_response"
-_GEN_AI_REQUEST_STREAM_CURSOR: Final = "gen_ai.request.stream_cursor"
-_GEN_AI_RESPONSE_STATUS: Final = "gen_ai.response.status"
 
 
 class FetchResponseInvocation(GenAIInvocation):
@@ -98,10 +89,10 @@ class FetchResponseInvocation(GenAIInvocation):
             metrics,
             logger,
             completion_hook,
-            operation_name=_FETCH_RESPONSE_OPERATION_NAME,
+            operation_name=GenAiOperationName.FETCH_RESPONSE.value,
             # The response identifier is high cardinality, so semconv keeps it
             # out of the span name.
-            span_name=_FETCH_RESPONSE_OPERATION_NAME,
+            span_name=GenAiOperationName.FETCH_RESPONSE.value,
             error_type_resolver=error_type_resolver,
             content_capturing_mode=content_capturing_mode,
         )
@@ -146,11 +137,11 @@ class FetchResponseInvocation(GenAIInvocation):
             (server_attributes.SERVER_PORT, self._server_port),
         )
         return {
-            GenAI.GEN_AI_OPERATION_NAME: self._operation_name,
-            GenAI.GEN_AI_PROVIDER_NAME: self._provider,
-            GenAI.GEN_AI_RESPONSE_ID: self._response_id,
+            Attr.GEN_AI_OPERATION_NAME: self._operation_name,
+            Attr.GEN_AI_PROVIDER_NAME: self._provider,
+            Attr.GEN_AI_RESPONSE_ID: self._response_id,
             **(
-                {GenAI.GEN_AI_REQUEST_STREAM: self._request_stream}
+                {Attr.GEN_AI_REQUEST_STREAM: self._request_stream}
                 if self._request_stream is not None
                 else {}
             ),
@@ -193,13 +184,13 @@ class FetchResponseInvocation(GenAIInvocation):
 
     def _get_attributes(self) -> dict[str, AttributeValue]:
         optional_attrs: tuple[tuple[str, AttributeValue | None], ...] = (
-            (_GEN_AI_REQUEST_STREAM_CURSOR, self.stream_cursor),
+            (Attr.GEN_AI_REQUEST_STREAM_CURSOR, self.stream_cursor),
             (
-                GenAI.GEN_AI_RESPONSE_FINISH_REASONS,
+                Attr.GEN_AI_RESPONSE_FINISH_REASONS,
                 self.finish_reasons or None,
             ),
-            (GenAI.GEN_AI_RESPONSE_MODEL, self.response_model_name),
-            (_GEN_AI_RESPONSE_STATUS, self.response_status),
+            (Attr.GEN_AI_RESPONSE_MODEL, self.response_model_name),
+            (Attr.GEN_AI_RESPONSE_STATUS, self.response_status),
         )
         return {k: v for k, v in optional_attrs if v is not None}
 
