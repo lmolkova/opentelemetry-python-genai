@@ -4,16 +4,18 @@
 from __future__ import annotations
 
 import timeit
-from collections.abc import Sequence
-from typing import cast
 
 from opentelemetry._logs import Logger
+from opentelemetry.util.genai._attribute import _Attribute
 from opentelemetry.util.genai._invocation import (
     Error,
     GenAIInvocation,
 )
 from opentelemetry.util.genai.completion_hook import CompletionHook
-from opentelemetry.util.genai.semconv.gen_ai import GenAiOperationName
+from opentelemetry.util.genai.semconv.gen_ai import (
+    FetchResponseAttributes,
+    GenAiOperationName,
+)
 from opentelemetry.util.genai.semconv.gen_ai._metrics import _Metrics
 from opentelemetry.util.genai.semconv.gen_ai._spans import (
     FetchResponseSpan,
@@ -69,6 +71,27 @@ class FetchResponseInvocation(GenAIInvocation):
     failed.
     """
 
+    _provider = _Attribute[str]("provider_name")
+    _server_address = _Attribute[str | None]("server_address")
+    _server_port = _Attribute[int | None]("server_port")
+    response_model_name = _Attribute[str | None]("response_model")
+    response_status = _Attribute[str | None]()
+    finish_reasons = _Attribute[list[str] | None]("response_finish_reasons")
+    stream_cursor = _Attribute[str | None]("request_stream_cursor")
+    output_messages = _Attribute[list[OutputMessage] | None]()
+    system_instruction = _Attribute[
+        list[SystemInstructionPart] | list[MessagePart] | None
+    ]("system_instructions")
+    tool_definitions = _Attribute[list[ToolDefinition] | None]()
+
+    @property
+    def _request_stream(self) -> bool | None:
+        return self._semconv_attributes.request_stream
+
+    @_request_stream.setter
+    def _request_stream(self, value: bool | None) -> None:
+        self._semconv_attributes.request_stream = value
+
     def __init__(
         self,
         spans: _Spans,
@@ -85,44 +108,37 @@ class FetchResponseInvocation(GenAIInvocation):
         content_capturing_mode: ContentCapturingMode | None = None,
     ) -> None:
         """Use handler.fetch_response() rather than calling this directly."""
+        operation_name = GenAiOperationName.FETCH_RESPONSE.value
+        self._semconv_attributes = FetchResponseAttributes(
+            operation_name=operation_name,
+            provider_name=provider,
+            response_id=response_id,
+            request_stream=request_stream,
+            server_address=server_address,
+            server_port=server_port,
+        )
         super().__init__(
             spans,
             metrics,
             logger,
             completion_hook,
-            operation_name=GenAiOperationName.FETCH_RESPONSE.value,
+            operation_name=operation_name,
             # The response identifier is high cardinality, so semconv keeps it
             # out of the span name.
-            span_name=GenAiOperationName.FETCH_RESPONSE.value,
+            span_name=operation_name,
             error_type_resolver=error_type_resolver,
             content_capturing_mode=content_capturing_mode,
         )
-        self._provider: str = provider
-        self._response_id: str = response_id
-        self._request_stream = request_stream
-        self._ttfc_seconds: float | None = None
         self._stream_last_chunk_at: float | None = None
-        self._server_address: str | None = server_address
-        self._server_port: int | None = server_port
-        self.response_model_name: str | None = None
-        self.response_status: str | None = None
-        self.finish_reasons: list[str] | None = None
-        self.stream_cursor: str | None = None
-        self.output_messages: list[OutputMessage] = []
-        self.system_instruction: (
-            list[SystemInstructionPart] | list[MessagePart]
-        ) = []
-        """System instructions for the model. Passing ``MessagePart`` is deprecated; use ``SystemInstructionPart``."""
-        self.tool_definitions: list[ToolDefinition] | None = None
         self._fetch_response_span: FetchResponseSpan = (
             self._spans.fetch_response(
                 self._span_name,
-                operation_name=self._operation_name,
-                provider_name=self._provider,
-                response_id=self._response_id,
-                request_stream=self._request_stream,
-                server_address=self._server_address,
-                server_port=self._server_port,
+                operation_name=self._semconv_attributes.operation_name,
+                provider_name=self._semconv_attributes.provider_name,
+                response_id=self._semconv_attributes.response_id,
+                request_stream=self._semconv_attributes.request_stream,
+                server_address=self._semconv_attributes.server_address,
+                server_port=self._semconv_attributes.server_port,
             )
         )
         self._start(self._fetch_response_span)
@@ -130,7 +146,7 @@ class FetchResponseInvocation(GenAIInvocation):
     @property
     def response_id(self) -> str:
         """The identifier of the response being fetched."""
-        return self._response_id
+        return self._semconv_attributes.response_id
 
     def _on_stream_chunk(self, chunk_at: float) -> None:
         last_chunk_at = (
@@ -141,15 +157,11 @@ class FetchResponseInvocation(GenAIInvocation):
         self._stream_last_chunk_at = chunk_at
         delta = max(chunk_at - last_chunk_at, 0.0)
 
-        if self._ttfc_seconds is None:
-            self._ttfc_seconds = delta
+        if self._semconv_attributes.response_time_to_first_chunk is None:
+            self._semconv_attributes.response_time_to_first_chunk = delta
             self._metrics.client_operation_time_to_first_chunk(
                 delta,
-                operation_name=self._operation_name,
-                provider_name=self._provider,
-                server_address=self._server_address,
-                server_port=self._server_port,
-                response_model=self.response_model_name,
+                self._semconv_attributes,
                 additional_attributes=self.metric_attributes,
                 context=self._span_context,
             )
@@ -157,35 +169,26 @@ class FetchResponseInvocation(GenAIInvocation):
 
         self._metrics.client_operation_time_per_output_chunk(
             delta,
-            operation_name=self._operation_name,
-            provider_name=self._provider,
-            server_address=self._server_address,
-            server_port=self._server_port,
-            response_model=self.response_model_name,
+            self._semconv_attributes,
             additional_attributes=self.metric_attributes,
             context=self._span_context,
         )
 
     def _apply_finish(self, error: Error | None = None) -> None:
+        attributes = self._semconv_attributes
         if error is not None:
             self._fetch_response_span.set_error_details(
                 error.type, error.message
             )
-            self._error_type = error.type
+            attributes.error_type = error.type
         span = self._fetch_response_span
-        span.set_request_stream_cursor(self.stream_cursor)
-        span.set_response_finish_reasons(self.finish_reasons or None)
-        span.set_response_model(self.response_model_name)
-        span.set_response_status(self.response_status)
+        span.apply(attributes)
         if self._should_capture_content_on_span:
-            span.set_output_messages(self.output_messages or None)
+            span.set_output_messages(attributes.output_messages or None)
             span.set_system_instructions(
-                cast(
-                    "Sequence[SystemInstructionPart] | None",
-                    self.system_instruction or None,
-                )
+                attributes.system_instructions or None
             )
-        span.set_tool_definitions(self.tool_definitions)
+        span.set_tool_definitions(attributes.tool_definitions)
         span.set_attributes(self.attributes)
         duration_seconds = max(
             timeit.default_timer() - self._monotonic_start_s,
@@ -193,12 +196,7 @@ class FetchResponseInvocation(GenAIInvocation):
         )
         self._metrics.client_operation_duration(
             duration_seconds,
-            operation_name=self._operation_name,
-            server_address=self._server_address,
-            server_port=self._server_port,
-            response_model=self.response_model_name,
-            provider_name=self._provider,
-            error_type=self._error_type,
+            attributes,
             additional_attributes=self.metric_attributes,
             context=self._span_context,
         )

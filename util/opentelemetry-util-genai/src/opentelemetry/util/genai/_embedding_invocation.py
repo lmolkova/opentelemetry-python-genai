@@ -6,9 +6,11 @@ from __future__ import annotations
 import timeit
 
 from opentelemetry._logs import Logger
+from opentelemetry.util.genai._attribute import _Attribute
 from opentelemetry.util.genai._invocation import Error, GenAIInvocation
 from opentelemetry.util.genai.completion_hook import CompletionHook
 from opentelemetry.util.genai.semconv.gen_ai import (
+    EmbeddingAttributes,
     GenAiOperationName,
     GenAiTokenType,
 )
@@ -26,6 +28,15 @@ class EmbeddingInvocation(GenAIInvocation):
     Use handler.embedding(provider) rather than constructing this directly.
     """
 
+    _provider = _Attribute[str]("provider_name")
+    _request_model = _Attribute[str | None]("request_model")
+    _server_address = _Attribute[str | None]("server_address")
+    _server_port = _Attribute[int | None]("server_port")
+    encoding_formats = _Attribute[list[str] | None]("request_encoding_formats")
+    input_tokens = _Attribute[int | None]("usage_input_tokens")
+    dimension_count = _Attribute[int | None]("embeddings_dimension_count")
+    response_model_name = _Attribute[str | None]("response_model")
+
     def __init__(
         self,
         spans: _Spans,
@@ -41,6 +52,13 @@ class EmbeddingInvocation(GenAIInvocation):
     ) -> None:
         """Use handler.embedding(provider) rather than calling this directly."""
         _operation_name = GenAiOperationName.EMBEDDINGS.value
+        self._semconv_attributes = EmbeddingAttributes(
+            operation_name=_operation_name,
+            provider_name=provider,
+            request_model=request_model,
+            server_address=server_address,
+            server_port=server_port,
+        )
         super().__init__(
             spans,
             metrics,
@@ -52,39 +70,22 @@ class EmbeddingInvocation(GenAIInvocation):
             else _operation_name,
             content_capturing_mode=content_capturing_mode,
         )
-        # e.g., azure.ai.openai, openai, aws.bedrock
-        self._provider: str = provider
-        self._request_model: str | None = request_model
-        self._server_address: str | None = server_address
-        self._server_port: int | None = server_port
-        # encoding_formats can be multi-value -> combinational cardinality risk.
-        # Keep on spans/events only.
-        self.encoding_formats: list[str] | None = None
-        self.input_tokens: int | None = None
-        self.dimension_count: int | None = None
-        self.response_model_name: str | None = None
         self._embedding_span: EmbeddingsSpan = self._spans.embeddings(
             self._span_name,
-            operation_name=self._operation_name,
-            provider_name=self._provider,
-            request_model=self._request_model,
-            server_address=self._server_address,
-            server_port=self._server_port,
+            operation_name=self._semconv_attributes.operation_name,
+            provider_name=self._semconv_attributes.provider_name,
+            request_model=self._semconv_attributes.request_model,
+            server_address=self._semconv_attributes.server_address,
+            server_port=self._semconv_attributes.server_port,
         )
         self._start(self._embedding_span)
 
     def _apply_finish(self, error: Error | None = None) -> None:
+        attributes = self._semconv_attributes
         if error is not None:
             self._embedding_span.set_error_details(error.type, error.message)
-            self._error_type = error.type
-        self._embedding_span.set_embeddings_dimension_count(
-            self.dimension_count
-        )
-        self._embedding_span.set_request_encoding_formats(
-            self.encoding_formats
-        )
-        self._embedding_span.set_response_model(self.response_model_name)
-        self._embedding_span.set_usage_input_tokens(self.input_tokens)
+            attributes.error_type = error.type
+        self._embedding_span.apply(attributes)
         self._embedding_span.set_attributes(self.attributes)
         duration_seconds = max(
             timeit.default_timer() - self._monotonic_start_s,
@@ -92,26 +93,15 @@ class EmbeddingInvocation(GenAIInvocation):
         )
         self._metrics.client_operation_duration(
             duration_seconds,
-            operation_name=self._operation_name,
-            server_address=self._server_address,
-            server_port=self._server_port,
-            request_model=self._request_model,
-            response_model=self.response_model_name,
-            provider_name=self._provider,
-            error_type=self._error_type,
+            attributes,
             additional_attributes=self.metric_attributes,
             context=self._span_context,
         )
         if self.input_tokens is not None:
             self._metrics.client_token_usage(
                 self.input_tokens,
-                operation_name=self._operation_name,
-                provider_name=self._provider,
+                attributes,
                 token_type=GenAiTokenType.INPUT,
-                server_address=self._server_address,
-                server_port=self._server_port,
-                request_model=self._request_model,
-                response_model=self.response_model_name,
                 additional_attributes=self.metric_attributes,
                 context=self._span_context,
             )

@@ -43,7 +43,11 @@ _logger = logging.getLogger(__name__)
 
 
 class _StreamTimingInvocation(Protocol):
-    _request_stream: bool | None
+    @property
+    def _request_stream(self) -> bool | None: ...
+
+    @_request_stream.setter
+    def _request_stream(self, value: bool | None) -> None: ...
 
     def _on_stream_chunk(self, chunk_at: float) -> None: ...
 

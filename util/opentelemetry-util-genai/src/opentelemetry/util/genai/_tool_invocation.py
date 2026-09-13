@@ -6,9 +6,13 @@ from __future__ import annotations
 import timeit
 
 from opentelemetry._logs import Logger
+from opentelemetry.util.genai._attribute import _Attribute
 from opentelemetry.util.genai._invocation import Error, GenAIInvocation
 from opentelemetry.util.genai.completion_hook import CompletionHook
-from opentelemetry.util.genai.semconv.gen_ai import GenAiOperationName
+from opentelemetry.util.genai.semconv.gen_ai import (
+    GenAiOperationName,
+    ToolAttributes,
+)
 from opentelemetry.util.genai.semconv.gen_ai._metrics import _Metrics
 from opentelemetry.util.genai.semconv.gen_ai._spans import (
     ExecuteToolSpan,
@@ -40,6 +44,14 @@ class ToolInvocation(GenAIInvocation):
     - error.type: Error type if operation failed (Conditionally Required)
     """
 
+    _name = _Attribute[str]("tool_name")
+    _tool_type = _Attribute[str | None]("tool_type")
+    _agent_name = _Attribute[str | None]("agent_name")
+    tool_result = _Attribute[AnyValue | None]("tool_call_result")
+    arguments = _Attribute[AnyValue | None]("tool_call_arguments")
+    tool_call_id = _Attribute[str | None]()
+    tool_description = _Attribute[str | None]()
+
     def __init__(
         self,
         spans: _Spans,
@@ -62,6 +74,14 @@ class ToolInvocation(GenAIInvocation):
             ``invocation.tool_description`` on the returned invocation instead.
         """
         _operation_name = GenAiOperationName.EXECUTE_TOOL.value
+        self._semconv_attributes = ToolAttributes(
+            operation_name=_operation_name,
+            tool_name=name,
+            tool_type=tool_type,
+            agent_name=agent_name,
+            tool_call_id=tool_call_id,
+            tool_description=tool_description,
+        )
         super().__init__(
             spans,
             metrics,
@@ -71,23 +91,12 @@ class ToolInvocation(GenAIInvocation):
             span_name=f"{_operation_name} {name}" if name else _operation_name,
             content_capturing_mode=content_capturing_mode,
         )
-        self._name: str = name
-        self.tool_result: AnyValue | None = None
-        # Since arguments and tool_result can be expensive to serialize,
-        # it's recommended to check the content capture flag in the
-        # instrumentation library before assigning these attributes
-        # to the invocation.
-        self.arguments: AnyValue | None = None
-        self.tool_call_id: str | None = tool_call_id
-        self.tool_description: str | None = tool_description
-        self._tool_type: str | None = tool_type
-        self._agent_name: str | None = agent_name
         self._tool_span: ExecuteToolSpan = self._spans.execute_tool(
             self._span_name,
-            operation_name=self._operation_name,
-            tool_name=self._name,
-            tool_type=self._tool_type,
-            agent_name=self._agent_name,
+            operation_name=self._semconv_attributes.operation_name,
+            tool_name=self._semconv_attributes.tool_name,
+            tool_type=self._semconv_attributes.tool_type,
+            agent_name=self._semconv_attributes.agent_name,
         )
         self._start(self._tool_span)
 
@@ -101,14 +110,16 @@ class ToolInvocation(GenAIInvocation):
         return self._should_capture_content_on_span
 
     def _apply_finish(self, error: Error | None = None) -> None:
+        attributes = self._semconv_attributes
         if error is not None:
             self._tool_span.set_error_details(error.type, error.message)
-            self._error_type = error.type
-        self._tool_span.set_tool_call_id(self.tool_call_id)
-        self._tool_span.set_tool_description(self.tool_description)
+            attributes.error_type = error.type
+        self._tool_span.apply(attributes)
         if self._should_capture_content_on_span:
-            self._tool_span.set_tool_call_arguments(self.arguments)
-            self._tool_span.set_tool_call_result(self.tool_result)
+            self._tool_span.set_tool_call_arguments(
+                attributes.tool_call_arguments
+            )
+            self._tool_span.set_tool_call_result(attributes.tool_call_result)
         self._tool_span.set_attributes(self.attributes)
         self._record_metrics()
 
@@ -119,10 +130,7 @@ class ToolInvocation(GenAIInvocation):
         )
         self._metrics.execute_tool_duration(
             duration_seconds,
-            tool_name=self._name,
-            error_type=self._error_type,
-            tool_type=self._tool_type,
-            agent_name=self._agent_name,
+            self._semconv_attributes,
             additional_attributes=self.metric_attributes,
             context=self._span_context,
         )

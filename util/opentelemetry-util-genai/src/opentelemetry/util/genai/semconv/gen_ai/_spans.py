@@ -10,11 +10,24 @@ from enum import Enum
 
 from opentelemetry.context import Context
 from opentelemetry.semconv.attributes import (
+    error_attributes as ErrorAttributes,
+)
+from opentelemetry.semconv.attributes import (
     server_attributes as ServerAttributes,
 )
 from opentelemetry.trace import SpanKind, Tracer
 from opentelemetry.util.genai.semconv.gen_ai import attributes as Attr
 from opentelemetry.util.genai.semconv.gen_ai._span import GenAISpan
+from opentelemetry.util.genai.semconv.gen_ai.attribute_sets import (
+    EmbeddingAttributes,
+    FetchResponseAttributes,
+    InferenceAttributes,
+    LocalAgentAttributes,
+    RemoteAgentAttributes,
+    RetrievalAttributes,
+    ToolAttributes,
+    WorkflowAttributes,
+)
 from opentelemetry.util.genai.semconv.gen_ai.attributes import (
     GenAiOperationName,
     GenAiOutputType,
@@ -187,6 +200,81 @@ class InferenceSpan(GenAISpan):
     def set_conversation_compacted(self, value: bool | None) -> None:
         self._set_attribute(Attr.GEN_AI_CONVERSATION_COMPACTED, value)
 
+    def apply(
+        self,
+        attributes: InferenceAttributes,
+    ) -> None:
+        """Apply inference attributes that are not fixed at span creation."""
+        self.set_conversation_id(attributes.conversation_id)
+        self.set_request_stream(attributes.request_stream)
+        self.set_request_temperature(attributes.request_temperature)
+        self.set_request_top_p(attributes.request_top_p)
+        self.set_request_top_k(attributes.request_top_k)
+        self.set_request_frequency_penalty(
+            attributes.request_frequency_penalty
+        )
+        self.set_request_presence_penalty(attributes.request_presence_penalty)
+        self.set_request_max_tokens(attributes.request_max_tokens)
+        self.set_request_stop_sequences(attributes.request_stop_sequences)
+        self.set_request_seed(attributes.request_seed)
+        self.set_response_finish_reasons(attributes.response_finish_reasons)
+        self.set_response_model(attributes.response_model)
+        self.set_response_id(attributes.response_id)
+        self.set_usage_input_tokens(attributes.usage_input_tokens)
+        self.set_usage_output_tokens(attributes.usage_output_tokens)
+        self.set_request_choice_count(attributes.request_choice_count)
+        self.set_output_type(attributes.output_type)
+        self.set_usage_cache_write_input_tokens(
+            attributes.usage_cache_write_input_tokens or None
+        )
+        self.set_usage_cache_read_input_tokens(
+            attributes.usage_cache_read_input_tokens or None
+        )
+        self.set_usage_reasoning_output_tokens(
+            attributes.usage_reasoning_output_tokens or None
+        )
+        self.set_usage_text_input_tokens(
+            attributes.usage_text_input_tokens or None
+        )
+        self.set_usage_image_input_tokens(
+            attributes.usage_image_input_tokens or None
+        )
+        self.set_usage_audio_input_tokens(
+            attributes.usage_audio_input_tokens or None
+        )
+        self.set_usage_text_output_tokens(
+            attributes.usage_text_output_tokens or None
+        )
+        self.set_usage_image_output_tokens(
+            attributes.usage_image_output_tokens or None
+        )
+        self.set_usage_audio_output_tokens(
+            attributes.usage_audio_output_tokens or None
+        )
+        self.set_usage_text_cache_read_input_tokens(
+            attributes.usage_text_cache_read_input_tokens or None
+        )
+        self.set_usage_image_cache_read_input_tokens(
+            attributes.usage_image_cache_read_input_tokens or None
+        )
+        self.set_usage_audio_cache_read_input_tokens(
+            attributes.usage_audio_cache_read_input_tokens or None
+        )
+        self.set_request_reasoning_level(attributes.request_reasoning_level)
+        self.set_request_previous_response_id(
+            attributes.request_previous_response_id
+        )
+        self.set_conversation_compacted(
+            True if attributes.conversation_compacted else None
+        )
+        self.set_prompt_name(attributes.prompt_name)
+        self.set_prompt_version(attributes.prompt_version)
+        self.set_response_time_to_first_chunk(
+            attributes.response_time_to_first_chunk
+        )
+        self.set_tool_definitions(attributes.tool_definitions or None)
+        self._set_attribute(ErrorAttributes.ERROR_TYPE, attributes.error_type)
+
 
 class EmbeddingsSpan(GenAISpan):
     """`gen_ai.embeddings.client` span."""
@@ -204,6 +292,15 @@ class EmbeddingsSpan(GenAISpan):
 
     def set_response_model(self, value: str | None) -> None:
         self._set_attribute(Attr.GEN_AI_RESPONSE_MODEL, value)
+
+    def apply(self, attributes: EmbeddingAttributes) -> None:
+        self.set_request_encoding_formats(attributes.request_encoding_formats)
+        self.set_usage_input_tokens(attributes.usage_input_tokens)
+        self.set_embeddings_dimension_count(
+            attributes.embeddings_dimension_count
+        )
+        self.set_response_model(attributes.response_model)
+        self._set_attribute(ErrorAttributes.ERROR_TYPE, attributes.error_type)
 
 
 class RetrievalSpan(GenAISpan):
@@ -237,6 +334,10 @@ class RetrievalSpan(GenAISpan):
 
     def set_data_source_id(self, value: str | None) -> None:
         self._set_attribute(Attr.GEN_AI_DATA_SOURCE_ID, value)
+
+    def apply(self, attributes: RetrievalAttributes) -> None:
+        self.set_retrieval_top_k(attributes.retrieval_top_k)
+        self._set_attribute(ErrorAttributes.ERROR_TYPE, attributes.error_type)
 
 
 class FetchResponseSpan(GenAISpan):
@@ -282,6 +383,17 @@ class FetchResponseSpan(GenAISpan):
 
     def set_response_finish_reasons(self, value: Sequence[str] | None) -> None:
         self._set_attribute(Attr.GEN_AI_RESPONSE_FINISH_REASONS, value)
+
+    def apply(self, attributes: FetchResponseAttributes) -> None:
+        self.set_request_stream_cursor(attributes.request_stream_cursor)
+        self.set_response_finish_reasons(attributes.response_finish_reasons)
+        self.set_response_model(attributes.response_model)
+        self.set_response_status(attributes.response_status)
+        self._set_attribute(
+            Attr.GEN_AI_RESPONSE_TIME_TO_FIRST_CHUNK,
+            attributes.response_time_to_first_chunk,
+        )
+        self._set_attribute(ErrorAttributes.ERROR_TYPE, attributes.error_type)
 
 
 class MemorySpan(GenAISpan):
@@ -470,6 +582,37 @@ class InvokeAgentClientSpan(GenAISpan):
     def set_agent_version(self, value: str | None) -> None:
         self._set_attribute(Attr.GEN_AI_AGENT_VERSION, value)
 
+    def apply(self, attributes: RemoteAgentAttributes) -> None:
+        self.set_agent_id(attributes.agent_id)
+        self.set_agent_version(attributes.agent_version)
+        self.set_agent_description(attributes.agent_description)
+        self.set_conversation_id(attributes.conversation_id)
+        self.set_data_source_id(attributes.data_source_id)
+        self.set_output_type(attributes.output_type)
+        self.set_request_temperature(attributes.request_temperature)
+        self.set_request_top_p(attributes.request_top_p)
+        self.set_request_frequency_penalty(
+            attributes.request_frequency_penalty
+        )
+        self.set_request_presence_penalty(attributes.request_presence_penalty)
+        self.set_request_max_tokens(attributes.request_max_tokens)
+        self.set_request_stop_sequences(attributes.request_stop_sequences)
+        self.set_request_seed(attributes.request_seed)
+        self.set_request_choice_count(attributes.request_choice_count)
+        self.set_request_previous_response_id(
+            attributes.request_previous_response_id
+        )
+        self.set_response_finish_reasons(attributes.response_finish_reasons)
+        self.set_usage_input_tokens(attributes.usage_input_tokens)
+        self.set_usage_output_tokens(attributes.usage_output_tokens)
+        self.set_usage_cache_write_input_tokens(
+            attributes.usage_cache_write_input_tokens
+        )
+        self.set_usage_cache_read_input_tokens(
+            attributes.usage_cache_read_input_tokens
+        )
+        self._set_attribute(ErrorAttributes.ERROR_TYPE, attributes.error_type)
+
 
 class InvokeAgentSpan(GenAISpan):
     """`gen_ai.invoke_agent.internal` span."""
@@ -549,6 +692,26 @@ class InvokeAgentSpan(GenAISpan):
     def set_agent_description(self, value: str | None) -> None:
         self._set_attribute(Attr.GEN_AI_AGENT_DESCRIPTION, value)
 
+    def apply(self, attributes: LocalAgentAttributes) -> None:
+        self.set_agent_description(attributes.agent_description)
+        self.set_conversation_id(attributes.conversation_id)
+        self.set_data_source_id(attributes.data_source_id)
+        self.set_output_type(attributes.output_type)
+        self.set_request_temperature(attributes.request_temperature)
+        self.set_request_top_p(attributes.request_top_p)
+        self.set_request_frequency_penalty(
+            attributes.request_frequency_penalty
+        )
+        self.set_request_presence_penalty(attributes.request_presence_penalty)
+        self.set_request_max_tokens(attributes.request_max_tokens)
+        self.set_request_stop_sequences(attributes.request_stop_sequences)
+        self.set_request_seed(attributes.request_seed)
+        self.set_request_choice_count(attributes.request_choice_count)
+        self.set_response_finish_reasons(attributes.response_finish_reasons)
+        self.set_usage_input_tokens(attributes.usage_input_tokens)
+        self.set_usage_output_tokens(attributes.usage_output_tokens)
+        self._set_attribute(ErrorAttributes.ERROR_TYPE, attributes.error_type)
+
 
 class ExecuteToolSpan(GenAISpan):
     """`gen_ai.execute_tool.internal` span."""
@@ -564,6 +727,11 @@ class ExecuteToolSpan(GenAISpan):
 
     def set_tool_call_result(self, value: AnyValue | None) -> None:
         self._set_json_attribute(Attr.GEN_AI_TOOL_CALL_RESULT, value)
+
+    def apply(self, attributes: ToolAttributes) -> None:
+        self.set_tool_call_id(attributes.tool_call_id)
+        self.set_tool_description(attributes.tool_description)
+        self._set_attribute(ErrorAttributes.ERROR_TYPE, attributes.error_type)
 
 
 class InvokeWorkflowSpan(GenAISpan):
@@ -588,6 +756,10 @@ class InvokeWorkflowSpan(GenAISpan):
             Attr.GEN_AI_OUTPUT_MESSAGES,
             [asdict(item) for item in value] if value is not None else None,
         )
+
+    def apply(self, attributes: WorkflowAttributes) -> None:
+        self.set_conversation_id(attributes.conversation_id)
+        self._set_attribute(ErrorAttributes.ERROR_TYPE, attributes.error_type)
 
 
 class PlanSpan(GenAISpan):

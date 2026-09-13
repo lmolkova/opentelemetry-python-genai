@@ -28,6 +28,10 @@ from opentelemetry.util.genai.invocation import (
     LocalAgentInvocation,
     RemoteAgentInvocation,
 )
+from opentelemetry.util.genai.semconv.gen_ai import (
+    LocalAgentAttributes,
+    RemoteAgentAttributes,
+)
 from opentelemetry.util.genai.types import (
     ContentCapturingMode,
     Error,
@@ -54,6 +58,7 @@ class TestLocalAgentInvocation(unittest.TestCase):  # pylint: disable=too-many-p
         )
         assert isinstance(invocation, LocalAgentInvocation)
         assert isinstance(invocation, AgentInvocation)
+        assert isinstance(invocation._semconv_attributes, LocalAgentAttributes)
         invocation.stop()
 
         spans = self.span_exporter.get_finished_spans()
@@ -466,6 +471,9 @@ class TestRemoteAgentInvocation(unittest.TestCase):
         invocation = self.handler.invoke_remote_agent("openai")
         assert isinstance(invocation, RemoteAgentInvocation)
         assert isinstance(invocation, AgentInvocation)
+        assert isinstance(
+            invocation._semconv_attributes, RemoteAgentAttributes
+        )
         invocation.stop()
         assert (
             self.span_exporter.get_finished_spans()[0].kind == SpanKind.CLIENT
@@ -718,9 +726,7 @@ class TestAgentInvocationMetrics(TestBase):
         invocation.stop()
 
         metrics = self._harvest_metrics()
-        ttfc_point = metrics[
-            "gen_ai.client.operation.time_to_first_chunk"
-        ][0]
+        ttfc_point = metrics["gen_ai.client.operation.time_to_first_chunk"][0]
         self.assertAlmostEqual(ttfc_point.sum, 0.25)
         per_chunk_point = metrics[
             "gen_ai.client.operation.time_per_output_chunk"

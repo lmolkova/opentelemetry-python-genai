@@ -8,7 +8,7 @@ from collections import ChainMap
 from collections.abc import Mapping, MutableMapping, Sequence
 from enum import Enum
 from functools import cached_property
-from typing import cast
+from typing import TypeAlias, cast
 
 from opentelemetry.context import Context
 from opentelemetry.metrics import Histogram, Meter
@@ -19,12 +19,36 @@ from opentelemetry.semconv.attributes import (
     server_attributes as ServerAttributes,
 )
 from opentelemetry.util.genai.semconv.gen_ai import attributes as Attr
+from opentelemetry.util.genai.semconv.gen_ai.attribute_sets import (
+    EmbeddingAttributes,
+    FetchResponseAttributes,
+    InferenceAttributes,
+    LocalAgentAttributes,
+    RemoteAgentAttributes,
+    RetrievalAttributes,
+    ToolAttributes,
+    WorkflowAttributes,
+)
 from opentelemetry.util.genai.semconv.gen_ai.attributes import (
     GenAiOperationName,
     GenAiProviderName,
     GenAiTokenType,
 )
 from opentelemetry.util.types import AttributeValue
+
+ClientDurationAttributes: TypeAlias = (
+    InferenceAttributes
+    | EmbeddingAttributes
+    | RetrievalAttributes
+    | FetchResponseAttributes
+    | RemoteAgentAttributes
+)
+ClientTokenAttributes: TypeAlias = (
+    InferenceAttributes | EmbeddingAttributes | RemoteAgentAttributes
+)
+ClientChunkAttributes: TypeAlias = (
+    InferenceAttributes | FetchResponseAttributes | RemoteAgentAttributes
+)
 
 
 def _value(value: AttributeValue | Enum) -> AttributeValue:
@@ -86,6 +110,93 @@ class _Metrics:
     def client_token_usage(
         self,
         value: int,
+        attributes: ClientTokenAttributes,
+        *,
+        token_type: GenAiTokenType | str,
+        additional_attributes: Mapping[str, AttributeValue] | None = None,
+        context: Context | None = None,
+    ) -> None:
+        """Record client token usage from aggregate inference attributes."""
+        self.client_token_usage_explicit(
+            value,
+            operation_name=attributes.operation_name,
+            provider_name=attributes.provider_name,
+            token_type=token_type,
+            server_address=attributes.server_address,
+            server_port=attributes.server_port,
+            request_model=attributes.request_model,
+            response_model=attributes.response_model,
+            additional_attributes=additional_attributes,
+            context=context,
+        )
+
+    def client_operation_duration(
+        self,
+        value: float,
+        attributes: ClientDurationAttributes,
+        *,
+        additional_attributes: Mapping[str, AttributeValue] | None = None,
+        context: Context | None = None,
+    ) -> None:
+        """Record client duration from aggregate inference attributes."""
+        self.client_operation_duration_explicit(
+            value,
+            operation_name=attributes.operation_name,
+            server_address=attributes.server_address,
+            server_port=attributes.server_port,
+            request_model=attributes.request_model,
+            response_model=attributes.response_model,
+            provider_name=attributes.provider_name,
+            error_type=attributes.error_type,
+            additional_attributes=additional_attributes,
+            context=context,
+        )
+
+    def client_operation_time_to_first_chunk(
+        self,
+        value: float,
+        attributes: ClientChunkAttributes,
+        *,
+        additional_attributes: Mapping[str, AttributeValue] | None = None,
+        context: Context | None = None,
+    ) -> None:
+        """Record time to first chunk from aggregate inference attributes."""
+        self.client_operation_time_to_first_chunk_explicit(
+            value,
+            operation_name=attributes.operation_name,
+            provider_name=attributes.provider_name,
+            server_address=attributes.server_address,
+            server_port=attributes.server_port,
+            request_model=attributes.request_model,
+            response_model=attributes.response_model,
+            additional_attributes=additional_attributes,
+            context=context,
+        )
+
+    def client_operation_time_per_output_chunk(
+        self,
+        value: float,
+        attributes: ClientChunkAttributes,
+        *,
+        additional_attributes: Mapping[str, AttributeValue] | None = None,
+        context: Context | None = None,
+    ) -> None:
+        """Record time per output chunk from aggregate inference attributes."""
+        self.client_operation_time_per_output_chunk_explicit(
+            value,
+            operation_name=attributes.operation_name,
+            provider_name=attributes.provider_name,
+            server_address=attributes.server_address,
+            server_port=attributes.server_port,
+            request_model=attributes.request_model,
+            response_model=attributes.response_model,
+            additional_attributes=additional_attributes,
+            context=context,
+        )
+
+    def client_token_usage_explicit(
+        self,
+        value: int,
         *,
         operation_name: GenAiOperationName | str,
         provider_name: GenAiProviderName | str,
@@ -135,7 +246,7 @@ class _Metrics:
             ],
         )
 
-    def client_operation_duration(
+    def client_operation_duration_explicit(
         self,
         value: float,
         *,
@@ -189,7 +300,7 @@ class _Metrics:
             ],
         )
 
-    def client_operation_time_to_first_chunk(
+    def client_operation_time_to_first_chunk_explicit(
         self,
         value: float,
         *,
@@ -239,7 +350,7 @@ class _Metrics:
             ],
         )
 
-    def client_operation_time_per_output_chunk(
+    def client_operation_time_per_output_chunk_explicit(
         self,
         value: float,
         *,
@@ -445,6 +556,23 @@ class _Metrics:
     def invoke_workflow_duration(
         self,
         value: float,
+        attributes: WorkflowAttributes,
+        *,
+        additional_attributes: Mapping[str, AttributeValue] | None = None,
+        context: Context | None = None,
+    ) -> None:
+        """Record workflow duration from aggregate attributes."""
+        self.invoke_workflow_duration_explicit(
+            value,
+            error_type=attributes.error_type,
+            workflow_name=attributes.workflow_name,
+            additional_attributes=additional_attributes,
+            context=context,
+        )
+
+    def invoke_workflow_duration_explicit(
+        self,
+        value: float,
         *,
         error_type: str | None = None,
         workflow_name: str | None = None,
@@ -477,6 +605,24 @@ class _Metrics:
         )
 
     def invoke_agent_duration(
+        self,
+        value: float,
+        attributes: LocalAgentAttributes,
+        *,
+        additional_attributes: Mapping[str, AttributeValue] | None = None,
+        context: Context | None = None,
+    ) -> None:
+        """Record agent duration from aggregate attributes."""
+        self.invoke_agent_duration_explicit(
+            value,
+            error_type=attributes.error_type,
+            agent_name=attributes.agent_name,
+            request_model=attributes.request_model,
+            additional_attributes=additional_attributes,
+            context=context,
+        )
+
+    def invoke_agent_duration_explicit(
         self,
         value: float,
         *,
@@ -576,6 +722,25 @@ class _Metrics:
         )
 
     def execute_tool_duration(
+        self,
+        value: float,
+        attributes: ToolAttributes,
+        *,
+        additional_attributes: Mapping[str, AttributeValue] | None = None,
+        context: Context | None = None,
+    ) -> None:
+        """Record tool duration from aggregate attributes."""
+        self.execute_tool_duration_explicit(
+            value,
+            tool_name=attributes.tool_name,
+            error_type=attributes.error_type,
+            tool_type=attributes.tool_type,
+            agent_name=attributes.agent_name,
+            additional_attributes=additional_attributes,
+            context=context,
+        )
+
+    def execute_tool_duration_explicit(
         self,
         value: float,
         *,

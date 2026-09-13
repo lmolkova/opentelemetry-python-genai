@@ -8,9 +8,13 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from opentelemetry._logs import Logger
+from opentelemetry.util.genai._attribute import _Attribute
 from opentelemetry.util.genai._invocation import Error, GenAIInvocation
 from opentelemetry.util.genai.completion_hook import CompletionHook
-from opentelemetry.util.genai.semconv.gen_ai import GenAiOperationName
+from opentelemetry.util.genai.semconv.gen_ai import (
+    GenAiOperationName,
+    RetrievalAttributes,
+)
 from opentelemetry.util.genai.semconv.gen_ai._metrics import _Metrics
 from opentelemetry.util.genai.semconv.gen_ai._spans import (
     RetrievalSpan,
@@ -39,6 +43,17 @@ class RetrievalInvocation(GenAIInvocation):
     - gen_ai.retrieval.query.text: Query text (Opt-In, may contain sensitive data)
     """
 
+    _data_source_id = _Attribute[str | None]("data_source_id")
+    _provider = _Attribute[str | None]("provider_name")
+    _request_model = _Attribute[str | None]("request_model")
+    _server_address = _Attribute[str | None]("server_address")
+    _server_port = _Attribute[int | None]("server_port")
+    top_k = _Attribute[int | None]("retrieval_top_k")
+    query_text = _Attribute[str | None]("retrieval_query_text")
+    documents = _Attribute[Sequence[Mapping[str, Any]] | None](
+        "retrieval_documents"
+    )
+
     def __init__(
         self,
         spans: _Spans,
@@ -55,6 +70,14 @@ class RetrievalInvocation(GenAIInvocation):
     ) -> None:
         """Use handler.retrieval() instead of calling this directly."""
         _operation_name = GenAiOperationName.RETRIEVAL.value
+        self._semconv_attributes = RetrievalAttributes(
+            operation_name=_operation_name,
+            data_source_id=data_source_id,
+            provider_name=provider,
+            request_model=request_model,
+            server_address=server_address,
+            server_port=server_port,
+        )
         super().__init__(
             spans,
             metrics,
@@ -66,33 +89,30 @@ class RetrievalInvocation(GenAIInvocation):
             else _operation_name,
             content_capturing_mode=content_capturing_mode,
         )
-        self._data_source_id: str | None = data_source_id
-        self._provider: str | None = provider
-        self._request_model: str | None = request_model
-        self._server_address: str | None = server_address
-        self._server_port: int | None = server_port
-        self.top_k: int | None = None
-        self.query_text: str | None = None
-        self.documents: Sequence[Mapping[str, Any]] | None = None
         self._retrieval_span: RetrievalSpan = self._spans.retrieval(
             self._span_name,
-            operation_name=self._operation_name,
-            data_source_id=self._data_source_id,
-            provider_name=self._provider,
-            request_model=self._request_model,
-            server_address=self._server_address,
-            server_port=self._server_port,
+            operation_name=self._semconv_attributes.operation_name,
+            data_source_id=self._semconv_attributes.data_source_id,
+            provider_name=self._semconv_attributes.provider_name,
+            request_model=self._semconv_attributes.request_model,
+            server_address=self._semconv_attributes.server_address,
+            server_port=self._semconv_attributes.server_port,
         )
         self._start(self._retrieval_span)
 
     def _apply_finish(self, error: Error | None = None) -> None:
+        attributes = self._semconv_attributes
         if error is not None:
             self._retrieval_span.set_error_details(error.type, error.message)
-            self._error_type = error.type
-        self._retrieval_span.set_retrieval_top_k(self.top_k)
+            attributes.error_type = error.type
+        self._retrieval_span.apply(attributes)
         if self.span.is_recording() and self._should_capture_content_on_span:
-            self._retrieval_span.set_retrieval_query_text(self.query_text)
-            self._retrieval_span.set_retrieval_documents(self.documents)
+            self._retrieval_span.set_retrieval_query_text(
+                attributes.retrieval_query_text
+            )
+            self._retrieval_span.set_retrieval_documents(
+                attributes.retrieval_documents
+            )
         self._retrieval_span.set_attributes(self.attributes)
         duration_seconds = max(
             timeit.default_timer() - self._monotonic_start_s,
@@ -100,12 +120,7 @@ class RetrievalInvocation(GenAIInvocation):
         )
         self._metrics.client_operation_duration(
             duration_seconds,
-            operation_name=self._operation_name,
-            server_address=self._server_address,
-            server_port=self._server_port,
-            request_model=self._request_model,
-            provider_name=self._provider,
-            error_type=self._error_type,
+            attributes,
             additional_attributes=self.metric_attributes,
             context=self._span_context,
         )

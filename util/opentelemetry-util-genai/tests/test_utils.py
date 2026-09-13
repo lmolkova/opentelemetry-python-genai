@@ -469,6 +469,33 @@ class TestTelemetryHandler(unittest.TestCase):
             },
         )
 
+    def test_inference_invocation_proxies_semantic_state(self):
+        invocation = self.telemetry_handler.inference(
+            "test-provider", request_model="request-model"
+        )
+        attributes = invocation._semconv_attributes
+
+        assert invocation.input_messages is None
+        assert invocation.output_messages is None
+        assert invocation.system_instruction is None
+
+        invocation.temperature = 0.7
+        invocation.response_model_name = "response-model"
+        invocation.input_tokens = 12
+        invocation.conversation_compacted = True
+        invocation._request_stream = True
+
+        assert attributes.request_temperature == 0.7
+        assert attributes.response_model == "response-model"
+        assert attributes.usage_input_tokens == 12
+        assert attributes.conversation_compacted is True
+        assert attributes.request_stream is True
+
+        attributes.request_top_k = 5
+        assert invocation.top_k == 5
+
+        invocation.stop()
+
     @patch.dict(
         os.environ,
         {

@@ -6,12 +6,16 @@ from __future__ import annotations
 import timeit
 
 from opentelemetry._logs import Logger
+from opentelemetry.util.genai._attribute import _Attribute
 from opentelemetry.util.genai._invocation import (
     Error,
     GenAIInvocation,
 )
 from opentelemetry.util.genai.completion_hook import CompletionHook
-from opentelemetry.util.genai.semconv.gen_ai import GenAiOperationName
+from opentelemetry.util.genai.semconv.gen_ai import (
+    GenAiOperationName,
+    WorkflowAttributes,
+)
 from opentelemetry.util.genai.semconv.gen_ai._metrics import _Metrics
 from opentelemetry.util.genai.semconv.gen_ai._spans import (
     InvokeWorkflowSpan,
@@ -33,6 +37,11 @@ class WorkflowInvocation(GenAIInvocation):
     Use handler.workflow(name) rather than constructing this directly.
     """
 
+    _name = _Attribute[str | None]("workflow_name")
+    conversation_id = _Attribute[str | None]()
+    input_messages = _Attribute[list[InputMessage]]()
+    output_messages = _Attribute[list[OutputMessage]]()
+
     def __init__(
         self,
         spans: _Spans,
@@ -45,6 +54,12 @@ class WorkflowInvocation(GenAIInvocation):
     ) -> None:
         """Use handler.workflow(name) rather than calling this directly."""
         _operation_name = GenAiOperationName.INVOKE_WORKFLOW.value
+        self._semconv_attributes = WorkflowAttributes(
+            operation_name=_operation_name,
+            workflow_name=name,
+            input_messages=[],
+            output_messages=[],
+        )
         super().__init__(
             spans,
             metrics,
@@ -54,26 +69,25 @@ class WorkflowInvocation(GenAIInvocation):
             span_name=f"{_operation_name} {name}" if name else _operation_name,
             content_capturing_mode=content_capturing_mode,
         )
-        self._name: str | None = name
-        self.conversation_id: str | None = None
-        self.input_messages: list[InputMessage] = []
-        self.output_messages: list[OutputMessage] = []
         self._workflow_span: InvokeWorkflowSpan = self._spans.invoke_workflow(
             self._span_name,
-            operation_name=self._operation_name,
-            workflow_name=self._name,
+            operation_name=self._semconv_attributes.operation_name,
+            workflow_name=self._semconv_attributes.workflow_name,
         )
         self._start(self._workflow_span)
 
     def _apply_finish(self, error: Error | None = None) -> None:
+        attributes = self._semconv_attributes
         if error is not None:
             self._workflow_span.set_error_details(error.type, error.message)
-            self._error_type = error.type
-        self._workflow_span.set_conversation_id(self.conversation_id)
+            attributes.error_type = error.type
+        self._workflow_span.apply(attributes)
         if self._should_capture_content_on_span:
-            self._workflow_span.set_input_messages(self.input_messages or None)
+            self._workflow_span.set_input_messages(
+                attributes.input_messages or None
+            )
             self._workflow_span.set_output_messages(
-                self.output_messages or None
+                attributes.output_messages or None
             )
         self._workflow_span.set_attributes(self.attributes)
         self._call_completion_hook(
@@ -89,8 +103,7 @@ class WorkflowInvocation(GenAIInvocation):
         )
         self._metrics.invoke_workflow_duration(
             duration_seconds,
-            error_type=self._error_type,
-            workflow_name=self._name,
+            self._semconv_attributes,
             additional_attributes=self.metric_attributes,
             context=self._span_context,
         )

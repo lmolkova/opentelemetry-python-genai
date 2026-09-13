@@ -11,7 +11,10 @@ from opentelemetry._logs import Logger
 from opentelemetry.metrics import Histogram, Meter
 from opentelemetry.test.test_base import TestBase
 from opentelemetry.trace import SpanKind, StatusCode
-from opentelemetry.util.genai.semconv.gen_ai import GenAiOperationName
+from opentelemetry.util.genai.semconv.gen_ai import (
+    GenAiOperationName,
+    InferenceAttributes,
+)
 from opentelemetry.util.genai.semconv.gen_ai._events import _Events
 from opentelemetry.util.genai.semconv.gen_ai._metrics import _Metrics
 from opentelemetry.util.genai.semconv.gen_ai._spans import _Spans
@@ -184,9 +187,11 @@ class TestMetrics(TestBase):
 
         metrics.client_operation_duration(
             1.25,
-            operation_name="custom-operation",
-            provider_name="custom-provider",
-            request_model="model",
+            InferenceAttributes(
+                operation_name="custom-operation",
+                provider_name="custom-provider",
+                request_model="model",
+            ),
             additional_attributes={
                 "custom.attribute": "value",
                 "gen_ai.request.model": "ignored",
@@ -216,7 +221,7 @@ class TestMetrics(TestBase):
             client_operation_duration_boundaries=(0.1, 1.0, 10.0),
         )
 
-        metrics.client_operation_duration(1.25, operation_name="chat")
+        metrics.client_operation_duration_explicit(1.25, operation_name="chat")
 
         meter.create_histogram.assert_called_once_with(
             "gen_ai.client.operation.duration",
@@ -235,7 +240,7 @@ class TestMetrics(TestBase):
             "gen_ai.operation.name": "ignored",
         }
 
-        metrics.client_operation_duration(
+        metrics.client_operation_duration_explicit(
             1.25,
             operation_name="chat",
             additional_attributes=additional_attributes,
