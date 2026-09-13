@@ -215,7 +215,7 @@ class TestLocalAgentInvocation(unittest.TestCase):  # pylint: disable=too-many-p
         invocation.stop()
         assert isinstance(invocation, LocalAgentInvocation)
         assert isinstance(invocation, AgentInvocation)
-        assert invocation._operation_name == "invoke_agent"
+        assert invocation._semconv_attributes.operation_name == "invoke_agent"
         assert invocation.agent_name is None
         assert invocation._request_model is None
         assert not invocation.input_messages
@@ -484,7 +484,7 @@ class TestRemoteAgentInvocation(unittest.TestCase):
         invocation.stop()
         assert isinstance(invocation, RemoteAgentInvocation)
         assert isinstance(invocation, AgentInvocation)
-        assert invocation._operation_name == "invoke_agent"
+        assert invocation._semconv_attributes.operation_name == "invoke_agent"
         assert invocation.agent_name is None
         assert invocation._request_model is None
         assert invocation.agent_id is None

@@ -122,7 +122,6 @@ class FetchResponseInvocation(GenAIInvocation):
             metrics,
             logger,
             completion_hook,
-            operation_name=operation_name,
             # The response identifier is high cardinality, so semconv keeps it
             # out of the span name.
             span_name=operation_name,

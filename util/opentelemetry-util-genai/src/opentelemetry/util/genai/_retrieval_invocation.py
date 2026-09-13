@@ -83,7 +83,6 @@ class RetrievalInvocation(GenAIInvocation):
             metrics,
             logger,
             completion_hook,
-            operation_name=_operation_name,
             span_name=f"{_operation_name} {data_source_id}"
             if data_source_id
             else _operation_name,

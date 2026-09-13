@@ -38,7 +38,9 @@ class TestWorkflowInvocation(unittest.TestCase):
         invocation = self.handler.workflow(name=None)
         invocation.stop()
         assert invocation._name is None
-        assert invocation._operation_name == "invoke_workflow"
+        assert (
+            invocation._semconv_attributes.operation_name == "invoke_workflow"
+        )
         assert not invocation.input_messages
         assert not invocation.output_messages
         assert invocation.span is not INVALID_SPAN

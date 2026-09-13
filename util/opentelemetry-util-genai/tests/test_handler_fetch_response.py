@@ -236,9 +236,7 @@ class TelemetryHandlerFetchResponseTest(_FetchResponseTestBase):
             "gpt-4o-mini",
         )
 
-        per_chunk = metrics[
-            "gen_ai.client.operation.time_per_output_chunk"
-        ]
+        per_chunk = metrics["gen_ai.client.operation.time_per_output_chunk"]
         (per_chunk_point,) = per_chunk.data.data_points
         self.assertAlmostEqual(per_chunk_point.sum, 0.15)
 

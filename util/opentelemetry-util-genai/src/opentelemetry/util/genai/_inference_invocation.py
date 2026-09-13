@@ -141,7 +141,6 @@ class InferenceInvocation(GenAIInvocation):
             metrics,
             logger,
             completion_hook,
-            operation_name=operation_name,
             span_name=f"{operation_name} {request_model}"
             if request_model
             else operation_name,

@@ -87,7 +87,6 @@ class ToolInvocation(GenAIInvocation):
             metrics,
             logger,
             completion_hook,
-            operation_name=_operation_name,
             span_name=f"{_operation_name} {name}" if name else _operation_name,
             content_capturing_mode=content_capturing_mode,
         )

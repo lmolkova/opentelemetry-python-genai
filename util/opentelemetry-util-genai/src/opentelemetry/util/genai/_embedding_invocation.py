@@ -64,7 +64,6 @@ class EmbeddingInvocation(GenAIInvocation):
             metrics,
             logger,
             completion_hook,
-            operation_name=_operation_name,
             span_name=f"{_operation_name} {request_model}"
             if request_model
             else _operation_name,

@@ -225,7 +225,9 @@ class TelemetryHandlerWorkflowContextManagerTest(_WorkflowTestBase):
         with self.handler.workflow() as inv:
             self.assertIsInstance(inv, WorkflowInvocation)
             self.assertIsNone(inv._name)
-            self.assertEqual(inv._operation_name, "invoke_workflow")
+            self.assertEqual(
+                inv._semconv_attributes.operation_name, "invoke_workflow"
+            )
 
 
 class TelemetryHandlerWorkflowSamplingTest(_WorkflowTestBase):

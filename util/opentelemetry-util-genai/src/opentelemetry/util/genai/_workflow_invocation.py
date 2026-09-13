@@ -57,15 +57,12 @@ class WorkflowInvocation(GenAIInvocation):
         self._semconv_attributes = WorkflowAttributes(
             operation_name=_operation_name,
             workflow_name=name,
-            input_messages=[],
-            output_messages=[],
         )
         super().__init__(
             spans,
             metrics,
             logger,
             completion_hook,
-            operation_name=_operation_name,
             span_name=f"{_operation_name} {name}" if name else _operation_name,
             content_capturing_mode=content_capturing_mode,
         )

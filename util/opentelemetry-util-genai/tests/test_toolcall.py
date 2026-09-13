@@ -89,7 +89,7 @@ def test_toolcall_operation_name():
     """ToolInvocation operation_name is fixed to execute_tool"""
     handler = _make_handler()
     tc = handler.tool("my_tool")
-    assert tc._operation_name == "execute_tool"
+    assert tc._semconv_attributes.operation_name == "execute_tool"
     tc.stop()
 
 

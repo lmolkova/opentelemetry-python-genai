@@ -59,7 +59,6 @@ class GenAIInvocation(AbstractContextManager["GenAIInvocation"]):
         metrics: _Metrics,
         logger: Logger,
         completion_hook: CompletionHook,
-        operation_name: str,
         span_name: str,
         attributes: dict[str, AttributeValue] | None = None,
         metric_attributes: dict[str, AttributeValue] | None = None,
@@ -72,7 +71,6 @@ class GenAIInvocation(AbstractContextManager["GenAIInvocation"]):
         self._events = _Events(logger)
         self._completion_hook = completion_hook
         self._error_type_resolver = error_type_resolver
-        self._operation_name: str = operation_name
         self._content_capturing_mode: ContentCapturingMode = (
             get_content_capturing_mode()
             if content_capturing_mode is None
@@ -86,7 +84,6 @@ class GenAIInvocation(AbstractContextManager["GenAIInvocation"]):
             {} if metric_attributes is None else metric_attributes
         )
         """Additional attributes to set on metrics. Must be low cardinality. Not set on spans or events."""
-        self._error_type: str | None = None
         self.span: Span = _INVALID_SPAN
         self._span_context: Context
         self._span_name: str = span_name

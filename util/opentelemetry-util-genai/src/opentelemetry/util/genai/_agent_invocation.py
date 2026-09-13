@@ -88,7 +88,6 @@ class AgentInvocation(GenAIInvocation, ABC):
             metrics,
             logger,
             completion_hook,
-            operation_name=semconv_attributes.operation_name,
             span_name=(
                 f"{semconv_attributes.operation_name} {semconv_attributes.agent_name}"
                 if semconv_attributes.agent_name
@@ -164,9 +163,6 @@ class LocalAgentInvocation(AgentInvocation):
             operation_name=operation_name,
             request_model=request_model,
             agent_name=agent_name,
-            input_messages=[],
-            output_messages=[],
-            system_instructions=[],
         )
         super().__init__(
             spans,
@@ -259,9 +255,6 @@ class RemoteAgentInvocation(AgentInvocation):
             agent_name=agent_name,
             agent_id=agent_id,
             agent_version=agent_version,
-            input_messages=[],
-            output_messages=[],
-            system_instructions=[],
         )
         super().__init__(
             spans,

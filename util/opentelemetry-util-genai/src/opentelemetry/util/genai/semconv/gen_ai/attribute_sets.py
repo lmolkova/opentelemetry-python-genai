@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from opentelemetry.util.genai.semconv.gen_ai.attributes import (
     GenAiOperationName,
@@ -152,9 +152,15 @@ class LocalAgentAttributes:
     response_finish_reasons: Sequence[str] | None = None
     usage_input_tokens: int | None = None
     usage_output_tokens: int | None = None
-    input_messages: Sequence[InputMessage] | None = None
-    output_messages: Sequence[OutputMessage] | None = None
-    system_instructions: Sequence[SystemInstructionPart] | None = None
+    input_messages: Sequence[InputMessage] = field(
+        default_factory=list[InputMessage]
+    )
+    output_messages: Sequence[OutputMessage] = field(
+        default_factory=list[OutputMessage]
+    )
+    system_instructions: Sequence[SystemInstructionPart] = field(
+        default_factory=list[SystemInstructionPart]
+    )
     tool_definitions: Sequence[ToolDefinition] | None = None
     error_type: str | None = None
 
@@ -192,9 +198,15 @@ class RemoteAgentAttributes:
     usage_output_tokens: int | None = None
     usage_cache_write_input_tokens: int | None = None
     usage_cache_read_input_tokens: int | None = None
-    input_messages: Sequence[InputMessage] | None = None
-    output_messages: Sequence[OutputMessage] | None = None
-    system_instructions: Sequence[SystemInstructionPart] | None = None
+    input_messages: Sequence[InputMessage] = field(
+        default_factory=list[InputMessage]
+    )
+    output_messages: Sequence[OutputMessage] = field(
+        default_factory=list[OutputMessage]
+    )
+    system_instructions: Sequence[SystemInstructionPart] = field(
+        default_factory=list[SystemInstructionPart]
+    )
     tool_definitions: Sequence[ToolDefinition] | None = None
     error_type: str | None = None
 
@@ -221,8 +233,12 @@ class WorkflowAttributes:
     operation_name: GenAiOperationName | str
     workflow_name: str | None = None
     conversation_id: str | None = None
-    input_messages: Sequence[InputMessage] | None = None
-    output_messages: Sequence[OutputMessage] | None = None
+    input_messages: Sequence[InputMessage] = field(
+        default_factory=list[InputMessage]
+    )
+    output_messages: Sequence[OutputMessage] = field(
+        default_factory=list[OutputMessage]
+    )
     error_type: str | None = None
 
 
