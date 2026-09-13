@@ -70,16 +70,11 @@ class WorkflowInvocation(GenAIInvocation):
             self._workflow_span.set_error_details(error.type, error.message)
             self._error_type = error.type
         self._workflow_span.set_conversation_id(self.conversation_id)
-        self._workflow_span.set_input_messages(
-            (self.input_messages or None)
-            if self._should_capture_content_on_span
-            else None
-        )
-        self._workflow_span.set_output_messages(
-            (self.output_messages or None)
-            if self._should_capture_content_on_span
-            else None
-        )
+        if self._should_capture_content_on_span:
+            self._workflow_span.set_input_messages(self.input_messages or None)
+            self._workflow_span.set_output_messages(
+                self.output_messages or None
+            )
         self._workflow_span.set_attributes(self.attributes)
         self._call_completion_hook(
             inputs=self.input_messages,

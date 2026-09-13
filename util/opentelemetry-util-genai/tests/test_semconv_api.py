@@ -7,10 +7,12 @@ import json
 from collections import ChainMap
 from unittest.mock import MagicMock
 
+from opentelemetry._logs import Logger
 from opentelemetry.metrics import Histogram, Meter
 from opentelemetry.test.test_base import TestBase
 from opentelemetry.trace import SpanKind, StatusCode
 from opentelemetry.util.genai.semconv.gen_ai import GenAiOperationName
+from opentelemetry.util.genai.semconv.gen_ai._events import _Events
 from opentelemetry.util.genai.semconv.gen_ai._metrics import _Metrics
 from opentelemetry.util.genai.semconv.gen_ai._spans import _Spans
 from opentelemetry.util.genai.types import InputMessage, TextPart
@@ -113,6 +115,59 @@ class TestSpans(TestBase):
         assert recorded.status.description == "rate limited"
         assert recorded.attributes is not None
         assert recorded.attributes["error.type"] == "429"
+
+
+class TestEvents:
+    def test_client_inference_operation_details(self) -> None:
+        logger = MagicMock(spec=Logger)
+        events = _Events(logger)
+        event = events.client_inference_operation_details(
+            operation_name=GenAiOperationName.CHAT,
+            provider_name="custom-provider",
+            request_model="model",
+            request_temperature=0.7,
+            input_messages=[
+                InputMessage(role="user", parts=[TextPart(content="hello")])
+            ],
+            error_type="custom-error",
+            additional_attributes={"custom.attribute": "value"},
+        )
+
+        event.emit()
+
+        logger.emit.assert_called_once_with(event.log_record)
+        attributes = event.log_record.attributes
+        assert attributes is not None
+        assert attributes["gen_ai.operation.name"] == "chat"
+        assert attributes["gen_ai.provider.name"] == "custom-provider"
+        assert attributes["gen_ai.request.model"] == "model"
+        assert attributes["gen_ai.request.temperature"] == 0.7
+        assert attributes["gen_ai.input.messages"] == [
+            {
+                "role": "user",
+                "parts": [{"content": "hello", "type": "text"}],
+                "name": None,
+            }
+        ]
+        assert attributes["error.type"] == "custom-error"
+        assert attributes["custom.attribute"] == "value"
+
+    def test_event_omits_none(self) -> None:
+        event = _Events(
+            MagicMock(spec=Logger)
+        ).client_inference_operation_details(
+            operation_name="chat",
+            provider_name="custom-provider",
+            response_model="model",
+            request_temperature=None,
+            input_messages=None,
+        )
+
+        attributes = event.log_record.attributes
+        assert attributes is not None
+        assert attributes["gen_ai.response.model"] == "model"
+        assert "gen_ai.request.temperature" not in attributes
+        assert "gen_ai.input.messages" not in attributes
 
 
 class TestMetrics(TestBase):

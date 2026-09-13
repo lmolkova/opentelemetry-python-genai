@@ -177,19 +177,14 @@ class FetchResponseInvocation(GenAIInvocation):
         span.set_response_finish_reasons(self.finish_reasons or None)
         span.set_response_model(self.response_model_name)
         span.set_response_status(self.response_status)
-        span.set_output_messages(
-            (self.output_messages or None)
-            if self._should_capture_content_on_span
-            else None
-        )
-        span.set_system_instructions(
-            cast(
-                "Sequence[SystemInstructionPart] | None",
-                (self.system_instruction or None)
-                if self._should_capture_content_on_span
-                else None,
+        if self._should_capture_content_on_span:
+            span.set_output_messages(self.output_messages or None)
+            span.set_system_instructions(
+                cast(
+                    "Sequence[SystemInstructionPart] | None",
+                    self.system_instruction or None,
+                )
             )
-        )
         span.set_tool_definitions(self.tool_definitions)
         span.set_attributes(self.attributes)
         duration_seconds = max(

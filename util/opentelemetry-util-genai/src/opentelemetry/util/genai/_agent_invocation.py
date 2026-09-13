@@ -125,24 +125,15 @@ class AgentInvocation(GenAIInvocation, ABC):
         span.set_response_finish_reasons(self.finish_reasons or None)
         span.set_usage_input_tokens(self.input_tokens)
         span.set_usage_output_tokens(self.output_tokens)
-        span.set_input_messages(
-            (self.input_messages or None)
-            if self._should_capture_content_on_span
-            else None
-        )
-        span.set_output_messages(
-            (self.output_messages or None)
-            if self._should_capture_content_on_span
-            else None
-        )
-        span.set_system_instructions(
-            cast(
-                "Sequence[SystemInstructionPart] | None",
-                (self.system_instruction or None)
-                if self._should_capture_content_on_span
-                else None,
+        if self._should_capture_content_on_span:
+            span.set_input_messages(self.input_messages or None)
+            span.set_output_messages(self.output_messages or None)
+            span.set_system_instructions(
+                cast(
+                    "Sequence[SystemInstructionPart] | None",
+                    self.system_instruction or None,
+                )
             )
-        )
         span.set_tool_definitions(self.tool_definitions)
         span.set_attributes(self.attributes)
         self._call_completion_hook(

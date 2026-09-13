@@ -90,15 +90,9 @@ class RetrievalInvocation(GenAIInvocation):
             self._retrieval_span.set_error_details(error.type, error.message)
             self._error_type = error.type
         self._retrieval_span.set_retrieval_top_k(self.top_k)
-        capture_content = (
-            self.span.is_recording() and self._should_capture_content_on_span
-        )
-        self._retrieval_span.set_retrieval_query_text(
-            self.query_text if capture_content else None
-        )
-        self._retrieval_span.set_retrieval_documents(
-            self.documents if capture_content else None
-        )
+        if self.span.is_recording() and self._should_capture_content_on_span:
+            self._retrieval_span.set_retrieval_query_text(self.query_text)
+            self._retrieval_span.set_retrieval_documents(self.documents)
         self._retrieval_span.set_attributes(self.attributes)
         duration_seconds = max(
             timeit.default_timer() - self._monotonic_start_s,

@@ -8,24 +8,19 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import cast
 
-from opentelemetry._logs import Logger, LogRecord
-from opentelemetry.semconv.attributes import (
-    error_attributes,
-    server_attributes,
-)
+from opentelemetry._logs import Logger
 from opentelemetry.trace import INVALID_SPAN, Span, Tracer
 from opentelemetry.util.genai._invocation import (
     Error,
     GenAIInvocation,
-    get_content_attributes,
 )
 from opentelemetry.util.genai.completion_hook import CompletionHook
 from opentelemetry.util.genai.semconv.gen_ai import (
     GenAiOperationName,
     GenAiTokenType,
 )
-from opentelemetry.util.genai.semconv.gen_ai import (
-    attributes as Attr,
+from opentelemetry.util.genai.semconv.gen_ai._events import (
+    ClientInferenceOperationDetailsEvent,
 )
 from opentelemetry.util.genai.semconv.gen_ai._metrics import _Metrics
 from opentelemetry.util.genai.semconv.gen_ai._spans import (
@@ -205,17 +200,6 @@ class InferenceInvocation(GenAIInvocation):
             context=self._span_context,
         )
 
-    def _get_event_message_attributes(self) -> dict[str, AttributeValue]:
-        return get_content_attributes(
-            input_messages=self.input_messages,
-            output_messages=self.output_messages,
-            system_instruction=self.system_instruction,
-            tool_definitions=self.tool_definitions,
-            prompt_variables=self.prompt_variables,
-            for_span=False,
-            content_capturing_mode=self._content_capturing_mode,
-        )
-
     def _get_finish_reasons(self) -> list[str] | None:
         if self.finish_reasons is not None:
             return self.finish_reasons or None
@@ -227,114 +211,6 @@ class InferenceInvocation(GenAIInvocation):
             ]
             return reasons or None
         return None
-
-    def _get_event_start_attributes(self) -> dict[str, AttributeValue]:
-        optional_attrs = (
-            (Attr.GEN_AI_REQUEST_MODEL, self._request_model),
-            (Attr.GEN_AI_PROVIDER_NAME, self._provider),
-            (server_attributes.SERVER_ADDRESS, self._server_address),
-            (server_attributes.SERVER_PORT, self._server_port),
-        )
-        return {
-            Attr.GEN_AI_OPERATION_NAME: self._operation_name,
-            **{k: v for k, v in optional_attrs if v is not None},
-        }
-
-    def _get_event_attributes(self) -> dict[str, AttributeValue]:
-        attrs: dict[str, AttributeValue] = {}
-        optional_attrs = (
-            (Attr.GEN_AI_CONVERSATION_ID, self.conversation_id),
-            (Attr.GEN_AI_REQUEST_STREAM, self._request_stream),
-            (Attr.GEN_AI_REQUEST_TEMPERATURE, self.temperature),
-            (Attr.GEN_AI_REQUEST_TOP_P, self.top_p),
-            (Attr.GEN_AI_REQUEST_TOP_K, self.top_k),
-            (Attr.GEN_AI_REQUEST_FREQUENCY_PENALTY, self.frequency_penalty),
-            (Attr.GEN_AI_REQUEST_PRESENCE_PENALTY, self.presence_penalty),
-            (Attr.GEN_AI_REQUEST_MAX_TOKENS, self.max_tokens),
-            (Attr.GEN_AI_REQUEST_STOP_SEQUENCES, self.stop_sequences),
-            (Attr.GEN_AI_REQUEST_SEED, self.seed),
-            (Attr.GEN_AI_RESPONSE_FINISH_REASONS, self._get_finish_reasons()),
-            (Attr.GEN_AI_RESPONSE_MODEL, self.response_model_name),
-            (Attr.GEN_AI_RESPONSE_ID, self.response_id),
-            (Attr.GEN_AI_USAGE_INPUT_TOKENS, self.input_tokens),
-            (Attr.GEN_AI_USAGE_OUTPUT_TOKENS, self.output_tokens),
-            (Attr.GEN_AI_REQUEST_CHOICE_COUNT, self.request_choice_count),
-            (Attr.GEN_AI_OUTPUT_TYPE, self.output_type),
-            (
-                Attr.GEN_AI_USAGE_CACHE_WRITE_INPUT_TOKENS,
-                self.cache_write_input_tokens or None,
-            ),
-            (
-                Attr.GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS,
-                self.cache_read_input_tokens or None,
-            ),
-            (
-                Attr.GEN_AI_USAGE_REASONING_OUTPUT_TOKENS,
-                self.thinking_tokens or None,
-            ),
-            (
-                Attr.GEN_AI_USAGE_TEXT_INPUT_TOKENS,
-                self.text_input_tokens or None,
-            ),
-            (
-                Attr.GEN_AI_USAGE_IMAGE_INPUT_TOKENS,
-                self.image_input_tokens or None,
-            ),
-            (
-                Attr.GEN_AI_USAGE_AUDIO_INPUT_TOKENS,
-                self.audio_input_tokens or None,
-            ),
-            (
-                Attr.GEN_AI_USAGE_TEXT_OUTPUT_TOKENS,
-                self.text_output_tokens or None,
-            ),
-            (
-                Attr.GEN_AI_USAGE_IMAGE_OUTPUT_TOKENS,
-                self.image_output_tokens or None,
-            ),
-            (
-                Attr.GEN_AI_USAGE_AUDIO_OUTPUT_TOKENS,
-                self.audio_output_tokens or None,
-            ),
-            (
-                Attr.GEN_AI_USAGE_TEXT_CACHE_READ_INPUT_TOKENS,
-                self.text_cache_read_input_tokens or None,
-            ),
-            (
-                Attr.GEN_AI_USAGE_IMAGE_CACHE_READ_INPUT_TOKENS,
-                self.image_cache_read_input_tokens or None,
-            ),
-            (
-                Attr.GEN_AI_USAGE_AUDIO_CACHE_READ_INPUT_TOKENS,
-                self.audio_cache_read_input_tokens or None,
-            ),
-            (
-                Attr.GEN_AI_REQUEST_REASONING_LEVEL,
-                self.reasoning_level,
-            ),
-            (
-                Attr.GEN_AI_REQUEST_PREVIOUS_RESPONSE_ID,
-                self.previous_response_id,
-            ),
-            (
-                Attr.GEN_AI_CONVERSATION_COMPACTED,
-                True if self.conversation_compacted else None,
-            ),
-            (
-                Attr.GEN_AI_PROMPT_NAME,
-                self.prompt_name,
-            ),
-            (
-                Attr.GEN_AI_PROMPT_VERSION,
-                self.prompt_version,
-            ),
-            (
-                Attr.GEN_AI_RESPONSE_TIME_TO_FIRST_CHUNK,
-                self._ttfc_seconds,
-            ),
-        )
-        attrs.update({k: v for k, v in optional_attrs if v is not None})
-        return attrs
 
     def _apply_finish(self, error: Error | None = None) -> None:
         span = self._inference_span
@@ -388,33 +264,24 @@ class InferenceInvocation(GenAIInvocation):
         span.set_prompt_name(self.prompt_name)
         span.set_prompt_version(self.prompt_version)
         span.set_response_time_to_first_chunk(self._ttfc_seconds)
-        span.set_input_messages(
-            (self.input_messages or None)
-            if self._should_capture_content_on_span
-            else None
-        )
-        span.set_output_messages(
-            (self.output_messages or None)
-            if self._should_capture_content_on_span
-            else None
-        )
-        span.set_system_instructions(
-            cast(
-                "Sequence[SystemInstructionPart] | None",
-                (self.system_instruction or None)
-                if self._should_capture_content_on_span
-                else None,
-            )
-        )
-        span.set_tool_definitions(self.tool_definitions)
-        if self._should_capture_content_on_span and self.prompt_variables:
-            for name, value in self.prompt_variables.items():
-                span.set_prompt_variable(
-                    name,
-                    value
-                    if isinstance(value, str)
-                    else gen_ai_json_dumps(value),
+        if self._should_capture_content_on_span:
+            span.set_input_messages(self.input_messages or None)
+            span.set_output_messages(self.output_messages or None)
+            span.set_system_instructions(
+                cast(
+                    "Sequence[SystemInstructionPart] | None",
+                    self.system_instruction or None,
                 )
+            )
+            if self.prompt_variables:
+                for name, value in self.prompt_variables.items():
+                    span.set_prompt_variable(
+                        name,
+                        value
+                        if isinstance(value, str)
+                        else gen_ai_json_dumps(value),
+                    )
+        span.set_tool_definitions(self.tool_definitions)
         span.set_attributes(self.attributes)
         duration_seconds = max(
             timeit.default_timer() - self._monotonic_start_s,
@@ -458,7 +325,8 @@ class InferenceInvocation(GenAIInvocation):
                 additional_attributes=self.metric_attributes,
                 context=self._span_context,
             )
-        log_record = self._maybe_create_event()
+        event = self._maybe_create_event()
+        log_record = event.log_record if event is not None else None
         self._call_completion_hook(
             inputs=self.input_messages,
             outputs=self.output_messages,
@@ -466,10 +334,12 @@ class InferenceInvocation(GenAIInvocation):
             tool_definitions=self.tool_definitions,
             log_record=log_record,
         )
-        if log_record is not None:
-            self._logger.emit(log_record)
+        if event is not None:
+            event.emit()
 
-    def _maybe_create_event(self) -> LogRecord | None:
+    def _maybe_create_event(
+        self,
+    ) -> ClientInferenceOperationDetailsEvent | None:
         """Emit a gen_ai.client.inference.operation.details event.
 
         For more details, see the semantic convention documentation:
@@ -478,15 +348,79 @@ class InferenceInvocation(GenAIInvocation):
         if not should_emit_event():
             return None
 
-        attributes = self._get_event_start_attributes()
-        attributes.update(self._get_event_attributes())
-        attributes.update(self._get_event_message_attributes())
-        if self._error_type is not None:
-            attributes[error_attributes.ERROR_TYPE] = self._error_type
-        attributes.update(self.attributes)
-        return LogRecord(
-            event_name="gen_ai.client.inference.operation.details",
-            attributes=attributes,
+        input_messages = None
+        output_messages = None
+        system_instructions = None
+        prompt_variables = None
+        if self._should_capture_content_on_event:
+            input_messages = self.input_messages or None
+            output_messages = self.output_messages or None
+            system_instructions = cast(
+                "Sequence[SystemInstructionPart] | None",
+                self.system_instruction or None,
+            )
+            if self.prompt_variables:
+                prompt_variables = {
+                    name: value
+                    if isinstance(value, str)
+                    else gen_ai_json_dumps(value)
+                    for name, value in self.prompt_variables.items()
+                }
+
+        return self._events.client_inference_operation_details(
+            operation_name=self._operation_name,
+            provider_name=self._provider,
+            request_model=self._request_model,
+            server_address=self._server_address,
+            server_port=self._server_port,
+            conversation_id=self.conversation_id,
+            request_stream=self._request_stream,
+            request_temperature=self.temperature,
+            request_top_p=self.top_p,
+            request_top_k=self.top_k,
+            request_frequency_penalty=self.frequency_penalty,
+            request_presence_penalty=self.presence_penalty,
+            request_max_tokens=self.max_tokens,
+            request_stop_sequences=self.stop_sequences,
+            request_seed=self.seed,
+            response_finish_reasons=self._get_finish_reasons(),
+            response_model=self.response_model_name,
+            response_id=self.response_id,
+            usage_input_tokens=self.input_tokens,
+            usage_output_tokens=self.output_tokens,
+            request_choice_count=self.request_choice_count,
+            output_type=self.output_type,
+            usage_cache_write_input_tokens=self.cache_write_input_tokens
+            or None,
+            usage_cache_read_input_tokens=self.cache_read_input_tokens or None,
+            usage_reasoning_output_tokens=self.thinking_tokens or None,
+            usage_text_input_tokens=self.text_input_tokens or None,
+            usage_image_input_tokens=self.image_input_tokens or None,
+            usage_audio_input_tokens=self.audio_input_tokens or None,
+            usage_text_output_tokens=self.text_output_tokens or None,
+            usage_image_output_tokens=self.image_output_tokens or None,
+            usage_audio_output_tokens=self.audio_output_tokens or None,
+            usage_text_cache_read_input_tokens=self.text_cache_read_input_tokens
+            or None,
+            usage_image_cache_read_input_tokens=self.image_cache_read_input_tokens
+            or None,
+            usage_audio_cache_read_input_tokens=self.audio_cache_read_input_tokens
+            or None,
+            request_reasoning_level=self.reasoning_level,
+            request_previous_response_id=self.previous_response_id,
+            conversation_compacted=True
+            if self.conversation_compacted
+            else None,
+            prompt_name=self.prompt_name,
+            prompt_version=self.prompt_version,
+            prompt_variables=prompt_variables,
+            response_time_to_first_chunk=self._ttfc_seconds,
+            input_messages=input_messages,
+            output_messages=output_messages,
+            system_instructions=system_instructions,
+            tool_definitions=self.tool_definitions,
+            error_type=self._error_type,
+            additional_attributes=self.attributes,
             context=self._span_context,
         )
 

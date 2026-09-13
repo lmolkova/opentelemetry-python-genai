@@ -106,12 +106,9 @@ class ToolInvocation(GenAIInvocation):
             self._error_type = error.type
         self._tool_span.set_tool_call_id(self.tool_call_id)
         self._tool_span.set_tool_description(self.tool_description)
-        self._tool_span.set_tool_call_arguments(
-            self.arguments if self._should_capture_content_on_span else None
-        )
-        self._tool_span.set_tool_call_result(
-            self.tool_result if self._should_capture_content_on_span else None
-        )
+        if self._should_capture_content_on_span:
+            self._tool_span.set_tool_call_arguments(self.arguments)
+            self._tool_span.set_tool_call_result(self.tool_result)
         self._tool_span.set_attributes(self.attributes)
         self._record_metrics()
 

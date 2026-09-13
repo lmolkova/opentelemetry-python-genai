@@ -5,12 +5,10 @@ from __future__ import annotations
 
 import timeit
 from abc import abstractmethod
-from collections.abc import Mapping, Sequence
 from contextlib import AbstractContextManager
 from contextvars import Token
-from dataclasses import asdict
 from types import TracebackType
-from typing import Any, TypeAlias, cast
+from typing import TypeAlias, cast
 
 from typing_extensions import Self
 
@@ -22,7 +20,7 @@ from opentelemetry.util.genai.completion_hook import (
     CompletionHook,
     _NoOpCompletionHook,
 )
-from opentelemetry.util.genai.semconv.gen_ai import attributes as Attr
+from opentelemetry.util.genai.semconv.gen_ai._events import _Events
 from opentelemetry.util.genai.semconv.gen_ai._metrics import _Metrics
 from opentelemetry.util.genai.semconv.gen_ai._span import GenAISpan
 from opentelemetry.util.genai.semconv.gen_ai._spans import _Spans
@@ -37,7 +35,6 @@ from opentelemetry.util.genai.types import (
 )
 from opentelemetry.util.genai.utils import (
     ContentCapturingMode,
-    gen_ai_json_dumps,
     get_content_capturing_mode,
 )
 from opentelemetry.util.types import AttributeValue
@@ -72,7 +69,7 @@ class GenAIInvocation(AbstractContextManager["GenAIInvocation"]):
     ) -> None:
         self._spans = spans
         self._metrics: _Metrics = metrics
-        self._logger = logger
+        self._events = _Events(logger)
         self._completion_hook = completion_hook
         self._error_type_resolver = error_type_resolver
         self._operation_name: str = operation_name
@@ -109,6 +106,13 @@ class GenAIInvocation(AbstractContextManager["GenAIInvocation"]):
     def _should_capture_content_on_span(self) -> bool:
         return self._content_capturing_mode in (
             ContentCapturingMode.SPAN_ONLY,
+            ContentCapturingMode.SPAN_AND_EVENT,
+        )
+
+    @property
+    def _should_capture_content_on_event(self) -> bool:
+        return self._content_capturing_mode in (
+            ContentCapturingMode.EVENT_ONLY,
             ContentCapturingMode.SPAN_AND_EVENT,
         )
 
@@ -188,84 +192,3 @@ class GenAIInvocation(AbstractContextManager["GenAIInvocation"]):
             self.fail(exc_value)
         else:
             self.stop()
-
-
-def get_content_attributes(
-    *,
-    input_messages: Sequence[InputMessage],
-    output_messages: Sequence[OutputMessage],
-    system_instruction: Sequence[SystemInstructionPart | MessagePart],
-    tool_definitions: Sequence[ToolDefinition] | None,
-    prompt_variables: Mapping[str, object] | None = None,
-    for_span: bool,
-    content_capturing_mode: ContentCapturingMode | None = None,
-) -> dict[str, Any]:
-    """Serialize messages, system instructions, and tool definitions into attributes.
-
-    Args:
-        input_messages: Input messages to serialize.
-        output_messages: Output messages to serialize.
-        system_instruction: System instructions to serialize. Passing ``MessagePart``
-            is deprecated; use ``SystemInstructionPart``.
-        tool_definitions: Tool definitions to serialize (may be None).
-        prompt_variables: Prompt template variables to serialize (may be None).
-        for_span: If True, serialize for span attributes (JSON string);
-                  if False, serialize for event attributes (list of dicts).
-        content_capturing_mode: Configured content capturing mode; if None,
-                                reads from environment.
-    """
-    mode = (
-        get_content_capturing_mode()
-        if content_capturing_mode is None
-        else content_capturing_mode
-    )
-    allowed_modes = (
-        (
-            ContentCapturingMode.SPAN_ONLY,
-            ContentCapturingMode.SPAN_AND_EVENT,
-        )
-        if for_span
-        else (
-            ContentCapturingMode.EVENT_ONLY,
-            ContentCapturingMode.SPAN_AND_EVENT,
-        )
-    )
-
-    def serialize(items: Sequence[Any]) -> Any:
-        dicts = [asdict(item) for item in items]
-        return gen_ai_json_dumps(dicts) if for_span else dicts
-
-    # Tool definitions are always captured, the sem conv recommends adding params / description only
-    # when the content capture mode is set..
-    if mode not in allowed_modes:
-        return (
-            {Attr.GEN_AI_TOOL_DEFINITIONS: serialize(tool_definitions)}
-            if tool_definitions
-            else {}
-        )
-
-    optional_attrs = (
-        (
-            Attr.GEN_AI_INPUT_MESSAGES,
-            serialize(input_messages) if input_messages else None,
-        ),
-        (
-            Attr.GEN_AI_OUTPUT_MESSAGES,
-            serialize(output_messages) if output_messages else None,
-        ),
-        (
-            Attr.GEN_AI_SYSTEM_INSTRUCTIONS,
-            serialize(system_instruction) if system_instruction else None,
-        ),
-        (
-            Attr.GEN_AI_TOOL_DEFINITIONS,
-            serialize(tool_definitions) if tool_definitions else None,
-        ),
-    )
-    result = {key: value for key, value in optional_attrs if value is not None}
-    if prompt_variables:
-        for k, v in prompt_variables.items():
-            result[f"{Attr.GEN_AI_PROMPT_VARIABLE}.{k}"] = (
-                v if isinstance(v, str) else gen_ai_json_dumps(v)
-            )
-    return result
