@@ -619,6 +619,67 @@ def test_beta_accumulate_failure_disables_beta_and_falls_back_to_standard(
     assert wrapper._self_beta_accumulation_disabled
 
 
+def test_beta_accumulate_failure_does_not_disable_standard_accumulation(
+    monkeypatch,
+):
+    from anthropic.types import Message, RawMessageStartEvent, Usage
+    from anthropic.types.beta import BetaRawContentBlockDeltaEvent
+
+    from opentelemetry.instrumentation.genai.anthropic import wrappers
+
+    monkeypatch.setattr(wrappers, "_accumulation_disabled", False)
+
+    out_of_order_beta_event = BetaRawContentBlockDeltaEvent(
+        type="content_block_delta",
+        index=0,
+        delta={"type": "text_delta", "text": "hello"},
+    )
+    bad_beta_wrapper = _make_stream_wrapper(
+        _FakeSyncStream(events=[out_of_order_beta_event]), is_beta=True
+    )
+    list(bad_beta_wrapper)
+
+    valid_start_event = RawMessageStartEvent(
+        type="message_start",
+        message=Message(
+            id="msg_std_123",
+            type="message",
+            role="assistant",
+            model="claude-sonnet-4-6",
+            content=[],
+            stop_reason="end_turn",
+            usage=Usage(input_tokens=10, output_tokens=5),
+        ),
+    )
+    standard_invocation = _make_invocation()
+    standard_wrapper = MessagesStreamWrapper(
+        stream=_FakeSyncStream(events=[valid_start_event]),
+        invocation=standard_invocation,
+        capture_content=True,
+        is_beta=False,
+    )
+    list(standard_wrapper)
+    standard_wrapper.close()
+
+    assert not wrappers._accumulation_disabled
+    assert standard_invocation.response_id == "msg_std_123"
+
+
+def test_stream_wrapper_preserves_none_response():
+    class _StreamWithNoneResponse:
+        response = None
+
+        def __iter__(self):
+            return iter([])
+
+        def close(self):
+            pass
+
+    wrapper = _make_stream_wrapper(_StreamWithNoneResponse(), is_beta=True)
+
+    assert wrapper.response is None
+
+
 @pytest.mark.asyncio
 async def test_async_stream_wrapper_accumulate_event_failure_logs_warning_and_disables(
     monkeypatch, caplog

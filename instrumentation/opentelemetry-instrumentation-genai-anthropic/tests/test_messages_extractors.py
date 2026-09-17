@@ -378,3 +378,24 @@ def test_beta_server_tool_parts_have_semconv_serialized_shape():
             "type": "server_tool_call_response",
         },
     ]
+
+
+def test_convert_beta_block_pydantic_v1_dict():
+    class _PydanticV1BetaServerToolUseBlock:
+        def dict(self, **kwargs):
+            return {
+                "type": "server_tool_use",
+                "id": "srv_1",
+                "name": "web_search",
+                "input": {"query": "opentelemetry"},
+            }
+
+    part = _convert_content_block_to_part(_PydanticV1BetaServerToolUseBlock())
+
+    assert isinstance(part, ServerToolCallPart)
+    assert part.id == "srv_1"
+    assert part.name == "web_search"
+    assert part.server_tool_call == {
+        "type": "server_tool_use",
+        "arguments": {"query": "opentelemetry"},
+    }
