@@ -112,9 +112,7 @@ def test_convert_beta_mcp_tool_result_block_serializable():
     assert isinstance(part, ServerToolCallResponsePart)
     assert part.id == "tool_123"
     assert part.server_tool_call_response == {
-        "content": [
-            {"citations": None, "text": "tool output", "type": "text"}
-        ],
+        "content": [{"text": "tool output", "type": "text"}],
         "is_error": False,
         "type": "mcp_tool_result",
     }
@@ -382,13 +380,17 @@ def test_beta_server_tool_parts_have_semconv_serialized_shape():
 
 def test_convert_beta_block_pydantic_v1_dict():
     class _PydanticV1BetaServerToolUseBlock:
-        def dict(self, **kwargs):
-            return {
+        def dict(self, *, exclude_none=False, **kwargs):
+            data = {
                 "type": "server_tool_use",
                 "id": "srv_1",
                 "name": "web_search",
                 "input": {"query": "opentelemetry"},
+                "caller": None,
             }
+            if exclude_none:
+                return {k: v for k, v in data.items() if v is not None}
+            return data
 
     part = _convert_content_block_to_part(_PydanticV1BetaServerToolUseBlock())
 
@@ -398,4 +400,27 @@ def test_convert_beta_block_pydantic_v1_dict():
     assert part.server_tool_call == {
         "type": "server_tool_use",
         "arguments": {"query": "opentelemetry"},
+    }
+
+
+def test_convert_beta_block_excludes_none_fields():
+    class _BetaToolResultBlock:
+        def model_dump(self, *, exclude_none=False):
+            data = {
+                "type": "mcp_tool_result",
+                "tool_use_id": "call_1",
+                "content": "result",
+                "is_error": None,
+            }
+            if exclude_none:
+                return {k: v for k, v in data.items() if v is not None}
+            return data
+
+    part = _convert_content_block_to_part(_BetaToolResultBlock())
+
+    assert isinstance(part, ServerToolCallResponsePart)
+    assert part.id == "call_1"
+    assert part.server_tool_call_response == {
+        "type": "mcp_tool_result",
+        "content": "result",
     }

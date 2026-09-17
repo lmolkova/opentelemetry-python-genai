@@ -272,9 +272,12 @@ def _convert_content_block_to_part(
         )
         return ReasoningPart(content=content)
 
-    model_dump = getattr(block, "model_dump", None)
+    model_dump = getattr(block, "model_dump", getattr(block, "dict", None))
     if callable(model_dump):
-        dumped = model_dump()
+        try:
+            dumped = model_dump(exclude_none=True)
+        except TypeError:
+            dumped = model_dump()
         if isinstance(dumped, Mapping):
             return _convert_dict_block_to_part(cast(Mapping[str, Any], dumped))
 
