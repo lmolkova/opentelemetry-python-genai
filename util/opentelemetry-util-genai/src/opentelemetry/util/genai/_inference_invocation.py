@@ -119,6 +119,9 @@ class InferenceInvocation(GenAIInvocation):
         self._server_address: str | None = server_address
         self._server_port: int | None = server_port
         self.conversation_id: str | None = None
+        self._emit_event: bool = _should_emit_event(
+            self._content_capturing_mode
+        )
 
         self.input_messages: list[InputMessage] = []
         self.output_messages: list[OutputMessage] = []
@@ -434,7 +437,7 @@ class InferenceInvocation(GenAIInvocation):
         For more details, see the semantic convention documentation:
         https://github.com/open-telemetry/semantic-conventions/blob/main/docs/gen-ai/gen-ai-events.md#event-eventgen_aiclientinferenceoperationdetails
         """
-        if not _should_emit_event(self._content_capturing_mode):
+        if not self._emit_event:
             return None
 
         attributes = self._get_start_attributes()
