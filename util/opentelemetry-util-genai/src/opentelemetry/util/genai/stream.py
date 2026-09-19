@@ -19,6 +19,7 @@ from typing import (
 )
 
 if TYPE_CHECKING:
+    from opentelemetry.util.genai.types import Error
 
     class _ObjectProxy:
         __wrapped__: Any
@@ -47,7 +48,7 @@ class _StreamTimingInvocation(Protocol):
 
 
 class _StreamingInvocation(_StreamTimingInvocation, Protocol):
-    def fail(self, error: BaseException) -> None: ...
+    def fail(self, error: Error | BaseException) -> None: ...
 
 
 InvocationT = TypeVar("InvocationT", bound="_StreamingInvocation")
