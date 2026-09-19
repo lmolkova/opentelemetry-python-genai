@@ -1,0 +1,39 @@
+{% import "common.py.j2" as common %}
+{{ common.header() }}
+
+from __future__ import annotations
+
+from opentelemetry.context import (
+    Context,
+    create_key,
+    get_value,
+    set_value,
+)
+
+{% for attr in ctx.ambient_attributes %}
+_{{ attr.name | screaming_snake_case }}_KEY = create_key("opentelemetry.util.genai.{{ attr.name }}")
+
+
+def get_ambient_{{ attr.name }}(
+    context: Context | None = None,
+) -> str | None:
+    value = get_value(_{{ attr.name | screaming_snake_case }}_KEY, context=context)
+    return value if isinstance(value, str) else None
+
+
+def with_{{ attr.name }}(
+    {{ attr.name }}: str,
+    context: Context | None = None,
+) -> Context:
+    return set_value(_{{ attr.name | screaming_snake_case }}_KEY, {{ attr.name }}, context=context)
+{% if not loop.last %}
+
+{% endif %}
+{% endfor %}
+
+__all__ = [
+{% for attr in ctx.ambient_attributes %}
+    "get_ambient_{{ attr.name }}",
+    "with_{{ attr.name }}",
+{% endfor %}
+]
