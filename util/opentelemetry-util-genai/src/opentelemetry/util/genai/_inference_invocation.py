@@ -31,7 +31,7 @@ from opentelemetry.util.genai.types import (
 )
 from opentelemetry.util.genai.utils import (
     ContentCapturingMode,
-    should_emit_event,
+    _should_emit_event,
 )
 from opentelemetry.util.types import AttributeValue
 
@@ -434,7 +434,7 @@ class InferenceInvocation(GenAIInvocation):
         For more details, see the semantic convention documentation:
         https://github.com/open-telemetry/semantic-conventions/blob/main/docs/gen-ai/gen-ai-events.md#event-eventgen_aiclientinferenceoperationdetails
         """
-        if not should_emit_event():
+        if not _should_emit_event(self._content_capturing_mode):
             return None
 
         attributes = self._get_start_attributes()
