@@ -509,7 +509,9 @@ def test_tool_invocation_context_property():
     invocation = handler.tool("test_tool")
     try:
         assert invocation.context is not None
-        assert get_current_span(invocation.context) == invocation.span
+        span = get_current_span(invocation.context)
+        assert span == invocation.span
+        assert span.is_recording()
     finally:
         invocation.stop()
 
@@ -533,5 +535,8 @@ def test_tool_invocation_explicit_context(method_name: str):
 
     spans = span_exporter.get_finished_spans()
     tool_span = [s for s in spans if s.name == "execute_tool child_tool"][0]
+    assert (
+        tool_span.context.trace_id == parent_span.get_span_context().trace_id
+    )
     assert tool_span.parent is not None
     assert tool_span.parent.span_id == parent_span.get_span_context().span_id
