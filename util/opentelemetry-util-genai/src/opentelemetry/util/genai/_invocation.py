@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import timeit
 from abc import abstractmethod
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from contextlib import AbstractContextManager
 from contextvars import Token
 from dataclasses import asdict
@@ -34,10 +34,6 @@ from opentelemetry.trace import (
     set_span_in_context,
 )
 from opentelemetry.trace.status import Status, StatusCode
-from opentelemetry.util.genai._context import (
-    METRIC_ATTRIBUTES_KEY,
-    SPANEVENT_ATTRIBUTES_KEY,
-)
 from opentelemetry.util.genai._instruments import _Instruments
 from opentelemetry.util.genai.completion_hook import (
     CompletionHook,
@@ -74,12 +70,11 @@ class GenAIInvocation(AbstractContextManager["GenAIInvocation"]):
     workflow, tool) rather than constructing invocations directly.
     """
 
-    _context_attributes_key: str | None = None
-    """Context key used to attach an attributes dictionary for nested deduplication.
+    _context_key: str | None = None
+    """Context key used to attach context data for nested deduplication."""
 
-    Subclasses opting into context deduplication set ``_context_attributes_key``
-    to their type-specific context key and initialize/merge downstream attributes.
-    """
+    _context_factory: Callable[[], Any] | None = None
+    """Factory creating the initial context data object to attach."""
 
     def __init__(
         self,
@@ -132,14 +127,14 @@ class GenAIInvocation(AbstractContextManager["GenAIInvocation"]):
                 attributes=self._start_attributes,
                 context=context,
             )
-            ctx = set_span_in_context(self.span)
-            if self._context_attributes_key is not None:
+            ctx = set_span_in_context(self.span, context)
+            if (
+                self._context_key is not None
+                and self._context_factory is not None
+            ):
                 ctx = set_value(
-                    self._context_attributes_key,
-                    {
-                        SPANEVENT_ATTRIBUTES_KEY: {},
-                        METRIC_ATTRIBUTES_KEY: {},
-                    },
+                    self._context_key,
+                    self._context_factory(),
                     context=ctx,
                 )
             self._span_context: Context = ctx
@@ -147,8 +142,9 @@ class GenAIInvocation(AbstractContextManager["GenAIInvocation"]):
                 self._span_context
             )
         else:
-            self.span = get_current_span()
-            self._span_context = get_current() if context is None else context
+            ctx = get_current() if context is None else context
+            self.span = get_current_span(context=ctx)
+            self._span_context = ctx
             self._context_token = None
 
         self._monotonic_start_s: float = timeit.default_timer()

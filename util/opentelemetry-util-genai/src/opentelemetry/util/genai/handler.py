@@ -50,8 +50,11 @@ from opentelemetry.trace import (
     TracerProvider,
     get_tracer,
 )
-from opentelemetry.util.genai._context import get_inference_attributes
-from opentelemetry.util.genai._inference_invocation import LLMInvocation
+from opentelemetry.util.genai._context import get_inference_context_data
+from opentelemetry.util.genai._inference_invocation import (
+    LLMInvocation,
+    SuppressedInferenceInvocation,
+)
 from opentelemetry.util.genai._instruments import _Instruments
 from opentelemetry.util.genai._invocation import Error
 from opentelemetry.util.genai.completion_hook import (
@@ -67,7 +70,6 @@ from opentelemetry.util.genai.invocation import (
     LocalAgentInvocation,
     RemoteAgentInvocation,
     RetrievalInvocation,
-    SuppressedInferenceInvocation,
     ToolInvocation,
     WorkflowInvocation,
 )
@@ -188,7 +190,7 @@ class TelemetryHandler:
         """
         invocation_cls: type[InferenceInvocation] = (
             SuppressedInferenceInvocation
-            if get_inference_attributes() is not None
+            if get_inference_context_data() is not None
             else InferenceInvocation
         )
         return invocation_cls(
@@ -377,7 +379,7 @@ class TelemetryHandler:
         """
         invocation_cls: type[InferenceInvocation] = (
             SuppressedInferenceInvocation
-            if get_inference_attributes() is not None
+            if get_inference_context_data() is not None
             else InferenceInvocation
         )
         return invocation_cls(

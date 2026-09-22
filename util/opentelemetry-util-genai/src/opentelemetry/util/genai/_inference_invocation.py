@@ -21,11 +21,9 @@ from opentelemetry.trace import (
     Tracer,
 )
 from opentelemetry.util.genai._context import (
-    INFERENCE_ATTRIBUTES_KEY,
-    METRIC_ATTRIBUTES_KEY,
-    SPANEVENT_ATTRIBUTES_KEY,
-    InferenceAttributes,
-    get_inference_attributes,
+    INFERENCE_CONTEXT_KEY,
+    InferenceContextData,
+    get_inference_context_data,
 )
 from opentelemetry.util.genai._instruments import _Instruments
 from opentelemetry.util.genai._invocation import (
@@ -94,31 +92,14 @@ _GEN_AI_CONVERSATION_COMPACTED: Final = "gen_ai.conversation.compacted"
 _GEN_AI_PROMPT_VERSION: Final = "gen_ai.prompt.version"
 
 
-def _get_context_spanevent_attributes(
-    ctx_data: InferenceAttributes | None,
-) -> Mapping[str, AttributeValue]:
-    if ctx_data is None:
-        return {}
-    attrs = ctx_data.get(SPANEVENT_ATTRIBUTES_KEY)
-    return attrs if attrs is not None else {}
-
-
-def _get_context_metric_attributes(
-    ctx_data: InferenceAttributes | None,
-) -> Mapping[str, AttributeValue]:
-    if ctx_data is None:
-        return {}
-    attrs = ctx_data.get(METRIC_ATTRIBUTES_KEY)
-    return attrs if attrs is not None else {}
-
-
 class InferenceInvocation(GenAIInvocation):
     """Represents a single LLM chat/completion call.
 
     Use handler.inference(provider) rather than constructing this directly.
     """
 
-    _context_attributes_key = INFERENCE_ATTRIBUTES_KEY
+    _context_key = INFERENCE_CONTEXT_KEY
+    _context_factory = InferenceContextData
 
     def __init__(
         self,
@@ -411,6 +392,84 @@ class InferenceInvocation(GenAIInvocation):
         attrs.update({k: v for k, v in optional_attrs if v is not None})
         return attrs
 
+    def enrich_from_context(self, data: InferenceContextData) -> None:
+        """Enrich invocation attributes from context data published by inner invocations.
+
+        Outer (root) attributes take precedence over inner values.
+        We can make it the other way around, it's just consistent 
+        and contained here.
+
+        """
+        if (
+            self._response_model_name is None
+            and data.response_model is not None
+        ):
+            self._response_model_name = data.response_model
+        if self.input_tokens is None and data.input_tokens is not None:
+            self.input_tokens = data.input_tokens
+        if self.output_tokens is None and data.output_tokens is not None:
+            self.output_tokens = data.output_tokens
+        if self._request_stream is None and data.request_stream is not None:
+            self._request_stream = data.request_stream
+        if self._ttfc_seconds is None and data.ttfc_seconds is not None:
+            self._ttfc_seconds = data.ttfc_seconds
+
+        enriched_start_attrs: dict[str, AttributeValue] = {}
+        if (
+            server_attributes.SERVER_ADDRESS not in self._start_attributes
+            and data.server_address is not None
+        ):
+            self._start_attributes[server_attributes.SERVER_ADDRESS] = (
+                data.server_address
+            )
+            enriched_start_attrs[server_attributes.SERVER_ADDRESS] = (
+                data.server_address
+            )
+        if (
+            server_attributes.SERVER_PORT not in self._start_attributes
+            and data.server_port is not None
+        ):
+            self._start_attributes[server_attributes.SERVER_PORT] = (
+                data.server_port
+            )
+            enriched_start_attrs[server_attributes.SERVER_PORT] = (
+                data.server_port
+            )
+        if (
+            GenAI.GEN_AI_REQUEST_MODEL not in self._start_attributes
+            and data.request_model is not None
+        ):
+            self._start_attributes[GenAI.GEN_AI_REQUEST_MODEL] = (
+                data.request_model
+            )
+            enriched_start_attrs[GenAI.GEN_AI_REQUEST_MODEL] = (
+                data.request_model
+            )
+        if (
+            GenAI.GEN_AI_PROVIDER_NAME not in self._start_attributes
+            and data.provider is not None
+        ):
+            self._start_attributes[GenAI.GEN_AI_PROVIDER_NAME] = data.provider
+            enriched_start_attrs[GenAI.GEN_AI_PROVIDER_NAME] = data.provider
+
+        if enriched_start_attrs:
+            self.span.set_attributes(enriched_start_attrs)
+
+        own_attrs = self._get_attributes()
+        for k, v in data.attributes.items():
+            if (
+                k not in self._start_attributes
+                and k not in self.attributes
+                and k not in own_attrs
+            ):
+                self.attributes[k] = v
+        for k, v in data.metric_attributes.items():
+            if (
+                k not in self._start_attributes
+                and k not in self.metric_attributes
+            ):
+                self.metric_attributes[k] = v
+
     def _invalidate_metric_attributes(self) -> None:
         """Drop the cached metric attributes so the next read rebuilds them.
 
@@ -419,24 +478,14 @@ class InferenceInvocation(GenAIInvocation):
         """
         self._cached_metric_attributes = None
 
-    def _get_own_metric_attributes(self) -> dict[str, AttributeValue]:
-        attrs = dict(self._start_attributes)
-        if self._response_model_name is not None:
-            attrs[GenAI.GEN_AI_RESPONSE_MODEL] = self._response_model_name
-        attrs.update(self.metric_attributes)
-        return attrs
-
     def _get_metric_attributes(self) -> dict[str, AttributeValue]:
         # Cached because this is rebuilt once per streaming chunk. Any mutation
         # of its inputs must call _invalidate_metric_attributes.
         if self._cached_metric_attributes is None:
-            attrs = self._get_own_metric_attributes()
-            ctx_data = get_inference_attributes(self._span_context)
-            if ctx_data is not None:
-                ctx_attrs = _get_context_metric_attributes(ctx_data)
-                for key, val in ctx_attrs.items():
-                    if key not in attrs:
-                        attrs[key] = val
+            attrs = dict(self._start_attributes)
+            if self._response_model_name is not None:
+                attrs[GenAI.GEN_AI_RESPONSE_MODEL] = self._response_model_name
+            attrs.update(self.metric_attributes)
             self._cached_metric_attributes = attrs
         return self._cached_metric_attributes
 
@@ -447,36 +496,21 @@ class InferenceInvocation(GenAIInvocation):
 
     def _get_metric_token_counts(self) -> dict[str, int]:
         counts: dict[str, int] = {}
-        ctx_data = get_inference_attributes(self._span_context)
-        spanevent_attrs = _get_context_spanevent_attributes(ctx_data)
-        input_tokens = self.input_tokens
-        if input_tokens is None:
-            ctx_input = spanevent_attrs.get(GenAI.GEN_AI_USAGE_INPUT_TOKENS)
-            if isinstance(ctx_input, int):
-                input_tokens = ctx_input
-        if input_tokens is not None:
-            counts[GenAI.GenAiTokenTypeValues.INPUT.value] = input_tokens
-
-        output_tokens = self.output_tokens
-        if output_tokens is None:
-            ctx_output = spanevent_attrs.get(GenAI.GEN_AI_USAGE_OUTPUT_TOKENS)
-            if isinstance(ctx_output, int):
-                output_tokens = ctx_output
-        if output_tokens is not None:
-            counts[GenAI.GenAiTokenTypeValues.OUTPUT.value] = output_tokens
+        if self.input_tokens is not None:
+            counts[GenAI.GenAiTokenTypeValues.INPUT.value] = self.input_tokens
+        if self.output_tokens is not None:
+            counts[GenAI.GenAiTokenTypeValues.OUTPUT.value] = (
+                self.output_tokens
+            )
         return counts
 
     def _apply_finish(self, error: Error | None = None) -> None:
         if error is not None:
             self._apply_error_attributes(error)
-        ctx_data = get_inference_attributes(self._span_context)
-        spanevent_attrs = _get_context_spanevent_attributes(ctx_data)
-        # Exclude start attributes already set on the span at creation time so
-        # downstream context does not overwrite root values.
-        start_keys = set(self._start_attributes)
-        attributes = {
-            k: v for k, v in spanevent_attrs.items() if k not in start_keys
-        }
+        ctx_data = get_inference_context_data(self._span_context)
+        if ctx_data is not None:
+            self.enrich_from_context(ctx_data)
+        attributes: dict[str, AttributeValue] = {}
         attributes.update(self._get_attributes())
         attributes.update(self._get_message_attributes(for_span=True))
         attributes.update(self.attributes)
@@ -505,9 +539,7 @@ class InferenceInvocation(GenAIInvocation):
         if not self._emit_event:
             return None
 
-        ctx_data = get_inference_attributes(self._span_context)
-        spanevent_attrs = _get_context_spanevent_attributes(ctx_data)
-        attributes = dict(spanevent_attrs)
+        attributes: dict[str, AttributeValue] = {}
         attributes.update(self._start_attributes)
         attributes.update(self._get_attributes())
         attributes.update(self._get_message_attributes(for_span=False))
@@ -567,23 +599,46 @@ class SuppressedInferenceInvocation(InferenceInvocation):
         if self._ttfc_seconds is None:
             self._ttfc_seconds = delta
 
+    def publish_to_context(self, data: InferenceContextData) -> None:
+        """Publish invocation attributes to the active inference context."""
+        if self._response_model_name is not None:
+            data.response_model = self._response_model_name
+        if self.input_tokens is not None:
+            data.input_tokens = self.input_tokens
+        if self.output_tokens is not None:
+            data.output_tokens = self.output_tokens
+        if self._request_stream is not None:
+            data.request_stream = self._request_stream
+        if self._ttfc_seconds is not None:
+            data.ttfc_seconds = self._ttfc_seconds
+
+        req_model = self._start_attributes.get(GenAI.GEN_AI_REQUEST_MODEL)
+        if req_model is not None and isinstance(req_model, str):
+            data.request_model = req_model
+        provider = self._start_attributes.get(GenAI.GEN_AI_PROVIDER_NAME)
+        if provider is not None and isinstance(provider, str):
+            data.provider = provider
+        addr = self._start_attributes.get(server_attributes.SERVER_ADDRESS)
+        if addr is not None and isinstance(addr, str):
+            data.server_address = addr
+        port = self._start_attributes.get(server_attributes.SERVER_PORT)
+        if port is not None and isinstance(port, int):
+            data.server_port = port
+
+        attrs = dict(self._start_attributes)
+        attrs.update(self._get_attributes())
+        attrs.update(self.attributes)
+        data.attributes.update(attrs)
+        data.metric_attributes.update(self.metric_attributes)
+
     def _finish(self, error: Error | None = None) -> None:
         if self._finished:
             return
         self._finished = True
 
-        ctx_data = get_inference_attributes(self._span_context)
+        ctx_data = get_inference_context_data(self._span_context)
         if ctx_data is not None:
-            attrs = dict(self._start_attributes)
-            attrs.update(self._get_attributes())
-            attrs.update(self.attributes)
-            spanevent_attrs = ctx_data.get(SPANEVENT_ATTRIBUTES_KEY)
-            if spanevent_attrs is not None:
-                spanevent_attrs.update(attrs)
-
-            metric_attrs = ctx_data.get(METRIC_ATTRIBUTES_KEY)
-            if metric_attrs is not None:
-                metric_attrs.update(self._get_own_metric_attributes())
+            self.publish_to_context(ctx_data)
 
     def _apply_finish(self, error: Error | None = None) -> None:
         pass
@@ -640,7 +695,7 @@ class LLMInvocation:
         """Create and start an InferenceInvocation from this data container. Called by handler.start_llm()."""
         invocation_cls: type[InferenceInvocation] = (
             SuppressedInferenceInvocation
-            if get_inference_attributes() is not None
+            if get_inference_context_data() is not None
             else InferenceInvocation
         )
         inv = invocation_cls(
