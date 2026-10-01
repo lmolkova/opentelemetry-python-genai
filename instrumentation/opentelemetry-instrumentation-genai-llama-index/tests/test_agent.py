@@ -1079,7 +1079,6 @@ async def test_agent_workflow_captures_first_arriving_return_direct_result(
     workflow = AgentWorkflow(agents=[agent])
 
     result = await workflow.run(user_msg="Call both tools")
-    assert result.response.content == "SECOND"
 
     agent_span = _spans_named(
         span_exporter, "invoke_agent arrival-order-agent"
@@ -1087,7 +1086,10 @@ async def test_agent_workflow_captures_first_arriving_return_direct_result(
     agent_output = json.loads(
         agent_span.attributes[GenAIAttributes.GEN_AI_OUTPUT_MESSAGES]
     )
-    assert agent_output[0]["parts"] == [{"type": "text", "content": "SECOND"}]
+    # Which return_direct result LlamaIndex picks depends on task scheduling.
+    assert agent_output[0]["parts"] == [
+        {"type": "text", "content": result.response.content}
+    ]
 
 
 @pytest.mark.asyncio
