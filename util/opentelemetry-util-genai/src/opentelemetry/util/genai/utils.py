@@ -11,7 +11,7 @@ import os
 import urllib.parse
 from base64 import b64decode, b64encode
 from collections.abc import Callable, Iterable, Mapping
-from dataclasses import asdict, is_dataclass
+from dataclasses import asdict, fields, is_dataclass
 from datetime import date, datetime, time
 from enum import Enum
 from functools import lru_cache, partial
@@ -216,7 +216,7 @@ def _sanitize_for_any_value(
 
 def _dump_model(value: object) -> object | None:
     if is_dataclass(value) and not isinstance(value, type):
-        return asdict(value)
+        return {f.name: getattr(value, f.name) for f in fields(value)}
     for method_name in ("model_dump", "dict", "to_dict"):
         fn = getattr(value, method_name, None)
         if callable(fn):
@@ -262,7 +262,7 @@ def _sanitize_object(
         ]
 
     obj_dict: object = getattr(value, "__dict__", None)
-    if isinstance(obj_dict, dict):
+    if isinstance(obj_dict, dict) and obj_dict:
         return _sanitize_for_any_value(
             cast(dict[object, object], obj_dict),
             max_depth=max_depth,

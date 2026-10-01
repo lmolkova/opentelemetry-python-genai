@@ -749,9 +749,10 @@ class OpenTelemetryLangChainCallbackHandler(BaseCallbackHandler):
             _attach_to_context=self._attach_to_context,
         )
         tool_invocation.tool_description = description
-        tool_invocation.arguments = tool_arguments_to_any_value(
-            inputs if inputs is not None else input_str
-        )
+        if tool_invocation.should_capture_content:
+            tool_invocation.arguments = tool_arguments_to_any_value(
+                inputs if inputs is not None else input_str
+            )
         tool_call_id = kwargs.get("tool_call_id")
         if tool_call_id:
             tool_invocation.tool_call_id = tool_call_id
@@ -773,9 +774,10 @@ class OpenTelemetryLangChainCallbackHandler(BaseCallbackHandler):
         end_tool_call_id = getattr(output, "tool_call_id", None)
         if end_tool_call_id and not tool_invocation.tool_call_id:
             tool_invocation.tool_call_id = end_tool_call_id
-        tool_invocation.tool_result = object_to_any_value(
-            getattr(output, "content", output)
-        )
+        if tool_invocation.should_capture_content:
+            tool_invocation.tool_result = object_to_any_value(
+                getattr(output, "content", output)
+            )
         tool_invocation.stop()
         self._invocation_manager.delete_invocation_state(run_id=run_id)
 

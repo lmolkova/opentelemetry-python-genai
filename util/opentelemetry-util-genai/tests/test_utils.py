@@ -2198,6 +2198,19 @@ class TestObjectToAnyValue(unittest.TestCase):
             {"path": "/tmp/a"},
         )
 
+    def test_object_with_empty_dict_uses_str(self):
+        self.assertEqual(object_to_any_value(ValueError("boom")), "boom")
+
+    def test_dataclass_uncopyable_field_dropped(self):
+        @dataclass
+        class WithGenerator:
+            name: str
+            items: object
+
+        value = WithGenerator(name="a", items=(i for i in range(2)))
+        self.assertEqual(object_to_any_value(value), {"name": "a"})
+        self.assertEqual(list(cast(Any, value.items)), [0, 1])
+
     def test_model_non_any_value_fields_converted(self):
         class Model:
             def model_dump(self):
