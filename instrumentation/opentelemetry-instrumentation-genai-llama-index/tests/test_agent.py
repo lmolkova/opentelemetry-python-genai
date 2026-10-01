@@ -1387,7 +1387,7 @@ def test_sync_tool_span(
     assert json.loads(attrs[GenAIAttributes.GEN_AI_TOOL_CALL_ARGUMENTS]) == {
         "value": 4
     }
-    assert attrs[GenAIAttributes.GEN_AI_TOOL_CALL_RESULT] == 8
+    assert attrs[GenAIAttributes.GEN_AI_TOOL_CALL_RESULT] == "8"
 
 
 @pytest.mark.asyncio
