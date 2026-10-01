@@ -2253,6 +2253,26 @@ class TestObjectToAnyValue(unittest.TestCase):
     def test_object_with_empty_dict_uses_str(self):
         self.assertEqual(object_to_any_value(ValueError("boom")), "boom")
 
+    def test_private_attributes_skipped(self):
+        class Secret:
+            def __init__(self, value: str):
+                self._value = value
+
+            def __str__(self) -> str:
+                return "**********"
+
+        class Credentials:
+            def __init__(self):
+                self.user = "bob"
+                self.password = Secret("hunter2")
+                self._token = "t0k3n"
+
+        self.assertEqual(object_to_any_value(Secret("hunter2")), "**********")
+        self.assertEqual(
+            object_to_any_value(Credentials()),
+            {"user": "bob", "password": "**********"},
+        )
+
     def test_dataclass_uncopyable_field_dropped(self):
         @dataclass
         class WithGenerator:

@@ -221,12 +221,12 @@ _OMIT = object()
 def object_to_any_value(value: object) -> AnyValue | None:
     """Convert an object into an AnyValue, or None if it cannot be converted.
 
-    Models, dataclasses and objects with ``__dict__`` become dicts; datetimes,
-    UUIDs and enums become their primitive form. Other objects with a custom
-    ``__str__`` (e.g. ``Decimal``, ``Path``) become strings. Values that
-    cannot be converted (callables, types, non-finite floats, cycles, too
-    deep structures, objects raising on access) are dropped from collections.
-    Generators and other iterables are not consumed.
+    Models, dataclasses and objects with public ``__dict__`` attributes become
+    dicts; datetimes, UUIDs and enums become their primitive form. Other
+    objects with a custom ``__str__`` (e.g. ``Decimal``, ``Path``) become
+    strings. Values that cannot be converted (callables, types, non-finite
+    floats, cycles, too deep structures, objects raising on access) are
+    dropped from collections. Generators and other iterables are not consumed.
     """
     res = _sanitize_for_any_value(value, max_depth=_MAX_DEPTH)
     return None if res is _OMIT else cast(AnyValue | None, res)
@@ -328,12 +328,17 @@ def _sanitize_object(
         ]
 
     obj_dict: object = getattr(value, "__dict__", None)
-    if isinstance(obj_dict, dict) and obj_dict:
-        return _sanitize_for_any_value(
-            cast(dict[object, object], obj_dict),
-            max_depth=max_depth,
-            seen=seen,
-        )
+    if isinstance(obj_dict, dict):
+        # Skip private state, e.g. pydantic SecretStr's raw _secret_value.
+        public = {
+            k: v
+            for k, v in cast(dict[object, object], obj_dict).items()
+            if isinstance(k, str) and not k.startswith("_")
+        }
+        if public:
+            return _sanitize_for_any_value(
+                public, max_depth=max_depth, seen=seen
+            )
 
     # Default object.__str__ gives a repr with a memory address, not data.
     if type(value).__str__ is not object.__str__:
