@@ -350,6 +350,22 @@ def test_unconverted_objects_serialized():
     os.environ,
     {OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT: "SPAN_ONLY"},
 )
+def test_non_finite_floats_not_recorded_as_invalid_json():
+    span_exporter, handler = _make_span_exporter_and_handler()
+    invocation = handler.tool("echo")
+    invocation.arguments = {"a": 1, "b": float("nan")}
+    invocation.tool_result = float("inf")
+    invocation.stop()
+
+    attrs = span_exporter.get_finished_spans()[0].attributes
+    assert attrs[GenAI.GEN_AI_TOOL_CALL_ARGUMENTS] == '{"a":1}'
+    assert GenAI.GEN_AI_TOOL_CALL_RESULT not in attrs
+
+
+@patch.dict(
+    os.environ,
+    {OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT: "SPAN_ONLY"},
+)
 def test_arguments_none_omits_attribute():
     """None arguments must not produce the attribute on the span."""
     span_exporter, handler = _make_span_exporter_and_handler()
