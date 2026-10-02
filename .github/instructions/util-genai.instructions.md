@@ -37,6 +37,10 @@ land the semconv change first.
 
 - Do not remove or rename public objects. Deprecate first via a docstring note pointing to the
   replacement (not `@deprecated` — unreliable).
+- The `check-util-api` CI job fails when a public object is removed or its signature changes
+  compared to the latest util release. Flag new entries in `api_breaks_allowlist.txt` unless the
+  PR shows that no released instrumentation uses the object, in this repo or in
+  opentelemetry-python-contrib.
 - Private modules and module-private objects start with `_`.
 - Default to internal (`_`-prefixed) unless instrumentations need it public.
 - Flag every `Any` in the public API (anything not under a `_`-prefixed module) — parameters,

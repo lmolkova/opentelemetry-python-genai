@@ -127,11 +127,19 @@ uv run tox -e py314-test-instrumentation-genai-openai-conformance
 
 # Type check (pyright)
 uv run tox -e typecheck
+
+# Check util-genai for public API breaks against its latest release
+uv run tox -e check-util-api
 ```
 
 Before opening a PR, run `uv run tox -e precommit`, `uv run tox -e typecheck`, and the changed package's
 test envs (`-oldest` and `-latest`, plus `-conformance` if it ships scenarios) — these mirror
 the CI gates.
+
+If you change `util/opentelemetry-util-genai`, also run `uv run tox -e check-util-api`. Released
+instrumentations accept any util version below 2, so removing or changing a public object can
+break them on import. If the break is intended, check that no released instrumentation uses the
+object, then add its path to `util/opentelemetry-util-genai/api_breaks_allowlist.txt`.
 
 tox reuses cached envs and won't re-resolve dependencies on its own, so pass `--recreate` (`-r`)
 after editing a `tests/requirements.*.txt` or a `pyproject.toml` dependency bound — otherwise the
