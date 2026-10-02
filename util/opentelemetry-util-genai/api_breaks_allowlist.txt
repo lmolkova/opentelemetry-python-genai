@@ -1,6 +1,0 @@
-# Public API breaks allowed against the latest opentelemetry-util-genai release.
-# scripts/check_util_api.py reads this file. One object path per line.
-#
-# Add an entry only after checking that no released instrumentation uses it,
-# in this repo or in opentelemetry-python-contrib. The script reports entries
-# as stale once the next util version ships, so remove them then.

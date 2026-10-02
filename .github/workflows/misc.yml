@@ -198,12 +198,15 @@ jobs:
     name: check-util-api
     runs-on: ubuntu-slim
     timeout-minutes: 10
+    if: |
+      !contains(github.event.pull_request.labels.*.name, 'Approve Public API check')
+      && github.event.pull_request.user.login != 'otelbot[bot]' && github.event_name == 'pull_request'
     steps:
       - name: Checkout repo @ SHA - ${{ github.sha }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          # needs the latest opentelemetry-util-genai release tag as the baseline
+          # griffe compares against origin/main
           fetch-depth: 0
 
       - name: Set up Python 3.14
