@@ -1613,6 +1613,32 @@ class TestTelemetryHandler(unittest.TestCase):
             )
             assert "gen_ai.prompt.variable.bad_obj" not in attrs
 
+    @patch.dict(
+        os.environ,
+        {"OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT": "SPAN_ONLY"},
+    )
+    def test_inference_prompt_variables_self_referential_dataclass(self):
+        @dataclass
+        class Node:
+            name: str
+            parent: object = None
+
+        node = Node(name="root")
+        node.parent = node
+
+        handler = TelemetryHandler(
+            tracer_provider=self.tracer_provider,
+            logger_provider=self.logger_provider,
+        )
+        invocation = handler.inference(
+            "test-provider", request_model="test-model"
+        )
+        invocation.prompt_variables = {"node": node}
+        invocation.stop()
+
+        attrs = self.span_exporter.get_finished_spans()[-1].attributes
+        assert attrs["gen_ai.prompt.variable.node"] == '{"name":"root"}'
+
 
 class AnyNonNone:
     def __eq__(self, other):

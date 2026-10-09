@@ -335,7 +335,7 @@ def _json_dumps_unless_str(value: object) -> str | None:
         return value
     try:
         return gen_ai_json_dumps(value, allow_nan=False)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, RecursionError):
         pass
     # Callers may set objects (e.g. models) that weren't converted to AnyValue.
     converted = object_to_any_value(value)
