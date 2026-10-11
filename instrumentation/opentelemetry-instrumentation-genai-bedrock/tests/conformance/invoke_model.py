@@ -1,6 +1,8 @@
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
 
+"""Conformance scenario: bedrock invoke_model (chat)."""
+
 import json
 import os
 

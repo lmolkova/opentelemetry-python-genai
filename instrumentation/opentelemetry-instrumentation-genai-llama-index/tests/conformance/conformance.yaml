@@ -5,10 +5,8 @@ runner: genai-conformance
 instrumented_library: llama-index
 instrumentation_library: opentelemetry-instrumentation-genai-llama-index
 
-# TODO: point at the pin directly once the runner takes a Git URL with a ref -
-# https://github.com/open-telemetry/semantic-conventions-conformance/issues/176
 weaver:
-  registry: ../../../../.semconv/model
+  registry: https://github.com/open-telemetry/semantic-conventions-genai.git@${SEMCONV_GENAI_REF}[model]
 
 server:
   run: genai-mock-server --port ${PORT}
@@ -45,7 +43,7 @@ scenarios:
         expect:
           count: 1
     metrics:
-      - gen_ai.client.operation.duration
+      - gen_ai.invoke_agent.duration
 
   react_agent:
     run: opentelemetry-instrument python react_agent.py
@@ -72,7 +70,7 @@ scenarios:
         expect:
           count: 1
     metrics:
-      - gen_ai.client.operation.duration
+      - gen_ai.invoke_agent.duration
 
   automatic_tool_calling:
     run: opentelemetry-instrument python automatic_tool_calling.py
@@ -104,4 +102,61 @@ scenarios:
         expect:
           count: 1
     metrics:
+      - gen_ai.invoke_agent.duration
+      - gen_ai.execute_tool.duration
+
+  retrieval:
+    run: opentelemetry-instrument python retrieval.py
+    spans:
+      - match:
+          attributes:
+            gen_ai.operation.name: retrieval
+        expect:
+          count: 1
+    metrics:
       - gen_ai.client.operation.duration
+    expected_violations:
+      - id: genai_expected_attribute_missing
+        context:
+          operation: retrieval
+          missing_attribute: server.address
+        reason: The instrumentation does not provide server.address.
+
+  workflow:
+    run: opentelemetry-instrument python workflow.py
+    spans:
+      - match:
+          attributes:
+            gen_ai.operation.name: invoke_workflow
+        expect:
+          count: 1
+      - match:
+          attributes:
+            gen_ai.operation.name: invoke_agent
+        expect:
+          count: 2
+      - match:
+          attributes:
+            gen_ai.operation.name: execute_tool
+        expect:
+          count: 1
+    metrics:
+      - gen_ai.execute_tool.duration
+      - gen_ai.invoke_agent.duration
+      - gen_ai.invoke_workflow.duration
+    expected_violations:
+      - id: genai_expected_attribute_missing
+        context:
+          operation: invoke_agent
+          missing_attribute: gen_ai.response.finish_reasons
+        reason: Agent spans do not report finish reasons.
+      - id: genai_expected_attribute_missing
+        context:
+          operation: invoke_agent
+          missing_attribute: gen_ai.usage.input_tokens
+        reason: Agent spans do not report aggregated token usage.
+      - id: genai_expected_attribute_missing
+        context:
+          operation: invoke_agent
+          missing_attribute: gen_ai.usage.output_tokens
+        reason: Agent spans do not report aggregated token usage.

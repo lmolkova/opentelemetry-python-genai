@@ -5,10 +5,8 @@ runner: genai-conformance
 instrumented_library: qwen-agent
 instrumentation_library: opentelemetry-instrumentation-genai-qwen-agent
 
-# TODO: point at the pin directly once the runner takes a Git URL with a ref -
-# https://github.com/open-telemetry/semantic-conventions-conformance/issues/176
 weaver:
-  registry: ../../../../.semconv/model
+  registry: https://github.com/open-telemetry/semantic-conventions-genai.git@${SEMCONV_GENAI_REF}[model]
 
 server:
   run: genai-mock-server --port ${PORT}
@@ -44,7 +42,7 @@ scenarios:
         expect:
           count: 2
     metrics:
-      - gen_ai.client.operation.duration
+      - gen_ai.invoke_agent.duration
 
   automatic_tool_calling:
     run: opentelemetry-instrument python automatic_tool_calling.py
@@ -76,4 +74,5 @@ scenarios:
         expect:
           count: 1
     metrics:
-      - gen_ai.client.operation.duration
+      - gen_ai.invoke_agent.duration
+      - gen_ai.execute_tool.duration

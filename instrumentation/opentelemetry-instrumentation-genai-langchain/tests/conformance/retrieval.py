@@ -1,6 +1,8 @@
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
 
+"""Conformance scenario: langchain retrieval via VectorStoreRetriever."""
+
 from typing import Any
 
 from langchain_core.callbacks import CallbackManagerForRetrieverRun

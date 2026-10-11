@@ -1,6 +1,8 @@
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
 
+"""Shared helpers for smolagents conformance scenarios."""
+
 from __future__ import annotations
 
 import sys

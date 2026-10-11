@@ -64,11 +64,17 @@ Exercise **every non-text part type the library can emit**. Cover only what the
 package instruments: check its message serializer for which
 `opentelemetry.util.genai.types` parts it produces.
 
-Weaver validates a part's *shape*, not that a part type was emitted at all, and
-`expect.attributes` can't reach inside a JSON-valued attribute - so a scenario
-that stopped producing `blob` parts still passes. Exercising the part is what
-we have; asserting it arrived is
-[open upstream](https://github.com/open-telemetry/semantic-conventions-conformance/issues/177).
+Weaver validates a part's shape, but cannot prove the expected part was emitted.
+For content assertions, call the public `genai_conformance.genai_session` API from
+`tests/conformance.py`. Parametrize over `scenarios(directory)` and share one
+module-scoped session. For each scenario, check `result.failures` and `result.violations`,
+then inspect the raw Weaver report in `result.report`.
+
+Use `assert_message_part` and `messages` from
+`opentelemetry.test_util_genai.common_conformance` for JSON-valued message attributes.
+The OpenAI and Anthropic packages show presence checks and exact part assertions.
+Run this Python test file instead of collecting the YAML directly, so scenarios execute
+once and a complete session still regenerates `data.json`.
 
 | Part `type` | util-genai type | Emitted when the library accepts… |
 |---|---|---|
@@ -124,7 +130,7 @@ It defines:
 - `instrumented_library`: name of the underlying SDK (e.g. `openai`, `anthropic`).
 - `instrumentation_library`: name of the instrumentation package (e.g. `opentelemetry-instrumentation-genai-openai`).
 - `server`: mock server startup command, usually `genai-mock-server --port ${PORT}`.
-- `weaver.registry`: always `../../../../.semconv/model` - see [Which registry](#which-registry).
+- `weaver.registry`: always `https://github.com/open-telemetry/semantic-conventions-genai.git@${SEMCONV_GENAI_REF}[model]` - see [Which registry](#which-registry).
 - `env`: environment variables injected into the scenario execution environment.
 - `scenarios`: dictionary of scenario configurations with per-scenario expectations and declared gaps (`expected_violations`).
 
@@ -138,10 +144,8 @@ runner: genai-conformance
 instrumented_library: openai
 instrumentation_library: opentelemetry-instrumentation-genai-openai
 
-# TODO: point at the pin directly once the runner takes a Git URL with a ref -
-# https://github.com/open-telemetry/semantic-conventions-conformance/issues/176
 weaver:
-  registry: ../../../../.semconv/model
+  registry: https://github.com/open-telemetry/semantic-conventions-genai.git@${SEMCONV_GENAI_REF}[model]
 
 server:
   run: genai-mock-server --port ${PORT}
@@ -188,16 +192,12 @@ So every `conformance.yaml` overrides it:
 
 ```yaml
 weaver:
-  registry: ../../../../.semconv/model
+  registry: https://github.com/open-telemetry/semantic-conventions-genai.git@${SEMCONV_GENAI_REF}[model]
 ```
 
-`scripts/provision_semconv_registry.py` stages that directory from the pin in `versions.env`; the
-`conformance` tox envs run it in `commands_pre`, so `uv run tox -e py314-test-…-conformance` needs
-no extra step. A caller's registry wins outright in the runner - validation, the coverage model and
-the content JSON schemas all come from it. Only the rego policies and weaver config stay the
-runner's, so a convention needing a *new rule* still waits on a runner bump.
-
-Bumping `SEMCONV_GENAI_REF` is the one thing that moves this; the path never changes.
+The shared `common_session` fixture reads `SEMCONV_GENAI_REF` from `versions.env` and
+passes it to `genai_session` as a variable. The runner provisions that registry and supplies
+all policies and Weaver configuration. Do not add local copies of those components.
 
 ## Span and metric expectations
 
@@ -283,12 +283,15 @@ Run conformance tests using tox:
 uv run tox -e py314-test-instrumentation-genai-<lib>-conformance
 ```
 
-The `*-conformance` tox env invokes `pytest` directly on `tests/conformance/conformance.yaml`:
+The `*-conformance` tox env invokes the Python report assertions:
 
 ```sh
-pytest instrumentation/<pkg>/tests/conformance/conformance.yaml
+pytest instrumentation/<pkg>/tests/conformance.py
 ```
 
-The unit test envs (`*-{oldest,latest}`) ignore the `tests/conformance` directory so they do not
-require conformance tools or the Weaver binary.
+Use the shared `common_session` pytest fixture from
+`opentelemetry.test_util_genai.common_conformance`. Check both `result.failures` and
+`result.violations`; assert structured content on `result.report`.
+The unit test envs ignore all these conformance test paths so they do not require
+conformance tools or the Weaver binary.
 

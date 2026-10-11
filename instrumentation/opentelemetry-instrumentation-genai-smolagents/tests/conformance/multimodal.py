@@ -1,6 +1,8 @@
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
 
+"""Conformance scenario for an image ``uri`` part on a ``chat`` input."""
+
 from _helpers import vllm_model
 
 _IMAGE_URL = (

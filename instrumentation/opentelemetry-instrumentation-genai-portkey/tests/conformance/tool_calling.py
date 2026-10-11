@@ -1,6 +1,8 @@
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
 
+"""Conformance scenario: Portkey AI chat with tool calls."""
+
 import os
 
 from portkey_ai import Portkey

@@ -1,6 +1,8 @@
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
 
+"""Conformance scenario: langchain two-node LangGraph workflow (researcher → summariser)."""
+
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 

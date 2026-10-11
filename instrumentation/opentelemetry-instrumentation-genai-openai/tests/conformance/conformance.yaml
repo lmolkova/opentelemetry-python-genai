@@ -5,10 +5,8 @@ runner: genai-conformance
 instrumented_library: openai
 instrumentation_library: opentelemetry-instrumentation-genai-openai
 
-# TODO: point at the pin directly once the runner takes a Git URL with a ref -
-# https://github.com/open-telemetry/semantic-conventions-conformance/issues/176
 weaver:
-  registry: ../../../../.semconv/model
+  registry: https://github.com/open-telemetry/semantic-conventions-genai.git@${SEMCONV_GENAI_REF}[model]
 
 server:
   run: genai-mock-server --port ${PORT}
@@ -16,7 +14,7 @@ server:
 env:
   OPENAI_BASE_URL: ${MOCK_SERVER_URL}/v1
   OPENAI_API_KEY: test_openai_api_key
-  OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT: SPAN_ONLY
+  OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT: SPAN_AND_EVENT
 
 scenarios:
   inference:
@@ -30,6 +28,8 @@ scenarios:
     metrics:
       - gen_ai.client.operation.duration
       - gen_ai.client.token.usage
+    events:
+      - gen_ai.client.inference.operation.details
 
   streaming:
     run: opentelemetry-instrument python streaming.py
@@ -46,6 +46,8 @@ scenarios:
       - gen_ai.client.token.usage
       - gen_ai.client.operation.time_to_first_chunk
       - gen_ai.client.operation.time_per_output_chunk
+    events:
+      - gen_ai.client.inference.operation.details
 
   embeddings:
     run: opentelemetry-instrument python embeddings.py
@@ -70,6 +72,8 @@ scenarios:
     metrics:
       - gen_ai.client.operation.duration
       - gen_ai.client.token.usage
+    events:
+      - gen_ai.client.inference.operation.details
 
   responses_conversation:
     run: opentelemetry-instrument python responses_conversation.py
@@ -82,6 +86,8 @@ scenarios:
     metrics:
       - gen_ai.client.operation.duration
       - gen_ai.client.token.usage
+    events:
+      - gen_ai.client.inference.operation.details
 
   responses_fetch:
     run: opentelemetry-instrument python responses_fetch.py
@@ -105,6 +111,8 @@ scenarios:
     metrics:
       - gen_ai.client.operation.duration
       - gen_ai.client.token.usage
+    events:
+      - gen_ai.client.inference.operation.details
 
   responses_stream:
     run: opentelemetry-instrument python responses_stream.py
@@ -121,6 +129,8 @@ scenarios:
       - gen_ai.client.token.usage
       - gen_ai.client.operation.time_to_first_chunk
       - gen_ai.client.operation.time_per_output_chunk
+    events:
+      - gen_ai.client.inference.operation.details
 
   responses_streaming:
     run: opentelemetry-instrument python responses_streaming.py
@@ -137,6 +147,8 @@ scenarios:
       - gen_ai.client.token.usage
       - gen_ai.client.operation.time_to_first_chunk
       - gen_ai.client.operation.time_per_output_chunk
+    events:
+      - gen_ai.client.inference.operation.details
 
   structured_output:
     run: opentelemetry-instrument python structured_output.py
@@ -149,6 +161,8 @@ scenarios:
     metrics:
       - gen_ai.client.operation.duration
       - gen_ai.client.token.usage
+    events:
+      - gen_ai.client.inference.operation.details
 
   multimodal:
     run: opentelemetry-instrument python multimodal.py
@@ -161,3 +175,33 @@ scenarios:
     metrics:
       - gen_ai.client.operation.duration
       - gen_ai.client.token.usage
+    events:
+      - gen_ai.client.inference.operation.details
+
+  responses_multimodal:
+    run: opentelemetry-instrument python responses_multimodal.py
+    spans:
+      - match:
+          attributes:
+            gen_ai.operation.name: chat
+        expect:
+          count: 1
+    metrics:
+      - gen_ai.client.operation.duration
+      - gen_ai.client.token.usage
+    events:
+      - gen_ai.client.inference.operation.details
+
+  responses_server_tool_calling:
+    run: opentelemetry-instrument python responses_server_tool_calling.py
+    spans:
+      - match:
+          attributes:
+            gen_ai.operation.name: chat
+        expect:
+          count: 1
+    metrics:
+      - gen_ai.client.operation.duration
+      - gen_ai.client.token.usage
+    events:
+      - gen_ai.client.inference.operation.details

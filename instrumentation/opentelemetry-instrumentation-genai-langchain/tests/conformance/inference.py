@@ -1,6 +1,8 @@
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
 
+"""Conformance scenario: langchain chat (inference) via ChatOpenAI."""
+
 from langchain_openai import ChatOpenAI
 
 model = ChatOpenAI(

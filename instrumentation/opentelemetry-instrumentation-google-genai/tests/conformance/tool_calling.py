@@ -1,42 +1,53 @@
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
 
-"""Conformance scenario: google-genai tool execution."""
+"""Two model turns with caller-managed tool execution."""
 
 from google.genai import Client, types
 
-
-def get_weather(location: str) -> str:
-    """Get weather for location"""
-    return "sunny"
-
-
 client = Client()
-response = client.models.generate_content(
-    model="gemini-2.5-flash",
-    contents="What is the weather in Boston?",
-    config={"tools": [get_weather]},
+config = types.GenerateContentConfig(
+    tools=[
+        types.Tool(
+            function_declarations=[
+                types.FunctionDeclaration(
+                    name="get_weather",
+                    description="Get weather for a location",
+                    parameters={
+                        "type": "object",
+                        "properties": {"location": {"type": "string"}},
+                        "required": ["location"],
+                    },
+                )
+            ]
+        )
+    ],
+    automatic_function_calling=types.AutomaticFunctionCallingConfig(
+        disable=True
+    ),
 )
-
 contents = [
     types.Content(
         role="user",
         parts=[types.Part.from_text(text="What is the weather in Boston?")],
-    ),
-    response.candidates[0].content,
+    )
+]
+response = client.models.generate_content(
+    model="gemini-2.5-flash", contents=contents, config=config
+)
+assert response.function_calls
+contents.append(response.candidates[0].content)
+contents.append(
     types.Content(
-        role="user",
+        role="tool",
         parts=[
             types.Part.from_function_response(
-                name="get_weather",
-                response={"result": "sunny"},
+                name=call.name, response={"result": "sunny"}
             )
+            for call in response.function_calls
         ],
-    ),
-]
-
+    )
+)
 client.models.generate_content(
-    model="gemini-2.5-flash",
-    contents=contents,
-    config={"tools": [get_weather]},
+    model="gemini-2.5-flash", contents=contents, config=config
 )

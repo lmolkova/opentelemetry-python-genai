@@ -17,8 +17,9 @@
       "gen_ai.response.model",
       "gen_ai.response.time_to_first_chunk",
       "gen_ai.system_instructions",
-      "gen_ai.usage.cache_creation.input_tokens",
+      "gen_ai.tool.definitions",
       "gen_ai.usage.cache_read.input_tokens",
+      "gen_ai.usage.cache_write.input_tokens",
       "gen_ai.usage.input_tokens",
       "gen_ai.usage.output_tokens",
       "server.address",
@@ -60,15 +61,5 @@
     ]
   },
   "entities": {},
-  "findings": [
-    {
-      "id": "missing_attribute",
-      "message": "Attribute 'gen_ai.usage.cache_creation.input_tokens' does not exist in the registry.",
-      "signal_type": "span",
-      "signal_name": "chat claude-sonnet-4-20250514",
-      "context": {
-        "attribute_key": "gen_ai.usage.cache_creation.input_tokens"
-      }
-    }
-  ]
+  "findings": []
 }

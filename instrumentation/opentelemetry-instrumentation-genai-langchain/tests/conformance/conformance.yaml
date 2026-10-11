@@ -5,10 +5,8 @@ runner: genai-conformance
 instrumented_library: langchain
 instrumentation_library: opentelemetry-instrumentation-genai-langchain
 
-# TODO: point at the pin directly once the runner takes a Git URL with a ref -
-# https://github.com/open-telemetry/semantic-conventions-conformance/issues/176
 weaver:
-  registry: ../../../../.semconv/model
+  registry: https://github.com/open-telemetry/semantic-conventions-genai.git@${SEMCONV_GENAI_REF}[model]
 
 server:
   run: genai-mock-server --port ${PORT}
@@ -85,6 +83,7 @@ scenarios:
     metrics:
       - gen_ai.client.operation.duration
       - gen_ai.client.token.usage
+      - gen_ai.invoke_agent.duration
 
   invoke_agent_unnamed:
     run: opentelemetry-instrument python invoke_agent_unnamed.py
@@ -126,6 +125,7 @@ scenarios:
     metrics:
       - gen_ai.client.operation.duration
       - gen_ai.client.token.usage
+      - gen_ai.invoke_agent.duration
 
   automatic_tool_calling:
     run: opentelemetry-instrument python automatic_tool_calling.py
@@ -169,6 +169,8 @@ scenarios:
     metrics:
       - gen_ai.client.operation.duration
       - gen_ai.client.token.usage
+      - gen_ai.invoke_agent.duration
+      - gen_ai.execute_tool.duration
 
   retrieval:
     run: opentelemetry-instrument python retrieval.py
@@ -194,9 +196,6 @@ scenarios:
 
   inference:
     run: opentelemetry-instrument python inference.py
-    # TODO: assert the SystemMessage lands on gen_ai.input.messages as a
-    # system-role message. Needs expectations on complex values -
-    # https://github.com/open-telemetry/semantic-conventions-conformance/issues/177
     expected_violations:
       - id: genai_expected_attribute_missing
         context:
@@ -215,9 +214,6 @@ scenarios:
 
   streaming:
     run: opentelemetry-instrument python streaming.py
-    # TODO: assert the SystemMessage lands on gen_ai.input.messages as a
-    # system-role message. Needs expectations on complex values -
-    # https://github.com/open-telemetry/semantic-conventions-conformance/issues/177
     expected_violations:
       - id: genai_expected_attribute_missing
         context:
@@ -263,8 +259,6 @@ scenarios:
 
   multimodal:
     run: opentelemetry-instrument python multimodal.py
-    # TODO: was asserting the image reached gen_ai.input.messages as a
-    # blob/image part. Needs expectations on complex values - https://github.com/open-telemetry/semantic-conventions-conformance/issues/177
     expected_violations:
       - id: genai_expected_attribute_missing
         context:
@@ -283,8 +277,6 @@ scenarios:
 
   multimodal_image_block:
     run: opentelemetry-instrument python multimodal_image_block.py
-    # TODO: was asserting the image reached gen_ai.input.messages as a
-    # blob/image part. Needs expectations on complex values - https://github.com/open-telemetry/semantic-conventions-conformance/issues/177
     expected_violations:
       - id: genai_expected_attribute_missing
         context:
@@ -303,20 +295,12 @@ scenarios:
 
   multimodal_responses:
     run: opentelemetry-instrument python multimodal_responses.py
-    # TODO: was asserting the image reached gen_ai.input.messages as a
-    # blob/image part. Needs expectations on complex values - https://github.com/open-telemetry/semantic-conventions-conformance/issues/177
     expected_violations:
       - id: genai_expected_attribute_missing
         context:
           operation: chat
           missing_attribute: server.address
         reason: does not expose server address
-      - id: missing_attribute
-        context:
-          attribute_key: gen_ai.usage.cache_creation.input_tokens
-        reason: >-
-          renamed to gen_ai.usage.cache_write.input_tokens in
-          semantic-conventions-genai#440; util-genai still emits the old name
     spans:
       - match:
           attributes:
@@ -332,20 +316,12 @@ scenarios:
 
   multimodal_anthropic:
     run: opentelemetry-instrument python multimodal_anthropic.py
-    # TODO: was asserting the image reached gen_ai.input.messages as a
-    # blob/image part. Needs expectations on complex values - https://github.com/open-telemetry/semantic-conventions-conformance/issues/177
     expected_violations:
       - id: genai_expected_attribute_missing
         context:
           operation: chat
           missing_attribute: server.address
         reason: does not expose server address
-      - id: missing_attribute
-        context:
-          attribute_key: gen_ai.usage.cache_creation.input_tokens
-        reason: >-
-          renamed to gen_ai.usage.cache_write.input_tokens in
-          semantic-conventions-genai#440; util-genai still emits the old name
     spans:
       - match:
           attributes:
@@ -358,20 +334,12 @@ scenarios:
 
   multimodal_anthropic_file:
     run: opentelemetry-instrument python multimodal_anthropic_file.py
-    # TODO: was asserting the image reached gen_ai.input.messages as a
-    # file/image part. Needs expectations on complex values - https://github.com/open-telemetry/semantic-conventions-conformance/issues/177
     expected_violations:
       - id: genai_expected_attribute_missing
         context:
           operation: chat
           missing_attribute: server.address
         reason: does not expose server address
-      - id: missing_attribute
-        context:
-          attribute_key: gen_ai.usage.cache_creation.input_tokens
-        reason: >-
-          renamed to gen_ai.usage.cache_write.input_tokens in
-          semantic-conventions-genai#440; util-genai still emits the old name
     spans:
       - match:
           attributes:

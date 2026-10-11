@@ -1,6 +1,8 @@
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
 
+"""Conformance scenario: bedrock chat (inference)."""
+
 import boto3
 
 client = boto3.client("bedrock-runtime", region_name="us-east-1")

@@ -5,35 +5,27 @@
 
 from anthropic import Anthropic
 
-# A 1x1 transparent PNG and a one-page PDF; nothing under test decodes them.
-IMAGE = (
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk"
-    "YPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
-)
-DOCUMENT = (
-    "JVBERi0xLjQKMSAwIG9iago8PC9UeXBlL0NhdGFsb2cvUGFnZXMgMiAwIFI+"
-    "PgplbmRvYmoKdHJhaWxlcgo8PC9Sb290IDEgMCBSPj4K"
-)
-
-client = Anthropic()
-
-client.messages.create(
+Anthropic().messages.create(
     model="claude-sonnet-4-20250514",
-    max_tokens=256,
+    max_tokens=100,
     messages=[
         {
             "role": "user",
             "content": [
-                {
-                    "type": "text",
-                    "text": "What is in this image and document?",
-                },
+                {"type": "text", "text": "Describe these images."},
                 {
                     "type": "image",
                     "source": {
                         "type": "base64",
                         "media_type": "image/png",
-                        "data": IMAGE,
+                        "data": "QUJD",
+                    },
+                },
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "url",
+                        "url": "https://example.com/image.png",
                     },
                 },
                 {
@@ -41,8 +33,50 @@ client.messages.create(
                     "source": {
                         "type": "base64",
                         "media_type": "application/pdf",
-                        "data": DOCUMENT,
+                        "data": "QUJD",
                     },
+                },
+                {
+                    "type": "document",
+                    "source": {
+                        "type": "url",
+                        "url": "https://example.com/document.pdf",
+                    },
+                },
+                {
+                    "type": "document",
+                    "source": {
+                        "type": "text",
+                        "media_type": "text/plain",
+                        "data": "Document text",
+                    },
+                },
+                {
+                    "type": "document",
+                    "title": "Reference",
+                    "context": "Use the nested content.",
+                    "citations": {"enabled": True},
+                    "source": {
+                        "type": "content",
+                        "content": [
+                            {"type": "text", "text": "Nested text"},
+                            {
+                                "type": "image",
+                                "source": {
+                                    "type": "url",
+                                    "url": "https://example.com/nested.png",
+                                },
+                            },
+                        ],
+                    },
+                },
+                {
+                    "type": "image",
+                    "source": {"type": "file", "file_id": "file-image"},
+                },
+                {
+                    "type": "document",
+                    "source": {"type": "file", "file_id": "file-document"},
                 },
             ],
         }

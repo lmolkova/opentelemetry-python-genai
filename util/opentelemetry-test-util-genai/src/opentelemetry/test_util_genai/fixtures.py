@@ -33,9 +33,7 @@ from __future__ import annotations
 
 import functools
 import os
-import shutil
 import sys
-import tarfile
 from collections.abc import Iterator
 from typing import Any
 from unittest.mock import patch

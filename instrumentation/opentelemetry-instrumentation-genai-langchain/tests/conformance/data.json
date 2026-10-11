@@ -29,8 +29,8 @@
       "gen_ai.response.model",
       "gen_ai.response.time_to_first_chunk",
       "gen_ai.tool.definitions",
-      "gen_ai.usage.cache_creation.input_tokens",
       "gen_ai.usage.cache_read.input_tokens",
+      "gen_ai.usage.cache_write.input_tokens",
       "gen_ai.usage.input_tokens",
       "gen_ai.usage.output_tokens",
       "gen_ai.usage.reasoning.output_tokens"
@@ -78,21 +78,20 @@
       "gen_ai.response.model",
       "gen_ai.token.type"
     ],
+    "gen_ai.execute_tool.duration": [
+      "gen_ai.agent.name",
+      "gen_ai.tool.name",
+      "gen_ai.tool.type"
+    ],
+    "gen_ai.invoke_agent.duration": [
+      "gen_ai.agent.name"
+    ],
     "gen_ai.invoke_workflow.duration": [
       "gen_ai.workflow.name"
     ]
   },
   "entities": {},
   "findings": [
-    {
-      "id": "missing_attribute",
-      "message": "Attribute 'gen_ai.usage.cache_creation.input_tokens' does not exist in the registry.",
-      "signal_type": "span",
-      "signal_name": "chat claude-sonnet-4-5",
-      "context": {
-        "attribute_key": "gen_ai.usage.cache_creation.input_tokens"
-      }
-    },
     {
       "id": "genai_expected_attribute_missing",
       "message": "Span 'chat claude-sonnet-4-5' (operation 'chat') is missing expected attribute 'server.address'",
@@ -101,15 +100,6 @@
       "context": {
         "missing_attribute": "server.address",
         "operation": "chat"
-      }
-    },
-    {
-      "id": "missing_attribute",
-      "message": "Attribute 'gen_ai.usage.cache_creation.input_tokens' does not exist in the registry.",
-      "signal_type": "span",
-      "signal_name": "chat gpt-4o",
-      "context": {
-        "attribute_key": "gen_ai.usage.cache_creation.input_tokens"
       }
     },
     {

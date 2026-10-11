@@ -134,8 +134,13 @@ Flag, with a link to the rule:
   expected spans/metrics, and `expected_violations`), standalone scenario scripts
   (`tests/conformance/<scenario>.py`) executed under `opentelemetry-instrument`, and a
   committed `tests/conformance/data.json`. They run via
-  `pytest …/tests/conformance/conformance.yaml`. Flag a `conformance.yaml` with no
+  `pytest …/tests/conformance.py`. Flag a `conformance.yaml` with no
   `weaver.registry` — it would validate against the runner's pin, not `versions.env`'s.
+
+All conformance suites use the shared runner.
+For content assertions, `tests/conformance.py` calls the public `genai_session` API,
+checks `ScenarioReport.failures` and `.violations`, and inspects `.report` for message parts.
+These suites run each scenario once and still regenerate `data.json` on a complete run.
 
 ## 7. Examples
 

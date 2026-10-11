@@ -1,6 +1,8 @@
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
 
+"""Conformance scenario: a tool-calling qwen-agent Assistant run."""
+
 from qwen_agent.agents import Assistant
 
 agent = Assistant(

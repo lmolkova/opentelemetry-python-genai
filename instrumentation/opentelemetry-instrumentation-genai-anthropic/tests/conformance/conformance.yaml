@@ -5,10 +5,8 @@ runner: genai-conformance
 instrumented_library: anthropic
 instrumentation_library: opentelemetry-instrumentation-genai-anthropic
 
-# TODO: point at the pin directly once the runner takes a Git URL with a ref -
-# https://github.com/open-telemetry/semantic-conventions-conformance/issues/176
 weaver:
-  registry: ../../../../.semconv/model
+  registry: https://github.com/open-telemetry/semantic-conventions-genai.git@${SEMCONV_GENAI_REF}[model]
 
 server:
   run: genai-mock-server --port ${PORT}
@@ -21,13 +19,6 @@ env:
 scenarios:
   inference:
     run: opentelemetry-instrument python inference.py
-    expected_violations:
-      - id: missing_attribute
-        context:
-          attribute_key: gen_ai.usage.cache_creation.input_tokens
-        reason: >-
-          renamed to gen_ai.usage.cache_write.input_tokens in
-          semantic-conventions-genai#440; util-genai still emits the old name
     spans:
       - match:
           attributes:
@@ -56,13 +47,6 @@ scenarios:
 
   inference_raw_response:
     run: opentelemetry-instrument python inference_raw_response.py
-    expected_violations:
-      - id: missing_attribute
-        context:
-          attribute_key: gen_ai.usage.cache_creation.input_tokens
-        reason: >-
-          renamed to gen_ai.usage.cache_write.input_tokens in
-          semantic-conventions-genai#440; util-genai still emits the old name
     spans:
       - match:
           attributes:
@@ -91,13 +75,6 @@ scenarios:
 
   tool_calling:
     run: opentelemetry-instrument python tool_calling.py
-    expected_violations:
-      - id: missing_attribute
-        context:
-          attribute_key: gen_ai.usage.cache_creation.input_tokens
-        reason: >-
-          renamed to gen_ai.usage.cache_write.input_tokens in
-          semantic-conventions-genai#440; util-genai still emits the old name
     spans:
       - match:
           attributes:
@@ -110,13 +87,18 @@ scenarios:
 
   multimodal:
     run: opentelemetry-instrument python multimodal.py
-    expected_violations:
-      - id: missing_attribute
-        context:
-          attribute_key: gen_ai.usage.cache_creation.input_tokens
-        reason: >-
-          renamed to gen_ai.usage.cache_write.input_tokens in
-          semantic-conventions-genai#440; util-genai still emits the old name
+    spans:
+      - match:
+          attributes:
+            gen_ai.operation.name: chat
+        expect:
+          count: 1
+    metrics:
+      - gen_ai.client.operation.duration
+      - gen_ai.client.token.usage
+
+  server_tool_calling:
+    run: opentelemetry-instrument python server_tool_calling.py
     spans:
       - match:
           attributes:
