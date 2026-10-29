@@ -1,0 +1,1 @@
+Fix `TypeError` raised into the caller's stream when streamed tool call deltas have no `index`, as sent by Gemini's OpenAI-compatible API.
