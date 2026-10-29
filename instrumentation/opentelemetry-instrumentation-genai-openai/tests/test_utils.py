@@ -27,6 +27,9 @@ from opentelemetry.semconv._incubating.attributes import (
 from opentelemetry.semconv._incubating.attributes import (
     server_attributes as ServerAttributes,
 )
+from opentelemetry.semconv.attributes import (
+    error_attributes as ErrorAttributes,
+)
 from opentelemetry.trace import SpanKind
 from opentelemetry.util.genai.handler import TelemetryHandler
 from opentelemetry.util.genai.types import (
@@ -48,6 +51,7 @@ _REAL_PNG_BYTES = base64.b64decode(_REAL_PNG_B64)
 DEFAULT_MODEL = "gpt-4o-mini"
 DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
 REASONING_MODEL = "gpt-5.1"
+GEMINI_MODEL = "gemini-3.5-flash"
 FETCH_RESPONSE_OPERATION_NAME = "fetch_response"
 # TODO: use the semconv constant once released in
 # opentelemetry-semantic-conventions. Added to the GenAI semantic conventions
@@ -782,6 +786,34 @@ def assert_completion_attributes(
 
 def assert_messages_attribute(actual, expected):
     assert json.loads(actual) == expected
+
+
+def assert_streaming_tool_calls_without_index(span_exporter, tool_calls):
+    (span,) = span_exporter.get_finished_spans()
+    assert ErrorAttributes.ERROR_TYPE not in span.attributes
+    # Gemini reports "stop" rather than "tool_calls".
+    assert span.attributes[GenAIAttributes.GEN_AI_RESPONSE_FINISH_REASONS] == (
+        "stop",
+    )
+    assert_messages_attribute(
+        span.attributes[GenAIAttributes.GEN_AI_OUTPUT_MESSAGES],
+        [
+            {
+                "role": "assistant",
+                "parts": [
+                    {
+                        "type": "tool_call",
+                        "id": tool_call.id,
+                        "name": "get_current_weather",
+                        "arguments": json.loads(tool_call.function.arguments),
+                    }
+                    for tool_call in tool_calls
+                ],
+                "finish_reason": "stop",
+                "name": None,
+            }
+        ],
+    )
 
 
 def format_simple_expected_output_message(

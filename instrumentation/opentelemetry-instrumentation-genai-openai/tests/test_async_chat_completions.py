@@ -31,6 +31,7 @@ from .test_utils import (
     CACHEABLE_MESSAGES,
     DEFAULT_MODEL,
     EXPECTED_TOOL_DEFINITIONS,
+    GEMINI_MODEL,
     MULTIMODAL_EXPECTED_INPUT_MESSAGES,
     MULTIMODAL_PROMPT,
     REASONING_MODEL,
@@ -44,6 +45,7 @@ from .test_utils import (
     assert_message_in_logs,
     assert_messages_attribute,
     assert_reasoning_attributes,
+    assert_streaming_tool_calls_without_index,
     format_simple_expected_output_message,
     get_current_weather_tool_definition,
 )
@@ -818,6 +820,30 @@ async def test_async_chat_completion_tool_calls_no_content(
             False,
             is_experimental_mode(),
         )
+
+
+@pytest.mark.asyncio()
+async def test_async_chat_completion_streaming_tool_calls_without_index(
+    span_exporter, async_gemini_client, instrument_with_content, vcr
+):
+    with vcr.use_cassette(
+        "test_chat_completion_streaming_tool_calls_without_index.yaml"
+    ):
+        stream = await async_gemini_client.chat.completions.create(
+            messages=WEATHER_TOOL_PROMPT,
+            model=GEMINI_MODEL,
+            tools=[get_current_weather_tool_definition()],
+            stream=True,
+        )
+        tool_calls = [
+            tool_call
+            async for chunk in stream
+            for choice in chunk.choices
+            for tool_call in choice.delta.tool_calls or []
+        ]
+
+    assert [tool_call.index for tool_call in tool_calls] == [None, None]
+    assert_streaming_tool_calls_without_index(span_exporter, tool_calls)
 
 
 async def chat_completion_tool_call(

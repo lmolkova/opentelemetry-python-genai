@@ -37,8 +37,21 @@ class ChoiceBuffer:
     def append_refusal(self, refusal: str) -> None:
         self.refusal.append(refusal)
 
+    def _tool_call_index(self, tool_call: ChoiceDeltaToolCall) -> int:
+        # Typed as int, but OpenAI-compatible servers such as Gemini omit it.
+        index: int | None = tool_call.index
+        if index is not None:
+            return index
+
+        if tool_call.id is not None:
+            for buffer in self.tool_calls_buffers:
+                if buffer is not None and buffer.tool_call_id == tool_call.id:
+                    return buffer.index
+            return len(self.tool_calls_buffers)
+        return max(len(self.tool_calls_buffers) - 1, 0)
+
     def append_tool_call(self, tool_call: ChoiceDeltaToolCall) -> None:
-        idx = tool_call.index
+        idx = self._tool_call_index(tool_call)
         for _ in range(len(self.tool_calls_buffers), idx + 1):
             self.tool_calls_buffers.append(None)
 

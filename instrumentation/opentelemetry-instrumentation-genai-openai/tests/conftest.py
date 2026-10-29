@@ -36,6 +36,25 @@ def async_openai_client():
     return AsyncOpenAI()
 
 
+GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
+
+
+@pytest.fixture
+def gemini_client():
+    return OpenAI(
+        api_key=os.getenv("GEMINI_API_KEY", "test_gemini_api_key"),
+        base_url=GEMINI_BASE_URL,
+    )
+
+
+@pytest.fixture
+def async_gemini_client():
+    return AsyncOpenAI(
+        api_key=os.getenv("GEMINI_API_KEY", "test_gemini_api_key"),
+        base_url=GEMINI_BASE_URL,
+    )
+
+
 @pytest.fixture(scope="module")
 def vcr_config():
     from opentelemetry.test_util_genai.vcr import (
