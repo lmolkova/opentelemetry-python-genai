@@ -1,4 +1,4 @@
-qwen-agent~=0.0.34
+qwen-agent==0.0.34
 
 opentelemetry-sdk~=1.45.2
 opentelemetry-distro~=0.64b0
